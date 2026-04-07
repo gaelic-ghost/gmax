@@ -424,6 +424,13 @@ final class ShellModel: ObservableObject {
 		return root.findPane(id: focusedPaneID)
 	}
 
+	var requiresLastPaneCloseConfirmation: Bool {
+		guard let workspace = workspaces.first, workspaces.count == 1 else {
+			return false
+		}
+		return workspace.paneCount == 1
+	}
+
 	func selectWorkspace(_ workspaceID: WorkspaceID) {
 		selectedWorkspaceID = workspaceID
 	}
