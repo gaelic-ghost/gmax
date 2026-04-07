@@ -95,13 +95,13 @@ struct gmaxApp: App {
 						return
 					}
 
-					switch shellModel.performCloseCommand() {
-						case .closeWindow:
-							NSApp.keyWindow?.performClose(nil)
-						case .closedPane, .emptiedWorkspace, .closedWorkspace, .noAction:
-							break
+						switch shellModel.performCloseCommand() {
+							case .closeWindow:
+								NSApp.keyWindow?.performClose(nil)
+							case .closedPane, .closedWorkspace, .noAction:
+								break
+						}
 					}
-				}
 				.keyboardShortcut("w", modifiers: [.command])
 			}
 

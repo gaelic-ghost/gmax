@@ -25,16 +25,18 @@ final class ShellPersistenceController {
 		let request = WorkspaceEntity.fetchRequest()
 		request.sortDescriptors = [NSSortDescriptor(key: #keyPath(WorkspaceEntity.sortOrder), ascending: true)]
 
-		do {
-			return try context.fetch(request).map { workspaceEntity in
-				Workspace(
-					id: WorkspaceID(rawValue: workspaceEntity.id),
-					title: workspaceEntity.title,
-					root: Self.decodeNode(workspaceEntity.rootNode, logger: logger),
-					focusedPaneID: workspaceEntity.focusedPaneID.map(PaneID.init(rawValue:))
-				)
-			}
-		} catch {
+			do {
+				return try context.fetch(request).compactMap { workspaceEntity in
+					let workspace = Workspace(
+						id: WorkspaceID(rawValue: workspaceEntity.id),
+						title: workspaceEntity.title,
+						root: Self.decodeNode(workspaceEntity.rootNode, logger: logger),
+						focusedPaneID: workspaceEntity.focusedPaneID.map(PaneID.init(rawValue:))
+					)
+
+					return Self.normalizedWorkspace(workspace, logger: logger)
+				}
+			} catch {
 			logger.error("Core Data failed to load saved workspaces. The app will continue with default workspace state. Error: \(String(describing: error), privacy: .public)")
 			return []
 		}
@@ -178,6 +180,33 @@ final class ShellPersistenceController {
 				logger.error("A persisted pane node has an unknown kind value. That node will be skipped during restore. Node ID: \(nodeEntity.id.uuidString, privacy: .public)")
 				return nil
 		}
+	}
+
+	private static func normalizedWorkspace(_ workspace: Workspace, logger: Logger) -> Workspace? {
+		guard let root = workspace.root else {
+			logger.error("A persisted workspace has no root pane tree. That empty workspace will be discarded during restore. Workspace ID: \(workspace.id.rawValue.uuidString, privacy: .public)")
+			return nil
+		}
+
+		let leaves = root.leaves()
+		guard !leaves.isEmpty else {
+			logger.error("A persisted workspace decoded to an empty pane tree. That workspace will be discarded during restore. Workspace ID: \(workspace.id.rawValue.uuidString, privacy: .public)")
+			return nil
+		}
+
+		let focusedPaneID = if let focusedPaneID = workspace.focusedPaneID,
+			leaves.contains(where: { $0.id == focusedPaneID }) {
+			focusedPaneID
+		} else {
+			leaves[0].id
+		}
+
+		return Workspace(
+			id: workspace.id,
+			title: workspace.title,
+			root: root,
+			focusedPaneID: focusedPaneID
+		)
 	}
 
 	private static func storeURL() -> URL {

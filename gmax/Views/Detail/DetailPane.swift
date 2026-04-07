@@ -5,6 +5,7 @@
 //  Created by Gale Williams on 4/6/26.
 //
 
+import AppKit
 import SwiftUI
 
 struct DetailPane: View {
@@ -14,14 +15,18 @@ struct DetailPane: View {
 		if let workspace = model.selectedWorkspace,
 		   let pane = model.focusedPane,
 		   let session = model.sessions.session(for: pane.sessionID) {
-			ActivePaneDetails(
-				workspaceTitle: workspace.title,
-				pane: pane,
-				session: session,
-				onSplitRight: { model.splitFocusedPane(.right) },
-				onSplitDown: { model.splitFocusedPane(.down) },
-				onClose: { model.closeFocusedPane() }
-			)
+				ActivePaneDetails(
+					workspaceTitle: workspace.title,
+					pane: pane,
+					session: session,
+					onSplitRight: { model.splitFocusedPane(.right) },
+					onSplitDown: { model.splitFocusedPane(.down) },
+					onClose: {
+						if model.closeFocusedPane() == .closeWindow {
+							NSApp.keyWindow?.performClose(nil)
+						}
+					}
+				)
 		} else {
 			ContentUnavailableView("No Active Pane", systemImage: "rectangle.on.rectangle")
 		}

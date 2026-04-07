@@ -81,7 +81,6 @@ enum PaneFocusDirection {
 
 enum CloseCommandResult {
 	case closedPane
-	case emptiedWorkspace
 	case closedWorkspace
 	case closeWindow
 	case noAction
@@ -452,24 +451,9 @@ final class ShellModel: ObservableObject {
 			createWorkspace()
 			return
 		}
-
 		guard let paneID = workspace.focusedPaneID else {
-			guard let workspaceIndex = selectedWorkspaceIndex else {
-				return
-			}
-
-			let pane = PaneLeaf()
-			workspaces[workspaceIndex].root = .leaf(pane)
-			workspaces[workspaceIndex].focusedPaneID = pane.id
-			_ = sessions.ensureSession(
-				id: pane.sessionID,
-				launchConfiguration: launchContextBuilder.makeLaunchConfiguration()
-			)
-			recordPaneFocus(pane.id, in: workspace.id)
-			schedulePersistenceSave()
 			return
 		}
-
 		splitPane(paneID, in: workspace.id, direction: .right)
 	}
 
@@ -571,17 +555,6 @@ final class ShellModel: ObservableObject {
 		let priorLeaves = root.leaves()
 		let priorFocusedPaneID = workspaces[workspaceIndex].focusedPaneID
 
-		if root.paneCount() == 1 {
-			guard root.findPane(id: paneID) != nil else {
-				return
-			}
-			workspaces[workspaceIndex].root = nil
-			workspaces[workspaceIndex].focusedPaneID = nil
-			removeUnreferencedSessions()
-			schedulePersistenceSave()
-			return
-		}
-
 		guard root.removePane(id: paneID) != nil else {
 			return
 		}
@@ -598,12 +571,6 @@ final class ShellModel: ObservableObject {
 			return
 		}
 
-		guard !survivingLeaves.isEmpty else {
-			workspaces[workspaceIndex].focusedPaneID = nil
-			schedulePersistenceSave()
-			return
-		}
-
 		let removedPaneIndex = priorLeaves.firstIndex(where: { $0.id == paneID }) ?? survivingLeaves.endIndex
 		let fallbackIndex = min(removedPaneIndex, survivingLeaves.count - 1)
 		workspaces[workspaceIndex].focusedPaneID = survivingLeaves[fallbackIndex].id
@@ -611,15 +578,9 @@ final class ShellModel: ObservableObject {
 		schedulePersistenceSave()
 	}
 
-	func closeFocusedPane() {
-		guard
-			let workspace = selectedWorkspace,
-			let paneID = workspace.focusedPaneID
-		else {
-			return
-		}
-
-		closePane(paneID, in: workspace.id)
+	@discardableResult
+	func closeFocusedPane() -> CloseCommandResult {
+		performCloseCommand()
 	}
 
 	func movePaneFocus(_ direction: PaneFocusDirection) {
@@ -628,10 +589,7 @@ final class ShellModel: ObservableObject {
 		}
 
 		let leaves = workspaces[workspaceIndex].paneLeaves
-		guard !leaves.isEmpty else {
-			workspaces[workspaceIndex].focusedPaneID = nil
-			return
-		}
+		guard !leaves.isEmpty else { return }
 
 		guard let focusedPaneID = workspaces[workspaceIndex].focusedPaneID,
 			  let focusedIndex = leaves.firstIndex(where: { $0.id == focusedPaneID })
@@ -883,7 +841,7 @@ extension ShellModel {
 
 	private static func initialFocusHistory(for workspaces: [Workspace]) -> [WorkspaceID: [PaneID]] {
 		Dictionary(uniqueKeysWithValues: workspaces.map { workspace in
-			(workspace.id, workspace.focusedPaneID.map { [$0] } ?? [])
+			(workspace.id, [workspace.focusedPaneID].compactMap { $0 })
 		})
 	}
 
@@ -892,28 +850,29 @@ extension ShellModel {
 			return .closeWindow
 		}
 
-		let workspaceID = workspaces[workspaceIndex].id
-		if let focusedPaneID = workspaces[workspaceIndex].focusedPaneID {
-			closePane(focusedPaneID, in: workspaceID)
-			return workspaces[workspaceIndex].root == nil ? .emptiedWorkspace : .closedPane
-		}
-
-		guard workspaces[workspaceIndex].root == nil else {
+		let workspace = workspaces[workspaceIndex]
+		guard let focusedPaneID = workspace.focusedPaneID else {
 			return .noAction
 		}
 
-		if workspaces.count > 1 {
-			let removedWorkspaceID = workspaces[workspaceIndex].id
+		if workspace.paneCount == 1 {
+			if workspaces.count == 1 {
+				return .closeWindow
+			}
+
+			let removedWorkspaceID = workspace.id
 			workspaces.remove(at: workspaceIndex)
 			paneFramesByWorkspace.removeValue(forKey: removedWorkspaceID)
 			paneFocusHistoryByWorkspace.removeValue(forKey: removedWorkspaceID)
+			removeUnreferencedSessions()
 			let nextIndex = min(workspaceIndex, workspaces.count - 1)
 			selectedWorkspaceID = workspaces[nextIndex].id
 			schedulePersistenceSave()
 			return .closedWorkspace
 		}
 
-		return .closeWindow
+		closePane(focusedPaneID, in: workspace.id)
+		return .closedPane
 	}
 
 	private func schedulePersistenceSave() {
