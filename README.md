@@ -136,4 +136,4 @@ scripts/repo-maintenance/validate-all.sh
 
 ## License
 
-No license has been declared for this repository yet.
+Licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE).
