@@ -77,6 +77,18 @@ struct gmaxApp: App {
 					shellModel.toggleInspector()
 				}
 				.keyboardShortcut("b", modifiers: [.command, .shift])
+
+				Divider()
+
+				Button("Previous Workspace") {
+					shellModel.selectPreviousWorkspace()
+				}
+				.keyboardShortcut("[", modifiers: [.command, .shift])
+
+				Button("Next Workspace") {
+					shellModel.selectNextWorkspace()
+				}
+				.keyboardShortcut("]", modifiers: [.command, .shift])
 			}
 
 			CommandMenu("Pane") {

@@ -417,6 +417,32 @@ final class ShellModel: ObservableObject {
 		selectedWorkspaceID = workspaceID
 	}
 
+	func selectNextWorkspace() {
+		guard !workspaces.isEmpty else {
+			return
+		}
+		guard let selectedWorkspaceIndex else {
+			selectedWorkspaceID = workspaces.first?.id
+			return
+		}
+
+		let nextIndex = (selectedWorkspaceIndex + 1) % workspaces.count
+		selectedWorkspaceID = workspaces[nextIndex].id
+	}
+
+	func selectPreviousWorkspace() {
+		guard !workspaces.isEmpty else {
+			return
+		}
+		guard let selectedWorkspaceIndex else {
+			selectedWorkspaceID = workspaces.last?.id
+			return
+		}
+
+		let previousIndex = (selectedWorkspaceIndex - 1 + workspaces.count) % workspaces.count
+		selectedWorkspaceID = workspaces[previousIndex].id
+	}
+
 	func focusPane(_ paneID: PaneID, in workspaceID: WorkspaceID) {
 		guard let workspaceIndex = workspaces.firstIndex(where: { $0.id == workspaceID }) else {
 			return
