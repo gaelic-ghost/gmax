@@ -28,10 +28,10 @@ struct TerminalLaunchContextBuilder {
 			processInfo: processInfo,
 			currentDirectory: defaultCurrentDirectory
 		)
-		let baseEnvironment = swiftTermEnvironment.merging(
-			capturedEnvironment ?? processInfo.environment,
-			uniquingKeysWith: { _, new in new }
-		)
+		let capturedOrInheritedEnvironment = capturedEnvironment ?? processInfo.environment
+		let baseEnvironment = capturedOrInheritedEnvironment
+			.merging(swiftTermEnvironment, uniquingKeysWith: { _, new in new })
+			.merging(stableTerminalEnvironment(), uniquingKeysWith: { _, new in new })
 
 		return TerminalLaunchContextBuilder(
 			shellExecutable: shellExecutable,
@@ -147,6 +147,13 @@ struct TerminalLaunchContextBuilder {
 		environment
 			.map { key, value in "\(key)=\(value)" }
 			.sorted()
+	}
+
+	private static func stableTerminalEnvironment() -> [String: String] {
+		[
+			"TERM": "xterm-256color",
+			"COLORTERM": "truecolor"
+		]
 	}
 
 	private static func isDirectory(_ path: String, fileManager: FileManager) -> Bool {
