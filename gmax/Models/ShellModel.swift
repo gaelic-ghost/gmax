@@ -429,6 +429,50 @@ final class ShellModel: ObservableObject {
 		selectedWorkspaceID = workspaceID
 	}
 
+	func createWorkspace() {
+		let pane = PaneLeaf()
+		let workspace = Workspace(
+			title: "Workspace \(workspaces.count + 1)",
+			root: .leaf(pane),
+			focusedPaneID: pane.id
+		)
+
+		workspaces.append(workspace)
+		_ = sessions.ensureSession(
+			id: pane.sessionID,
+			launchConfiguration: launchContextBuilder.makeLaunchConfiguration()
+		)
+		selectedWorkspaceID = workspace.id
+		paneFocusHistoryByWorkspace[workspace.id] = [pane.id]
+		schedulePersistenceSave()
+	}
+
+	func createPane() {
+		guard let workspace = selectedWorkspace else {
+			createWorkspace()
+			return
+		}
+
+		guard let paneID = workspace.focusedPaneID else {
+			guard let workspaceIndex = selectedWorkspaceIndex else {
+				return
+			}
+
+			let pane = PaneLeaf()
+			workspaces[workspaceIndex].root = .leaf(pane)
+			workspaces[workspaceIndex].focusedPaneID = pane.id
+			_ = sessions.ensureSession(
+				id: pane.sessionID,
+				launchConfiguration: launchContextBuilder.makeLaunchConfiguration()
+			)
+			recordPaneFocus(pane.id, in: workspace.id)
+			schedulePersistenceSave()
+			return
+		}
+
+		splitPane(paneID, in: workspace.id, direction: .right)
+	}
+
 	func selectNextWorkspace() {
 		guard !workspaces.isEmpty else {
 			return

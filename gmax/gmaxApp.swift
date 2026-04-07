@@ -41,6 +41,22 @@ struct gmaxApp: App {
 				}
 			}
 			.toolbar {
+				ToolbarItem(placement: .navigation) {
+					Button {
+						shellModel.createWorkspace()
+					} label: {
+						Label("New Workspace", systemImage: "square.stack.badge.plus")
+					}
+				}
+
+				ToolbarItem(placement: .principal) {
+					Button {
+						shellModel.createPane()
+					} label: {
+						Label("New Pane", systemImage: "square.split.2x1")
+					}
+				}
+
 				ToolbarItem(placement: .automatic) {
 					Button {
 						shellModel.toggleInspector()
@@ -55,6 +71,13 @@ struct gmaxApp: App {
 		}
 		.defaultSize(defaultWindowSize)
 		.commands {
+			CommandGroup(replacing: .newItem) {
+				Button("New Workspace") {
+					shellModel.createWorkspace()
+				}
+				.keyboardShortcut("n", modifiers: [.command])
+			}
+
 			CommandGroup(replacing: .saveItem) {
 				Button("Close") {
 					switch shellModel.performCloseCommand() {
@@ -92,6 +115,13 @@ struct gmaxApp: App {
 			}
 
 			CommandMenu("Pane") {
+				Button("New Pane") {
+					shellModel.createPane()
+				}
+				.keyboardShortcut("t", modifiers: [.command])
+
+				Divider()
+
 				Button("Move Focus Left") {
 					shellModel.movePaneFocus(.left)
 				}
