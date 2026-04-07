@@ -80,6 +80,11 @@ struct gmaxApp: App {
 
 			CommandGroup(replacing: .saveItem) {
 				Button("Close") {
+					if let keyWindow = NSApp.keyWindow, keyWindow !== NSApp.mainWindow {
+						keyWindow.performClose(nil)
+						return
+					}
+
 					switch shellModel.performCloseCommand() {
 						case .closeWindow:
 							NSApp.keyWindow?.performClose(nil)
