@@ -4,6 +4,20 @@
 
 The product direction is a keyboard-forward shell for managing multiple terminal workspaces, each with nested split panes, a contextual inspector, and durable state that can grow into a polished daily-driver app instead of staying an experiment.
 
+## Table of Contents
+
+- [Overview](#overview)
+- [Current Architecture](#current-architecture)
+- [Repository Layout](#repository-layout)
+- [Setup](#setup)
+- [Usage](#usage)
+- [Development](#development)
+- [Keyboard Commands](#keyboard-commands)
+- [Verification](#verification)
+- [Status](#status)
+- [Roadmap](#roadmap)
+- [License](#license)
+
 ## Overview
 
 Today the app already has the core product shape in place:
@@ -18,7 +32,7 @@ Today the app already has the core product shape in place:
 
 This repository is the successor to the earlier exploration work. It is intended to keep moving toward a finished product.
 
-## Motivation
+### Motivation
 
 The goal is to build a terminal app that feels native on macOS, is practical to extend, and has a much better long-term story for product features than heavyweight embedders or renderer-first terminal stacks.
 
@@ -53,7 +67,7 @@ The maintainer-facing architecture note lives at [docs/maintainers/swiftui-termi
 - `gmax/Views/`: sidebar, content, detail, and pane rendering
 - `docs/maintainers/`: architecture and maintainer notes
 
-## Development
+## Setup
 
 ### Requirements
 
@@ -63,6 +77,14 @@ The maintainer-facing architecture note lives at [docs/maintainers/swiftui-termi
 ### Open The Project
 
 Open [gmax.xcodeproj](gmax.xcodeproj) in Xcode.
+
+## Usage
+
+Build and run the `gmax` scheme from Xcode.
+
+The app launches as a macOS window with the workspace sidebar, pane content area, and inspector rail. The active pane drives the detail inspector, and the center column renders the recursive split-pane tree for the selected workspace.
+
+## Development
 
 ### Build From The Command Line
 
@@ -95,3 +117,23 @@ What remains is product completion work: workspace management, polish, accessibi
 ## Roadmap
 
 See [ROADMAP.md](ROADMAP.md) for the current product roadmap.
+
+## Verification
+
+Use the project-aware Apple workflow first when validating changes in this repo.
+
+For code changes inside the app, prefer:
+
+```sh
+xcodebuild -project gmax.xcodeproj -scheme gmax -destination 'platform=macOS' build
+```
+
+For repo-maintenance validation after guidance syncs, use:
+
+```sh
+scripts/repo-maintenance/validate-all.sh
+```
+
+## License
+
+No license has been declared for this repository yet.
