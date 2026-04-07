@@ -10,6 +10,15 @@ import SwiftUI
 import SwiftTerm
 
 struct TerminalPaneRepresentable: NSViewRepresentable {
+	@AppStorage(TerminalAppearanceDefaults.fontNameKey)
+	private var terminalFontName = TerminalAppearance.fallback.fontName
+
+	@AppStorage(TerminalAppearanceDefaults.fontSizeKey)
+	private var terminalFontSize = TerminalAppearance.fallback.fontSize
+
+	@AppStorage(TerminalAppearanceDefaults.themeKey)
+	private var terminalThemeName = TerminalAppearance.fallback.theme.rawValue
+
 	let controller: TerminalPaneController
 	let isFocused: Bool
 	let onFocus: () -> Void
@@ -19,15 +28,26 @@ struct TerminalPaneRepresentable: NSViewRepresentable {
 	}
 
 	func makeNSView(context: Context) -> TerminalHostingContainerView {
-		context.coordinator.makeHostingView()
+		let hostingView = context.coordinator.makeHostingView()
+		currentAppearance.apply(to: hostingView.terminalView)
+		return hostingView
 	}
 
 	func updateNSView(_ nsView: TerminalHostingContainerView, context: Context) {
+		currentAppearance.apply(to: nsView.terminalView)
 		context.coordinator.update(hostingView: nsView, isFocused: isFocused)
 	}
 
 	static func dismantleNSView(_ nsView: TerminalHostingContainerView, coordinator: Coordinator) {
 		coordinator.dismantle(hostingView: nsView)
+	}
+
+	private var currentAppearance: TerminalAppearance {
+		TerminalAppearance.persisted(
+			fontName: terminalFontName,
+			fontSize: terminalFontSize,
+			themeName: terminalThemeName
+		)
 	}
 
 	@MainActor

@@ -173,5 +173,8 @@ struct gmaxApp: App {
 				}
 			}
 		}
+		Settings {
+			SettingsUtilityWindow()
+		}
 	}
 }
