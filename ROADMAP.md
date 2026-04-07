@@ -50,13 +50,17 @@ Build `gmax` into a finished macOS terminal workspace app:
 - [ ] Add app-level accessibility affordances around pane metadata and session state
 - [ ] Design a practical Voice Control and Full Keyboard Access story
 - [ ] Decide whether SwiftTerm should be extended locally for better accessibility support
+- [ ] Integrate SpeakSwiftly for in-process custom TTS and STT
+- [ ] Evaluate small fine-tunes of FunctionGemma and STT for Voice Commands
 
 ## Milestone 4: Preferences And Customization
 
-- [ ] Add app settings window
-- [ ] Add theme and appearance controls
+- [x] Add app settings window
+- [ ] Expand theme and appearance controls
+- [ ] Add import for theme and appearance settings
 - [ ] Add font, spacing, and terminal presentation settings
-- [ ] Add configurable keyboard shortcuts where practical
+- [ ] Add toolbar "preset" buttons for saving workspace layouts as "favorites"
+- [ ] Add initial set of configurable keyboard shortcuts
 - [ ] Add custom actions or command presets worth persisting
 - [ ] Separate durable app settings from scene-local window state
 
@@ -77,6 +81,23 @@ Build `gmax` into a finished macOS terminal workspace app:
 - [ ] Tighten operator-facing logs and error messages throughout the app
 - [ ] Write onboarding and maintainer docs for release-oriented development
 - [ ] Prepare a release checklist for first usable internal builds
+
+## Milestone 7: Deeper Terminal Integrations/Remote/SSH/Etc
+
+- [ ] Explorre other SwiftTerm types, particularly `TerminalView`
+- [ ] Add Ghostty.app pane option (depends on completion of ghostty's proper API surface)
+- [ ] SwiftTerm Headless terminal for workflow command execution
+- [ ] Headless terminal for remote SSH. See also: Apple Network, Swift NIO, etc.
+
+## Milestone 8: App Sandbox Compatibility
+
+- [ ] Move environment capture to a bundled XPC service or SMAppService helper
+
+## Milestone 9: iOS Remote and iPadOS App
+
+## Milestone 10: Chromium Browser Pane
+
+## Milestone 11: Custom Codex App-Server Pane
 
 ## Near-Term Recommended Order
 
