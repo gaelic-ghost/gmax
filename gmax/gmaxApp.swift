@@ -60,15 +60,15 @@ struct gmaxApp: App {
 					Button {
 						shellModel.createWorkspace()
 					} label: {
-						Label("New Workspace", systemImage: "square.stack.badge.plus")
+						Label("New Workspace", systemImage: "plus.rectangle.on.rectangle")
 					}
 				}
 
-				ToolbarItem(placement: .principal) {
+					ToolbarItem(placement: .automatic) {
 					Button {
 						shellModel.createPane()
 					} label: {
-						Label("New Pane", systemImage: "square.split.2x1")
+						Label("New Pane", systemImage: "uiwindow.split.2x1")
 					}
 				}
 
