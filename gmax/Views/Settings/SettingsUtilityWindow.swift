@@ -10,7 +10,7 @@ import SwiftUI
 
 struct SettingsUtilityWindow: View {
 	@AppStorage(TerminalAppearanceDefaults.fontNameKey)
-	private var terminalFontName = "MonoidNF-Regular"
+	private var terminalFontName = TerminalAppearance.fallback.fontName
 
 	@AppStorage(TerminalAppearanceDefaults.fontSizeKey)
 	private var terminalFontSize = TerminalAppearanceDefaults.defaultFontSize
