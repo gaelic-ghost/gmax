@@ -331,6 +331,7 @@ final class ShellModel: ObservableObject {
 	@Published var workspaces: [Workspace]
 	@Published var selectedWorkspaceID: WorkspaceID?
 	@Published var columnVisibility: NavigationSplitViewVisibility
+	@Published var isInspectorVisible: Bool
 
 	let persistence: ShellPersistenceController
 	let sessions: TerminalSessionRegistry
@@ -345,24 +346,27 @@ final class ShellModel: ObservableObject {
 		let workspaces = persistedWorkspaces.isEmpty ? Self.sampleWorkspaces : persistedWorkspaces
 		self.persistence = persistence
 		self.sessions = TerminalSessionRegistry(workspaces: workspaces)
-		self.paneControllers = TerminalPaneControllerStore()
-		self.workspaces = workspaces
-		self.selectedWorkspaceID = workspaces.first?.id
-		self.columnVisibility = .all
-		self.paneFramesByWorkspace = [:]
-		self.paneFocusHistoryByWorkspace = Self.initialFocusHistory(for: workspaces)
-	}
+			self.paneControllers = TerminalPaneControllerStore()
+			self.workspaces = workspaces
+			self.selectedWorkspaceID = workspaces.first?.id
+			self.columnVisibility = .all
+			self.isInspectorVisible = true
+			self.paneFramesByWorkspace = [:]
+			self.paneFocusHistoryByWorkspace = Self.initialFocusHistory(for: workspaces)
+		}
 
 	convenience init(
 		workspaces: [Workspace],
 		selectedWorkspaceID: WorkspaceID?,
-		columnVisibility: NavigationSplitViewVisibility = .all
+		columnVisibility: NavigationSplitViewVisibility = .all,
+		isInspectorVisible: Bool = true
 	) {
 		self.init(
 			workspaces: workspaces,
 			selectedWorkspaceID: selectedWorkspaceID,
 			persistence: .shared,
-			columnVisibility: columnVisibility
+			columnVisibility: columnVisibility,
+			isInspectorVisible: isInspectorVisible
 		)
 	}
 
@@ -370,7 +374,8 @@ final class ShellModel: ObservableObject {
 		workspaces: [Workspace],
 		selectedWorkspaceID: WorkspaceID?,
 		persistence: ShellPersistenceController,
-		columnVisibility: NavigationSplitViewVisibility = .all
+		columnVisibility: NavigationSplitViewVisibility = .all,
+		isInspectorVisible: Bool = true
 	) {
 		self.persistence = persistence
 		self.sessions = TerminalSessionRegistry(workspaces: workspaces)
@@ -378,6 +383,7 @@ final class ShellModel: ObservableObject {
 		self.workspaces = workspaces
 		self.selectedWorkspaceID = selectedWorkspaceID
 		self.columnVisibility = columnVisibility
+		self.isInspectorVisible = isInspectorVisible
 		self.paneFramesByWorkspace = [:]
 		self.paneFocusHistoryByWorkspace = Self.initialFocusHistory(for: workspaces)
 	}
@@ -566,6 +572,14 @@ final class ShellModel: ObservableObject {
 
 	func workspace(for workspaceID: WorkspaceID) -> Workspace? {
 		workspaces.first { $0.id == workspaceID }
+	}
+
+	func toggleSidebar() {
+		columnVisibility = columnVisibility == .all ? .doubleColumn : .all
+	}
+
+	func toggleInspector() {
+		isInspectorVisible.toggle()
 	}
 
 	func controller(for pane: PaneLeaf) -> TerminalPaneController {

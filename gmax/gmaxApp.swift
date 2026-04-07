@@ -12,16 +12,48 @@ import SwiftUI
 struct gmaxApp: App {
 	@StateObject private var shellModel = ShellModel()
 
+	private let defaultWindowSize = CGSize(width: 1_440, height: 900)
+	private let sidebarColumnWidth: CGFloat = 220
+	private let contentColumnIdealWidth: CGFloat = 920
+	private let detailColumnMinimumWidth: CGFloat = 220
+	private let detailColumnIdealWidth: CGFloat = 260
+	private let detailColumnMaximumWidth: CGFloat = 340
+
 	var body: some Scene {
 		Window("gmax exploration", id: "main-window") {
 			NavigationSplitView(columnVisibility: $shellModel.columnVisibility) {
 				SidebarPane(model: shellModel)
+					.navigationSplitViewColumnWidth(sidebarColumnWidth)
 			} content: {
 				ContentPane(model: shellModel)
+					.navigationSplitViewColumnWidth(min: 640, ideal: contentColumnIdealWidth)
 			} detail: {
-				DetailPane(model: shellModel)
+				if shellModel.isInspectorVisible {
+					DetailPane(model: shellModel)
+						.navigationSplitViewColumnWidth(
+							min: detailColumnMinimumWidth,
+							ideal: detailColumnIdealWidth,
+							max: detailColumnMaximumWidth
+						)
+				} else {
+					Color.clear
+						.navigationSplitViewColumnWidth(0)
+				}
+			}
+			.toolbar {
+				ToolbarItem(placement: .automatic) {
+					Button {
+						shellModel.toggleInspector()
+					} label: {
+						Label(
+							shellModel.isInspectorVisible ? "Hide Inspector" : "Show Inspector",
+							systemImage: "sidebar.right"
+						)
+					}
+				}
 			}
 		}
+		.defaultSize(defaultWindowSize)
 		.commands {
 			CommandGroup(replacing: .saveItem) {
 				Button("Close") {
@@ -33,6 +65,18 @@ struct gmaxApp: App {
 					}
 				}
 				.keyboardShortcut("w", modifiers: [.command])
+			}
+
+			CommandGroup(after: .windowSize) {
+				Button(shellModel.columnVisibility == .all ? "Hide Sidebar" : "Show Sidebar") {
+					shellModel.toggleSidebar()
+				}
+				.keyboardShortcut("b", modifiers: [.command])
+
+				Button(shellModel.isInspectorVisible ? "Hide Inspector" : "Show Inspector") {
+					shellModel.toggleInspector()
+				}
+				.keyboardShortcut("b", modifiers: [.command, .shift])
 			}
 
 			CommandMenu("Pane") {
