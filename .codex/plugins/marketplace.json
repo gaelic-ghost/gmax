@@ -1,0 +1,20 @@
+{
+  "name": "local-repo-install-gmax-0a4ac1f3",
+  "interface": {
+    "displayName": "Local Repo Install Gmax 0A4Ac1F3"
+  },
+  "plugins": [
+    {
+      "name": "apple-dev-skills",
+      "source": {
+        "source": "local",
+        "path": "./.codex/plugins/apple-dev-skills"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}
