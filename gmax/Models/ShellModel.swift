@@ -334,6 +334,7 @@ final class ShellModel: ObservableObject {
 	@Published var isInspectorVisible: Bool
 
 	let persistence: ShellPersistenceController
+	let launchContextBuilder: TerminalLaunchContextBuilder
 	let sessions: TerminalSessionRegistry
 	let paneControllers: TerminalPaneControllerStore
 	private var paneFramesByWorkspace: [WorkspaceID: [PaneID: CGRect]]
@@ -344,8 +345,13 @@ final class ShellModel: ObservableObject {
 		let persistence = ShellPersistenceController.shared
 		let persistedWorkspaces = persistence.loadWorkspaces()
 		let workspaces = persistedWorkspaces.isEmpty ? Self.sampleWorkspaces : persistedWorkspaces
+		let launchContextBuilder = TerminalLaunchContextBuilder.live()
 		self.persistence = persistence
-		self.sessions = TerminalSessionRegistry(workspaces: workspaces)
+		self.launchContextBuilder = launchContextBuilder
+		self.sessions = TerminalSessionRegistry(
+			workspaces: workspaces,
+			defaultLaunchConfiguration: launchContextBuilder.makeLaunchConfiguration()
+		)
 			self.paneControllers = TerminalPaneControllerStore()
 			self.workspaces = workspaces
 			self.selectedWorkspaceID = workspaces.first?.id
@@ -365,6 +371,7 @@ final class ShellModel: ObservableObject {
 			workspaces: workspaces,
 			selectedWorkspaceID: selectedWorkspaceID,
 			persistence: .shared,
+			launchContextBuilder: .live(),
 			columnVisibility: columnVisibility,
 			isInspectorVisible: isInspectorVisible
 		)
@@ -374,11 +381,16 @@ final class ShellModel: ObservableObject {
 		workspaces: [Workspace],
 		selectedWorkspaceID: WorkspaceID?,
 		persistence: ShellPersistenceController,
+		launchContextBuilder: TerminalLaunchContextBuilder,
 		columnVisibility: NavigationSplitViewVisibility = .all,
 		isInspectorVisible: Bool = true
 	) {
 		self.persistence = persistence
-		self.sessions = TerminalSessionRegistry(workspaces: workspaces)
+		self.launchContextBuilder = launchContextBuilder
+		self.sessions = TerminalSessionRegistry(
+			workspaces: workspaces,
+			defaultLaunchConfiguration: launchContextBuilder.makeLaunchConfiguration()
+		)
 		self.paneControllers = TerminalPaneControllerStore()
 		self.workspaces = workspaces
 		self.selectedWorkspaceID = selectedWorkspaceID
@@ -464,6 +476,13 @@ final class ShellModel: ObservableObject {
 		guard var root = workspaces[workspaceIndex].root else {
 			return
 		}
+		guard let sourcePane = root.findPane(id: paneID) else {
+			return
+		}
+
+		let sourceSession = sessions.ensureSession(id: sourcePane.sessionID)
+		let inheritedCurrentDirectory = sourceSession.currentDirectory
+			?? sourceSession.launchConfiguration.currentDirectory
 
 		let newPane = PaneLeaf()
 		guard root.split(
@@ -475,7 +494,12 @@ final class ShellModel: ObservableObject {
 		}
 
 		workspaces[workspaceIndex].root = root
-		_ = sessions.ensureSession(id: newPane.sessionID)
+		_ = sessions.ensureSession(
+			id: newPane.sessionID,
+			launchConfiguration: launchContextBuilder.makeLaunchConfiguration(
+				currentDirectory: inheritedCurrentDirectory
+			)
+		)
 		workspaces[workspaceIndex].focusedPaneID = newPane.id
 		recordPaneFocus(newPane.id, in: workspaceID)
 		schedulePersistenceSave()

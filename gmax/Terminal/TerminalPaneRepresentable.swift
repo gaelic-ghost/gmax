@@ -72,6 +72,7 @@ struct TerminalPaneRepresentable: NSViewRepresentable {
 			terminalView.startProcess(
 				executable: launch.executable,
 				args: launch.arguments,
+				environment: launch.environment,
 				currentDirectory: launch.currentDirectory
 			)
 			didStartProcess = true

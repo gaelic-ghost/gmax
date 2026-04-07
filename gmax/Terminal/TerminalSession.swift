@@ -11,12 +11,14 @@ import Combine
 struct TerminalLaunchConfiguration: Hashable {
 	var executable: String
 	var arguments: [String]
+	var environment: [String]?
 	var currentDirectory: String?
 
 	nonisolated static var loginShell: TerminalLaunchConfiguration {
 		TerminalLaunchConfiguration(
 			executable: ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh",
 			arguments: ["-l"],
+			environment: nil,
 			currentDirectory: nil
 		)
 	}
@@ -54,23 +56,40 @@ final class TerminalSession: ObservableObject, Identifiable {
 
 @MainActor
 final class TerminalSessionRegistry {
+	private let defaultLaunchConfiguration: TerminalLaunchConfiguration
 	private var sessionsByID: [TerminalSessionID: TerminalSession]
 
-	init(workspaces: [Workspace]) {
+	init(
+		workspaces: [Workspace],
+		defaultLaunchConfiguration: TerminalLaunchConfiguration = .loginShell
+	) {
+		self.defaultLaunchConfiguration = defaultLaunchConfiguration
 		self.sessionsByID = [:]
 		for workspace in workspaces {
 			for leaf in workspace.paneLeaves {
-				sessionsByID[leaf.sessionID] = TerminalSession(id: leaf.sessionID)
+				sessionsByID[leaf.sessionID] = TerminalSession(
+					id: leaf.sessionID,
+					launchConfiguration: defaultLaunchConfiguration,
+					currentDirectory: defaultLaunchConfiguration.currentDirectory
+				)
 			}
 		}
 	}
 
-	func ensureSession(id: TerminalSessionID) -> TerminalSession {
+	func ensureSession(
+		id: TerminalSessionID,
+		launchConfiguration: TerminalLaunchConfiguration? = nil
+	) -> TerminalSession {
 		if let session = sessionsByID[id] {
 			return session
 		}
 
-		let session = TerminalSession(id: id)
+		let resolvedLaunchConfiguration = launchConfiguration ?? defaultLaunchConfiguration
+		let session = TerminalSession(
+			id: id,
+			launchConfiguration: resolvedLaunchConfiguration,
+			currentDirectory: resolvedLaunchConfiguration.currentDirectory
+		)
 		sessionsByID[id] = session
 		return session
 	}
