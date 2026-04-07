@@ -8,6 +8,15 @@
 import AppKit
 import SwiftUI
 
+enum AppWindowRole: String {
+	case mainShell
+	case settings
+
+	var identifier: NSUserInterfaceItemIdentifier {
+		NSUserInterfaceItemIdentifier(rawValue)
+	}
+}
+
 @main
 struct gmaxApp: App {
 	@StateObject private var shellModel = ShellModel()
@@ -40,6 +49,7 @@ struct gmaxApp: App {
 						.navigationSplitViewColumnWidth(0)
 				}
 			}
+			.windowRole(.mainShell)
 			.toolbar {
 				ToolbarItem(placement: .navigation) {
 					Button {
@@ -80,8 +90,8 @@ struct gmaxApp: App {
 
 			CommandGroup(replacing: .saveItem) {
 				Button("Close") {
-					if let keyWindow = NSApp.keyWindow, keyWindow !== NSApp.mainWindow {
-						keyWindow.performClose(nil)
+					if NSApp.keyWindow?.identifier == AppWindowRole.settings.identifier {
+						NSApp.keyWindow?.performClose(nil)
 						return
 					}
 
@@ -180,6 +190,29 @@ struct gmaxApp: App {
 		}
 		Settings {
 			SettingsUtilityWindow()
+				.windowRole(.settings)
 		}
+	}
+}
+
+struct WindowRoleAccessor: NSViewRepresentable {
+	let role: AppWindowRole
+
+	func makeNSView(context: Context) -> NSView {
+		let view = NSView(frame: .zero)
+		view.isHidden = true
+		return view
+	}
+
+	func updateNSView(_ nsView: NSView, context: Context) {
+		DispatchQueue.main.async {
+			nsView.window?.identifier = role.identifier
+		}
+	}
+}
+
+extension View {
+	func windowRole(_ role: AppWindowRole) -> some View {
+		background(WindowRoleAccessor(role: role))
 	}
 }
