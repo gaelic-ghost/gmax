@@ -14,8 +14,6 @@ struct WorkspacePaneTreeView: View {
 	let onUpdateSplitFraction: (SplitID, CGFloat) -> Void
 	let onUpdatePaneFrames: ([PaneID: CGRect]) -> Void
 	let onFocusPane: (PaneID) -> Void
-	let onSplit: (PaneID, SplitDirection) -> Void
-	let onClosePane: (PaneID) -> Void
 
 	var body: some View {
 		Group {
@@ -23,15 +21,13 @@ struct WorkspacePaneTreeView: View {
 				PaneNodeView(
 					node: root,
 					focusedPaneID: workspace.focusedPaneID,
-					controllerForPane: controllerForPane,
-					onUpdateSplitFraction: onUpdateSplitFraction,
-					onFocusPane: onFocusPane,
-					onSplit: onSplit,
-					onClosePane: onClosePane
-				)
+						controllerForPane: controllerForPane,
+						onUpdateSplitFraction: onUpdateSplitFraction,
+						onFocusPane: onFocusPane
+					)
+				}
 			}
-		}
-		.coordinateSpace(name: "workspace-pane-tree")
+			.coordinateSpace(name: "workspace-pane-tree")
 		.onPreferenceChange(PaneFramePreferenceKey.self, perform: onUpdatePaneFrames)
 	}
 }
@@ -42,8 +38,6 @@ private struct PaneNodeView: View {
 	let controllerForPane: (PaneLeaf) -> TerminalPaneController
 	let onUpdateSplitFraction: (SplitID, CGFloat) -> Void
 	let onFocusPane: (PaneID) -> Void
-	let onSplit: (PaneID, SplitDirection) -> Void
-	let onClosePane: (PaneID) -> Void
 
 	var body: some View {
 		switch node {
@@ -51,14 +45,11 @@ private struct PaneNodeView: View {
 				let controller = controllerForPane(leaf)
 				PaneLeafCard(
 					pane: leaf,
-					controller: controller,
-					session: controller.session,
-					isFocused: leaf.id == focusedPaneID,
-					onFocus: { onFocusPane(leaf.id) },
-					onSplitRight: { onSplit(leaf.id, .right) },
-					onSplitDown: { onSplit(leaf.id, .down) },
-					onClose: { onClosePane(leaf.id) }
-				)
+						controller: controller,
+						session: controller.session,
+						isFocused: leaf.id == focusedPaneID,
+						onFocus: { onFocusPane(leaf.id) }
+					)
 
 			case .split(let split):
 				PaneSplitContainer(
@@ -69,23 +60,19 @@ private struct PaneNodeView: View {
 					PaneNodeView(
 						node: split.first,
 						focusedPaneID: focusedPaneID,
-						controllerForPane: controllerForPane,
-						onUpdateSplitFraction: onUpdateSplitFraction,
-						onFocusPane: onFocusPane,
-						onSplit: onSplit,
-						onClosePane: onClosePane
-					)
-				} second: {
-					PaneNodeView(
+							controllerForPane: controllerForPane,
+							onUpdateSplitFraction: onUpdateSplitFraction,
+							onFocusPane: onFocusPane
+						)
+					} second: {
+						PaneNodeView(
 						node: split.second,
 						focusedPaneID: focusedPaneID,
-						controllerForPane: controllerForPane,
-						onUpdateSplitFraction: onUpdateSplitFraction,
-						onFocusPane: onFocusPane,
-						onSplit: onSplit,
-						onClosePane: onClosePane
-					)
-				}
+							controllerForPane: controllerForPane,
+							onUpdateSplitFraction: onUpdateSplitFraction,
+							onFocusPane: onFocusPane
+						)
+					}
 		}
 	}
 }
@@ -209,9 +196,6 @@ private struct PaneLeafCard: View {
 	@ObservedObject var session: TerminalSession
 	let isFocused: Bool
 	let onFocus: () -> Void
-	let onSplitRight: () -> Void
-	let onSplitDown: () -> Void
-	let onClose: () -> Void
 
 	var body: some View {
 		ZStack(alignment: .topLeading) {
@@ -223,10 +207,10 @@ private struct PaneLeafCard: View {
 			.background(.black)
 
 
-			VStack(alignment: .leading, spacing: 10) {
-				HStack(spacing: 8) {
-					Text(session.title)
-						.font(.headline)
+				VStack(alignment: .leading, spacing: 10) {
+					HStack(spacing: 8) {
+						Text(session.title)
+							.font(.headline)
 						.lineLimit(1)
 					if let currentDirectory = session.currentDirectory {
 						Text(currentDirectory)
@@ -234,23 +218,15 @@ private struct PaneLeafCard: View {
 							.foregroundStyle(.secondary)
 							.lineLimit(1)
 					}
-					if isFocused {
-						Text("Focused")
-							.font(.caption.weight(.semibold))
-							.foregroundStyle(.green)
+						if isFocused {
+							Text("Focused")
+								.font(.caption.weight(.semibold))
+								.foregroundStyle(.green)
+						}
 					}
 				}
-
-				HStack {
-					Button("Focus", action: onFocus)
-					Button("Split Right", action: onSplitRight)
-					Button("Split Down", action: onSplitDown)
-					Button("Close", action: onClose)
-				}
-				.buttonStyle(.bordered)
-			}
-			.padding(12)
-			.background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
+				.padding(12)
+				.background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
 			.padding(12)
 		}
 		.frame(maxWidth: .infinity, maxHeight: .infinity)

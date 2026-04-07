@@ -14,7 +14,14 @@ struct DetailPane: View {
 		if let workspace = model.selectedWorkspace,
 		   let pane = model.focusedPane,
 		   let session = model.sessions.session(for: pane.sessionID) {
-			ActivePaneDetails(workspaceTitle: workspace.title, pane: pane, session: session)
+			ActivePaneDetails(
+				workspaceTitle: workspace.title,
+				pane: pane,
+				session: session,
+				onSplitRight: { model.splitFocusedPane(.right) },
+				onSplitDown: { model.splitFocusedPane(.down) },
+				onClose: { model.closeFocusedPane() }
+			)
 		} else {
 			ContentUnavailableView("No Active Pane", systemImage: "rectangle.on.rectangle")
 		}
@@ -25,11 +32,27 @@ private struct ActivePaneDetails: View {
 	let workspaceTitle: String
 	let pane: PaneLeaf
 	@ObservedObject var session: TerminalSession
+	let onSplitRight: () -> Void
+	let onSplitDown: () -> Void
+	let onClose: () -> Void
 
 	var body: some View {
 		VStack(alignment: .leading, spacing: 16) {
 			Text("Active Pane")
 				.font(.title2.weight(.semibold))
+
+			VStack(alignment: .leading, spacing: 10) {
+				Text("Actions")
+					.font(.caption.weight(.semibold))
+					.foregroundStyle(.secondary)
+
+				HStack {
+					Button("Split Right", action: onSplitRight)
+					Button("Split Down", action: onSplitDown)
+					Button("Close Pane", action: onClose)
+				}
+				.buttonStyle(.bordered)
+			}
 
 			Group {
 				labelValue("Workspace", workspaceTitle)
