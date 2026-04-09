@@ -16,18 +16,20 @@ Build `gmax` into a finished macOS terminal workspace app:
 - [x] Workspace sidebar
 - [x] Recursive split-pane model
 - [x] SwiftTerm-backed local shell panes
+- [x] Explicit workspace creation and standalone new-pane creation commands
 - [x] Directional pane focus movement
 - [x] Close semantics for panes, empty workspaces, and window fallback
 - [x] Core Data persistence for workspaces and pane graph
+- [x] App settings window for terminal appearance
 - [x] Maintainer architecture note
 
 ## Milestone 1: Workspace And Pane Core
 
-- [ ] Add explicit workspace creation
+- [x] Add explicit workspace creation
 - [ ] Add workspace rename
 - [ ] Add workspace deletion from the UI
 - [ ] Add duplicate workspace or clone-layout behavior
-- [ ] Add new-pane creation commands beyond split-from-focus flow
+- [x] Add new-pane creation commands beyond split-from-focus flow
 - [ ] Add pane restart / relaunch behavior after shell exit
 - [ ] Add better empty-workspace presentation and actions
 - [ ] Persist selected workspace and inspector visibility per scene
@@ -84,20 +86,47 @@ Build `gmax` into a finished macOS terminal workspace app:
 
 ## Milestone 7: Deeper Terminal Integrations/Remote/SSH/Etc
 
-- [ ] Explorre other SwiftTerm types, particularly `TerminalView`
-- [ ] Add Ghostty.app pane option (depends on completion of ghostty's proper API surface)
-- [ ] SwiftTerm Headless terminal for workflow command execution
-- [ ] Headless terminal for remote SSH. See also: Apple Network, Swift NIO, etc.
+- [ ] Explore other SwiftTerm types, particularly `TerminalView`
+- [ ] Decide how local-shell, headless, and remote-session backends should share one durable session model
+- [ ] Add a headless terminal path for workflow command execution
+- [ ] Add a remote SSH session path with clear connection lifecycle and operator-facing state
+- [ ] Surface remote host, command, and connection metadata in the inspector
+- [ ] Evaluate transport and protocol primitives worth using for remote sessions
+- [ ] Add Ghostty.app pane option if and when Ghostty exposes a stable integration surface
 
 ## Milestone 8: App Sandbox Compatibility
 
 - [ ] Move environment capture to a bundled XPC service or SMAppService helper
+- [ ] Audit local-shell launch assumptions against macOS App Sandbox constraints
+- [ ] Decide how shell launching, environment inheritance, and path resolution should behave in sandboxed builds
+- [ ] Add security-scoped or bookmark-backed file access where the product needs durable user-selected locations
+- [ ] Keep helper and IPC design explicit, minimal, and operator-friendly to debug
 
 ## Milestone 9: iOS Remote and iPadOS App
 
+- [ ] Define the first remote-companion scope instead of assuming full desktop feature parity
+- [ ] Reuse the workspace and pane model where it composes cleanly across macOS and iPadOS
+- [ ] Design an iPad external-keyboard-first interaction model
+- [ ] Add a remote session browser with clear workspace and pane selection
+- [ ] Decide which inspector affordances belong on touch-first platforms
+- [ ] Evaluate whether iPhone should stay companion-only while iPad carries the fuller remote shell story
+
 ## Milestone 10: Chromium Browser Pane
 
+- [ ] Define the browser-pane use cases that justify embedding Chromium instead of bouncing out to the default browser
+- [ ] Add a browser pane model that can coexist with terminal panes in the same workspace tree
+- [ ] Decide how navigation state, history, and session isolation should persist
+- [ ] Add intentional controls and inspector metadata for browser panes
+- [ ] Define security boundaries for web content inside mixed terminal workspaces
+
 ## Milestone 11: Custom Codex App-Server Pane
+
+- [ ] Define the first Codex-specific pane workflows worth building into `gmax`
+- [ ] Decide whether the pane is chat-first, tool-first, or workflow-first
+- [ ] Add a durable model for pane-scoped prompts, responses, and task context
+- [ ] Define how terminal panes and Codex panes should share or hand off context
+- [ ] Add operator-friendly visibility into tool execution, progress, and failure states
+- [ ] Keep the app-server integration explicit enough that local and remote Codex backends can evolve without rewriting the pane model
 
 ## Near-Term Recommended Order
 

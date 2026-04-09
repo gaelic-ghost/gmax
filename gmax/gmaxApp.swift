@@ -22,69 +22,14 @@ struct gmaxApp: App {
 	@StateObject private var shellModel = ShellModel()
 	@State private var isBypassingLastPaneCloseConfirmation = false
 
-	private let defaultWindowSize = CGSize(width: 1_440, height: 900)
-	private let sidebarColumnWidth: CGFloat = 220
-	private let contentColumnIdealWidth: CGFloat = 920
-	private let detailColumnMinimumWidth: CGFloat = 220
-	private let detailColumnIdealWidth: CGFloat = 260
-	private let detailColumnMaximumWidth: CGFloat = 340
-
 	var body: some Scene {
 		Window("gmax exploration", id: "main-window") {
-			NavigationSplitView(columnVisibility: $shellModel.columnVisibility) {
-				SidebarPane(model: shellModel)
-					.navigationSplitViewColumnWidth(sidebarColumnWidth)
-			} content: {
-				ContentPane(model: shellModel)
-					.navigationSplitViewColumnWidth(min: 640, ideal: contentColumnIdealWidth)
-			} detail: {
-				if shellModel.isInspectorVisible {
-					DetailPane(model: shellModel)
-						.navigationSplitViewColumnWidth(
-							min: detailColumnMinimumWidth,
-							ideal: detailColumnIdealWidth,
-							max: detailColumnMaximumWidth
-						)
-				} else {
-					Color.clear
-						.navigationSplitViewColumnWidth(0)
-				}
-				}
-				.windowRole(.mainShell)
-				.windowCloseConfirmation(
-					model: shellModel,
-					isBypassingConfirmation: $isBypassingLastPaneCloseConfirmation
-				)
-				.toolbar {
-				ToolbarItem(placement: .navigation) {
-					Button {
-						shellModel.createWorkspace()
-					} label: {
-						Label("New Workspace", systemImage: "plus.rectangle.on.rectangle")
-					}
-				}
-
-					ToolbarItem(placement: .automatic) {
-					Button {
-						shellModel.createPane()
-					} label: {
-						Label("New Pane", systemImage: "uiwindow.split.2x1")
-					}
-				}
-
-				ToolbarItem(placement: .automatic) {
-					Button {
-						shellModel.toggleInspector()
-					} label: {
-						Label(
-							shellModel.isInspectorVisible ? "Hide Inspector" : "Show Inspector",
-							systemImage: "sidebar.right"
-						)
-					}
-				}
-			}
+			MainShellSceneView(
+				shellModel: shellModel,
+				isBypassingLastPaneCloseConfirmation: $isBypassingLastPaneCloseConfirmation
+			)
 		}
-		.defaultSize(defaultWindowSize)
+		.defaultSize(width: 1_440, height: 900)
 		.commands {
 			CommandGroup(replacing: .newItem) {
 				Button("New Workspace") {
@@ -197,6 +142,105 @@ struct gmaxApp: App {
 			SettingsUtilityWindow()
 				.windowRole(.settings)
 		}
+	}
+}
+
+private struct MainShellSceneView: View {
+	@ObservedObject var shellModel: ShellModel
+	@Binding var isBypassingLastPaneCloseConfirmation: Bool
+	@SceneStorage("mainShell.selectedWorkspaceID") private var restoredSelectedWorkspaceID: String?
+	@SceneStorage("mainShell.isInspectorVisible") private var restoredInspectorVisible = true
+	@State private var hasAppliedSceneState = false
+
+	private let sidebarColumnWidth: CGFloat = 220
+	private let contentColumnIdealWidth: CGFloat = 920
+	private let detailColumnMinimumWidth: CGFloat = 220
+	private let detailColumnIdealWidth: CGFloat = 260
+	private let detailColumnMaximumWidth: CGFloat = 340
+
+	var body: some View {
+		NavigationSplitView(columnVisibility: $shellModel.columnVisibility) {
+			SidebarPane(model: shellModel)
+				.navigationSplitViewColumnWidth(sidebarColumnWidth)
+		} content: {
+			ContentPane(model: shellModel)
+				.navigationSplitViewColumnWidth(min: 640, ideal: contentColumnIdealWidth)
+		} detail: {
+			if shellModel.isInspectorVisible {
+				DetailPane(model: shellModel)
+					.navigationSplitViewColumnWidth(
+						min: detailColumnMinimumWidth,
+						ideal: detailColumnIdealWidth,
+						max: detailColumnMaximumWidth
+					)
+			} else {
+				Color.clear
+					.navigationSplitViewColumnWidth(0)
+			}
+		}
+		.windowRole(.mainShell)
+		.windowCloseConfirmation(
+			model: shellModel,
+			isBypassingConfirmation: $isBypassingLastPaneCloseConfirmation
+		)
+		.toolbar {
+			ToolbarItem(placement: .navigation) {
+				Button {
+					shellModel.createWorkspace()
+				} label: {
+					Label("New Workspace", systemImage: "plus.rectangle.on.rectangle")
+				}
+			}
+
+			ToolbarItem(placement: .automatic) {
+				Button {
+					shellModel.createPane()
+				} label: {
+					Label("New Pane", systemImage: "uiwindow.split.2x1")
+				}
+			}
+
+			ToolbarItem(placement: .automatic) {
+				Button {
+					shellModel.toggleInspector()
+				} label: {
+					Label(
+						shellModel.isInspectorVisible ? "Hide Inspector" : "Show Inspector",
+						systemImage: "sidebar.right"
+					)
+				}
+			}
+		}
+		.onAppear(perform: applySceneStateIfNeeded)
+		.onChange(of: shellModel.selectedWorkspaceID?.rawValue.uuidString) { _, newValue in
+			restoredSelectedWorkspaceID = newValue
+		}
+		.onChange(of: shellModel.isInspectorVisible) { _, newValue in
+			restoredInspectorVisible = newValue
+		}
+	}
+
+	private func applySceneStateIfNeeded() {
+		guard !hasAppliedSceneState else {
+			return
+		}
+
+		hasAppliedSceneState = true
+		shellModel.setInspectorVisible(restoredInspectorVisible)
+
+		guard
+			let restoredSelectedWorkspaceID,
+			let workspaceUUID = UUID(uuidString: restoredSelectedWorkspaceID)
+		else {
+			return
+		}
+
+		let workspaceID = WorkspaceID(rawValue: workspaceUUID)
+		guard shellModel.workspace(for: workspaceID) != nil else {
+			return
+		}
+
+		shellModel.selectWorkspace(workspaceID)
 	}
 }
 

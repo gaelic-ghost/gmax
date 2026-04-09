@@ -8,13 +8,8 @@
 
 /* Begin PBXBuildFile section */
 		49A943482F855AA200F4016C /* LICENSE in Resources */ = {isa = PBXBuildFile; fileRef = 49A943462F855AA200F4016C /* LICENSE */; };
-		49A943492F855AA200F4016C /* AGENTS.md in Resources */ = {isa = PBXBuildFile; fileRef = 49A943452F855AA200F4016C /* AGENTS.md */; };
 		49A9434A2F855AA200F4016C /* NOTICE in Resources */ = {isa = PBXBuildFile; fileRef = 49A943472F855AA200F4016C /* NOTICE */; };
 		49BCD34B2F848A7C00BC2479 /* SwiftTerm in Frameworks */ = {isa = PBXBuildFile; productRef = 49BCD34A2F848A7C00BC2479 /* SwiftTerm */; };
-		49BCD35D2F848CEC00BC2479 /* README.md in Resources */ = {isa = PBXBuildFile; fileRef = 49BCD35C2F848CEC00BC2479 /* README.md */; };
-		49BCD35F2F848CF600BC2479 /* ROADMAP.md in Resources */ = {isa = PBXBuildFile; fileRef = 49BCD35E2F848CF600BC2479 /* ROADMAP.md */; };
-		49BCD3612F848D0300BC2479 /* TODO.md in Resources */ = {isa = PBXBuildFile; fileRef = 49BCD3602F848D0300BC2479 /* TODO.md */; };
-		49BCD3632F848D0A00BC2479 /* FIXME.md in Resources */ = {isa = PBXBuildFile; fileRef = 49BCD3622F848D0A00BC2479 /* FIXME.md */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -268,13 +263,8 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				49BCD35D2F848CEC00BC2479 /* README.md in Resources */,
 				49A943482F855AA200F4016C /* LICENSE in Resources */,
-				49A943492F855AA200F4016C /* AGENTS.md in Resources */,
 				49A9434A2F855AA200F4016C /* NOTICE in Resources */,
-				49BCD35F2F848CF600BC2479 /* ROADMAP.md in Resources */,
-				49BCD3632F848D0A00BC2479 /* FIXME.md in Resources */,
-				49BCD3612F848D0300BC2479 /* TODO.md in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

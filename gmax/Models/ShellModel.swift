@@ -343,7 +343,7 @@ final class ShellModel: ObservableObject {
 	init() {
 		let persistence = ShellPersistenceController.shared
 		let persistedWorkspaces = persistence.loadWorkspaces()
-		let workspaces = persistedWorkspaces.isEmpty ? Self.sampleWorkspaces : persistedWorkspaces
+		let workspaces = persistedWorkspaces.isEmpty ? [Self.makeDefaultWorkspace()] : persistedWorkspaces
 		let launchContextBuilder = TerminalLaunchContextBuilder.live()
 		self.persistence = persistence
 		self.launchContextBuilder = launchContextBuilder
@@ -436,12 +436,12 @@ final class ShellModel: ObservableObject {
 	}
 
 	func createWorkspace() {
-		let pane = PaneLeaf()
-		let workspace = Workspace(
-			title: "Workspace \(workspaces.count + 1)",
-			root: .leaf(pane),
-			focusedPaneID: pane.id
+		let workspace = Self.makeDefaultWorkspace(
+			title: uniqueWorkspaceTitle(startingWith: "Workspace \(workspaces.count + 1)")
 		)
+		guard let pane = workspace.root?.firstLeaf() else {
+			return
+		}
 
 		workspaces.append(workspace)
 		_ = sessions.ensureSession(
@@ -450,6 +450,56 @@ final class ShellModel: ObservableObject {
 		)
 		selectedWorkspaceID = workspace.id
 		paneFocusHistoryByWorkspace[workspace.id] = [pane.id]
+		schedulePersistenceSave()
+	}
+
+	func renameWorkspace(_ workspaceID: WorkspaceID, to proposedTitle: String) {
+		guard let workspaceIndex = workspaces.firstIndex(where: { $0.id == workspaceID }) else {
+			return
+		}
+
+		let trimmedTitle = proposedTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+		guard !trimmedTitle.isEmpty else {
+			return
+		}
+
+		workspaces[workspaceIndex].title = trimmedTitle
+		schedulePersistenceSave()
+	}
+
+	func duplicateWorkspace(_ workspaceID: WorkspaceID) {
+		guard let workspaceIndex = workspaces.firstIndex(where: { $0.id == workspaceID }) else {
+			return
+		}
+
+		let duplicatedWorkspace = duplicatedWorkspace(from: workspaces[workspaceIndex])
+		workspaces.insert(duplicatedWorkspace, at: workspaceIndex + 1)
+		selectedWorkspaceID = duplicatedWorkspace.id
+		paneFocusHistoryByWorkspace[duplicatedWorkspace.id] = [duplicatedWorkspace.focusedPaneID].compactMap { $0 }
+		schedulePersistenceSave()
+	}
+
+	func canDeleteWorkspace(_ workspaceID: WorkspaceID) -> Bool {
+		workspaces.count > 1 && workspaces.contains(where: { $0.id == workspaceID })
+	}
+
+	func deleteWorkspace(_ workspaceID: WorkspaceID) {
+		guard canDeleteWorkspace(workspaceID),
+			  let workspaceIndex = workspaces.firstIndex(where: { $0.id == workspaceID }) else {
+			return
+		}
+
+		let wasSelectedWorkspace = selectedWorkspaceID == workspaceID
+		workspaces.remove(at: workspaceIndex)
+		paneFramesByWorkspace.removeValue(forKey: workspaceID)
+		paneFocusHistoryByWorkspace.removeValue(forKey: workspaceID)
+		removeUnreferencedSessions()
+
+		if wasSelectedWorkspace {
+			let nextIndex = min(workspaceIndex, workspaces.count - 1)
+			selectedWorkspaceID = workspaces[nextIndex].id
+		}
+
 		schedulePersistenceSave()
 	}
 
@@ -641,6 +691,10 @@ final class ShellModel: ObservableObject {
 		isInspectorVisible.toggle()
 	}
 
+	func setInspectorVisible(_ isVisible: Bool) {
+		isInspectorVisible = isVisible
+	}
+
 	func controller(for pane: PaneLeaf) -> TerminalPaneController {
 		let session = sessions.ensureSession(id: pane.sessionID)
 		return paneControllers.controller(for: pane, session: session)
@@ -822,6 +876,86 @@ final class ShellModel: ObservableObject {
 }
 
 extension ShellModel {
+	private func uniqueWorkspaceTitle(startingWith baseTitle: String) -> String {
+		let normalizedBaseTitle = baseTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+		let resolvedBaseTitle = normalizedBaseTitle.isEmpty ? "Workspace" : normalizedBaseTitle
+		let existingTitles = Set(workspaces.map(\.title))
+		guard existingTitles.contains(resolvedBaseTitle) else {
+			return resolvedBaseTitle
+		}
+
+		var suffix = 2
+		while true {
+			let candidate = "\(resolvedBaseTitle) \(suffix)"
+			if !existingTitles.contains(candidate) {
+				return candidate
+			}
+			suffix += 1
+		}
+	}
+
+	private func duplicatedWorkspace(from workspace: Workspace) -> Workspace {
+		var clonedFocusedPaneID: PaneID?
+		let clonedRoot = workspace.root.map { duplicateNode($0, focusedPaneID: workspace.focusedPaneID, clonedFocusedPaneID: &clonedFocusedPaneID) }
+
+		return Workspace(
+			title: uniqueWorkspaceTitle(startingWith: "\(workspace.title) Copy"),
+			root: clonedRoot,
+			focusedPaneID: clonedFocusedPaneID
+		)
+	}
+
+	private func duplicateNode(
+		_ node: PaneNode,
+		focusedPaneID: PaneID?,
+		clonedFocusedPaneID: inout PaneID?
+	) -> PaneNode {
+		switch node {
+			case .leaf(let leaf):
+				let sourceSession = sessions.ensureSession(id: leaf.sessionID)
+				let inheritedCurrentDirectory = sourceSession.currentDirectory
+					?? sourceSession.launchConfiguration.currentDirectory
+				let clonedLeaf = PaneLeaf()
+				_ = sessions.ensureSession(
+					id: clonedLeaf.sessionID,
+					launchConfiguration: launchContextBuilder.makeLaunchConfiguration(
+						currentDirectory: inheritedCurrentDirectory
+					)
+				)
+				if leaf.id == focusedPaneID {
+					clonedFocusedPaneID = clonedLeaf.id
+				}
+				return .leaf(clonedLeaf)
+
+			case .split(let split):
+				return .split(
+					PaneSplit(
+						axis: split.axis,
+						fraction: split.fraction,
+						first: duplicateNode(
+							split.first,
+							focusedPaneID: focusedPaneID,
+							clonedFocusedPaneID: &clonedFocusedPaneID
+						),
+						second: duplicateNode(
+							split.second,
+							focusedPaneID: focusedPaneID,
+							clonedFocusedPaneID: &clonedFocusedPaneID
+						)
+					)
+				)
+		}
+	}
+
+	private static func makeDefaultWorkspace(title: String = "Workspace 1") -> Workspace {
+		let pane = PaneLeaf()
+		return Workspace(
+			title: title,
+			root: .leaf(pane),
+			focusedPaneID: pane.id
+		)
+	}
+
 	private struct PaneNavigationMetrics: Comparable {
 		let hasPerpendicularOverlap: Bool
 		let perpendicularOverlap: CGFloat
@@ -893,39 +1027,4 @@ extension ShellModel {
 			persistence.save(workspaces: workspacesSnapshot)
 		}
 	}
-
-	static let sampleWorkspaces: [Workspace] = {
-		let workspaceOneRootLeaf = PaneLeaf()
-		let workspaceOneTopRightLeaf = PaneLeaf()
-		let workspaceOneBottomRightLeaf = PaneLeaf()
-
-		let workspaceOne = Workspace(
-			title: "Workspace One",
-			root: .split(
-				PaneSplit(
-					axis: .horizontal,
-					fraction: 0.5,
-					first: .leaf(workspaceOneRootLeaf),
-					second: .split(
-						PaneSplit(
-							axis: .vertical,
-							fraction: 0.5,
-							first: .leaf(workspaceOneTopRightLeaf),
-							second: .leaf(workspaceOneBottomRightLeaf)
-						)
-					)
-				)
-			),
-			focusedPaneID: workspaceOneBottomRightLeaf.id
-		)
-
-		let workspaceTwoLeaf = PaneLeaf()
-		let workspaceTwo = Workspace(
-			title: "Workspace Two",
-			root: .leaf(workspaceTwoLeaf),
-			focusedPaneID: workspaceTwoLeaf.id
-		)
-
-		return [workspaceOne, workspaceTwo]
-	}()
 }
