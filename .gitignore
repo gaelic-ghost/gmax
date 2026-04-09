@@ -1,3 +1,5 @@
 .DS_Store
 UserInterfaceState.xcuserstate
 .venv-maintenance/
+.codex/
+__pycache__/
