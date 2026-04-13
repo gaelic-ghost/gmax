@@ -1,4 +1,13 @@
 gmax
 Copyright 2026 Gale Williams
 
-This product includes software and documentation developed by Gale Williams.
+This repository is currently distributed under the Functional Source License
+1.1, Apache 2.0 future-license variant (`FSL-1.1-ALv2`).
+
+During the protected window, competing commercial use is not a permitted
+purpose. Non-competing internal use, non-commercial education, and
+non-commercial research remain permitted under the license text in
+`LICENSE`.
+
+Each covered release converts to Apache License 2.0 on the second anniversary
+of the date that release was made available.

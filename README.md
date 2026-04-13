@@ -161,4 +161,16 @@ scripts/repo-maintenance/validate-all.sh
 
 ## License
 
-Licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE).
+`gmax` is currently source-available under the Functional Source License 1.1,
+Apache 2.0 future-license variant (`FSL-1.1-ALv2`).
+
+That means this repository is available for permitted non-competing use now,
+including internal use, non-commercial education, and non-commercial research.
+Competing commercial use is outside the permitted-purpose grant during the
+protected window.
+
+Each covered release converts to Apache License 2.0 on the second anniversary
+of the date that release was made available.
+
+See [LICENSE](LICENSE), [NOTICE](NOTICE), and
+[LICENSE-TRANSITION.md](LICENSE-TRANSITION.md).
