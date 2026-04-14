@@ -93,6 +93,7 @@ struct MainShellSceneView: View {
 				} label: {
 					Label("Open Saved Workspaces", systemImage: "folder")
 				}
+				.labelStyle(.iconOnly)
 				.help("Open saved workspaces (\u{2318}O)")
 				.accessibilityIdentifier("mainShell.openSavedWorkspacesButton")
 			}
@@ -103,6 +104,8 @@ struct MainShellSceneView: View {
 				} label: {
 					Label("New Workspace", systemImage: "plus.rectangle.on.rectangle")
 				}
+				.labelStyle(.iconOnly)
+				.help("Create a new workspace (\u{2318}N)")
 				.accessibilityIdentifier("mainShell.newWorkspaceButton")
 			}
 
@@ -112,6 +115,8 @@ struct MainShellSceneView: View {
 				} label: {
 					Label("Split Right", systemImage: "uiwindow.split.2x1")
 				}
+				.labelStyle(.iconOnly)
+				.help("Split the focused pane to the right (\u{2318}D)")
 				.disabled(!sceneContext.canSplitFocusedPane)
 				.accessibilityIdentifier("mainShell.splitRightButton")
 
@@ -120,9 +125,13 @@ struct MainShellSceneView: View {
 				} label: {
 					Label("Split Down", systemImage: "uiwindow.split.2x1.rotate.90")
 				}
+				.labelStyle(.iconOnly)
+				.help("Split the focused pane downward (\u{21E7}\u{2318}D)")
 				.disabled(!sceneContext.canSplitFocusedPane)
 				.accessibilityIdentifier("mainShell.splitDownButton")
+			}
 
+			ToolbarItem(placement: .primaryAction) {
 				Button {
 					sceneContext.toggleInspector()
 				} label: {
@@ -131,6 +140,8 @@ struct MainShellSceneView: View {
 						systemImage: "sidebar.right"
 					)
 				}
+				.labelStyle(.iconOnly)
+				.help(sceneContext.isInspectorVisible ? "Hide the inspector (\u{21E7}\u{2318}B)" : "Show the inspector (\u{21E7}\u{2318}B)")
 				.accessibilityIdentifier("mainShell.toggleInspectorButton")
 			}
 		}
