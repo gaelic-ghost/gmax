@@ -113,6 +113,12 @@ The workspace sidebar is a SwiftUI `List(selection:)` with:
 
 The app already exposes meaningful menu commands and keyboard shortcuts for workspaces, panes, close behavior, and inspector visibility.
 
+The current command surface is also frontmost-window scoped:
+
+- the main shell uses a `WindowGroup`
+- each shell window owns scene-local selection plus sidebar and inspector visibility
+- menu commands resolve through `focusedSceneValue` instead of one app-global selection binding
+
 ### Plan
 
 - Treat the command surface as part of accessibility, not just power-user polish.
@@ -122,6 +128,7 @@ The app already exposes meaningful menu commands and keyboard shortcuts for work
 ### Risks
 
 - If toolbar labels, menu titles, and inspector action titles drift apart, Voice Control and spoken-navigation users get a worse experience even when all actions technically exist.
+- If command routing, toolbar focus, and scene-local selection disagree, a keyboard or spoken-navigation user may act on the wrong window even though the command itself succeeded.
 
 ### macOS Alignment Notes
 
@@ -149,6 +156,9 @@ The pane tree is a custom SwiftUI composition:
   - accessibility value: focused state, running or exited state, and current directory when available
   - accessibility actions: Restart Shell, Split Right, Split Down, Close Pane
 - Treat the pane card as a focusable custom control for keyboard navigation, not just a painted background around an AppKit child view.
+- Status:
+  - implemented as pane-level labels, values, hints, selected-state traits, and custom actions on `PaneLeafCard`
+  - still needs manual validation for VoiceOver phrasing, focus order, and Full Keyboard Access behavior
 
 #### Keyboard Focus Shape
 
@@ -156,6 +166,9 @@ The pane tree is a custom SwiftUI composition:
 - Apply `focusSection()` to the pane-tree region so sequential keyboard movement stays within the pane cohort in a predictable order before escaping to adjacent shell chrome.
 - Evaluate `focusable(interactions: .activate)` or a similar constrained focus interaction on pane cards so they participate in keyboard navigation without pretending to be generic button rows.
 - Keep pane focus changes routed back into `ShellModel.focusPane(_:in:)` so the visual highlight, inspector, and model selection remain synchronized.
+- Status:
+  - `focusable(interactions: .activate)` is already applied to pane cards
+  - the remaining work is to validate how that behaves against the embedded terminal host and decide whether additional focus shaping is still needed
 
 #### Split Divider Accessibility
 
@@ -319,7 +332,12 @@ For each release candidate:
    - pane tree
    - inspector
    - saved-workspace sheet
-4. Record whether the terminal surface itself is:
+4. Run a multi-window command-routing pass:
+   - open a second shell window
+   - select different workspaces in each window
+   - confirm `New Pane`, `Save Workspace`, `Open Workspace…`, `Close Workspace`, and `Delete Workspace` follow the frontmost window
+   - confirm keyboard focus and spoken focus do not leave the wrong window appearing active
+5. Record whether the terminal surface itself is:
    - meaningfully accessible
    - partially usable but limited
    - effectively inaccessible for live terminal content
@@ -341,8 +359,8 @@ The following may be acceptable as documented known limitations for `v0.1.0`:
 
 ## Recommended Next Implementation Order
 
-1. Add explicit accessibility labels, values, and actions to pane cards.
-2. Add keyboard-focus structure to the pane tree using SwiftUI focus helpers.
+1. Run the full manual keyboard-only, Full Keyboard Access, VoiceOver, and multi-window command-routing pass and capture exact findings.
+2. Repair any blocker-level issues where the wrong window receives commands or where pane focus is not visually or audibly trustworthy.
 3. Evaluate `LocalProcessTerminalView` directly with VoiceOver and Full Keyboard Access.
 4. Decide whether split dividers need direct accessible adjustment for `v0.1.0`.
 5. Tune inspector and saved-workspace row verbosity after the first spoken-navigation pass.
