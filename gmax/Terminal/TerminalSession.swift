@@ -8,7 +8,7 @@
 import Foundation
 import Combine
 
-struct TerminalLaunchConfiguration: Hashable {
+struct TerminalLaunchConfiguration: Hashable, Codable {
 	var executable: String
 	var arguments: [String]
 	var environment: [String]?
@@ -38,19 +38,28 @@ final class TerminalSession: ObservableObject, Identifiable {
 	@Published var title: String
 	@Published var currentDirectory: String?
 	@Published var state: TerminalSessionState
+	@Published private(set) var relaunchGeneration: Int
 
 	init(
 		id: TerminalSessionID,
 		launchConfiguration: TerminalLaunchConfiguration = .loginShell,
 		title: String = "Shell",
 		currentDirectory: String? = nil,
-		state: TerminalSessionState = .idle
+		state: TerminalSessionState = .idle,
+		relaunchGeneration: Int = 0
 	) {
 		self.id = id
 		self.launchConfiguration = launchConfiguration
 		self.title = title
 		self.currentDirectory = currentDirectory
 		self.state = state
+		self.relaunchGeneration = relaunchGeneration
+	}
+
+	func prepareForRelaunch() {
+		title = "Shell"
+		state = .idle
+		relaunchGeneration += 1
 	}
 }
 

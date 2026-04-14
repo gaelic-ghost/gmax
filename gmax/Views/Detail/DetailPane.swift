@@ -19,6 +19,7 @@ struct DetailPane: View {
 					workspaceTitle: workspace.title,
 					pane: pane,
 					session: session,
+					onRelaunch: { model.relaunchPane(pane.id, in: workspace.id) },
 					onSplitRight: { model.splitFocusedPane(.right) },
 					onSplitDown: { model.splitFocusedPane(.down) },
 					onClose: {
@@ -27,6 +28,14 @@ struct DetailPane: View {
 						}
 					}
 				)
+		} else if let workspace = model.selectedWorkspace {
+			WorkspaceDetails(
+				workspaceTitle: workspace.title,
+				paneCount: workspace.paneCount,
+				onStartShell: {
+					model.createPane()
+				}
+			)
 		} else {
 			ContentUnavailableView("No Active Pane", systemImage: "rectangle.on.rectangle")
 		}
@@ -37,6 +46,7 @@ private struct ActivePaneDetails: View {
 	let workspaceTitle: String
 	let pane: PaneLeaf
 	@ObservedObject var session: TerminalSession
+	let onRelaunch: () -> Void
 	let onSplitRight: () -> Void
 	let onSplitDown: () -> Void
 	let onClose: () -> Void
@@ -52,6 +62,8 @@ private struct ActivePaneDetails: View {
 					.foregroundStyle(.secondary)
 
 				HStack {
+					Button("Restart Shell", action: onRelaunch)
+						.disabled(session.state == .running)
 					Button("Split Right", action: onSplitRight)
 					Button("Split Down", action: onSplitDown)
 					Button("Close Pane", action: onClose)
@@ -96,6 +108,54 @@ private struct ActivePaneDetails: View {
 					return "Exited (\(exitCode))"
 				}
 				return "Exited"
+		}
+	}
+}
+
+private struct WorkspaceDetails: View {
+	let workspaceTitle: String
+	let paneCount: Int
+	let onStartShell: () -> Void
+
+	var body: some View {
+		VStack(alignment: .leading, spacing: 16) {
+			Text("Workspace")
+				.font(.title2.weight(.semibold))
+
+			VStack(alignment: .leading, spacing: 10) {
+				Text("Actions")
+					.font(.caption.weight(.semibold))
+					.foregroundStyle(.secondary)
+
+				Button("Start Shell", action: onStartShell)
+					.buttonStyle(.borderedProminent)
+			}
+
+			Group {
+				labelValue("Workspace", workspaceTitle)
+				labelValue("Pane Count", paneCount == 1 ? "1 pane" : "\(paneCount) panes")
+				labelValue(
+					"Status",
+					paneCount == 0
+						? "This workspace is empty and ready for a fresh shell."
+						: "Select a pane to inspect its shell session."
+				)
+			}
+
+			Spacer()
+		}
+		.padding()
+	}
+
+	@ViewBuilder
+	private func labelValue(_ label: String, _ value: String) -> some View {
+		VStack(alignment: .leading, spacing: 4) {
+			Text(label)
+				.font(.caption.weight(.semibold))
+				.foregroundStyle(.secondary)
+			Text(value)
+				.font(.system(.body, design: .monospaced))
+				.textSelection(.enabled)
 		}
 	}
 }

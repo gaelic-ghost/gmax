@@ -46,7 +46,7 @@ enum TerminalTheme: String, CaseIterable, Identifiable {
 	var backgroundColor: NSColor {
 		switch self {
 			case .defaultTerminal:
-				return NSColor(calibratedRed: 0.07, green: 0.08, blue: 0.11, alpha: 1)
+				return NSColor.textBackgroundColor
 			case .midnight:
 				return NSColor(calibratedRed: 0.04, green: 0.05, blue: 0.08, alpha: 1)
 			case .paper:
@@ -59,7 +59,7 @@ enum TerminalTheme: String, CaseIterable, Identifiable {
 	var foregroundColor: NSColor {
 		switch self {
 			case .defaultTerminal:
-				return NSColor(calibratedRed: 0.87, green: 0.89, blue: 0.94, alpha: 1)
+				return NSColor.textColor
 			case .midnight:
 				return NSColor(calibratedRed: 0.70, green: 0.84, blue: 1.00, alpha: 1)
 			case .paper:
@@ -72,7 +72,7 @@ enum TerminalTheme: String, CaseIterable, Identifiable {
 	var cursorColor: NSColor {
 		switch self {
 			case .defaultTerminal:
-				return NSColor(calibratedRed: 0.98, green: 0.98, blue: 1.00, alpha: 1)
+				return NSColor.selectedTextBackgroundColor
 			case .midnight:
 				return NSColor(calibratedRed: 1.00, green: 0.78, blue: 0.95, alpha: 1)
 			case .paper:
@@ -84,9 +84,11 @@ enum TerminalTheme: String, CaseIterable, Identifiable {
 
 	var cursorTextColor: NSColor {
 		switch self {
+			case .defaultTerminal:
+				return NSColor.selectedTextColor
 			case .paper:
 				return backgroundColor
-			case .defaultTerminal, .midnight, .phosphor:
+			case .midnight, .phosphor:
 				return NSColor.black
 		}
 	}
@@ -160,9 +162,17 @@ struct TerminalAppearance: Hashable {
 
 	func apply(to terminalView: TerminalView) {
 		terminalView.font = resolvedFont
-		terminalView.nativeBackgroundColor = theme.backgroundColor
-		terminalView.nativeForegroundColor = theme.foregroundColor
+
+		if theme == .defaultTerminal {
+			terminalView.configureNativeColors()
+		} else {
+			terminalView.nativeForegroundColor = theme.foregroundColor
+			terminalView.nativeBackgroundColor = theme.backgroundColor
+		}
+
 		terminalView.caretColor = theme.cursorColor
 		terminalView.caretTextColor = theme.cursorTextColor
+		terminalView.layer?.backgroundColor = terminalView.nativeBackgroundColor.cgColor
+		terminalView.needsDisplay = true
 	}
 }

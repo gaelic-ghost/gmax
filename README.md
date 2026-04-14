@@ -131,7 +131,10 @@ The current shell already exposes a few important command-driven interactions:
 - `cmd-shift-d`: split the focused pane downward
 - `cmd-option-left/right/up/down`: move focus directionally
 - `cmd-option-[` and `cmd-option-]`: move focus in pane order
-- `cmd-w`: close the focused pane, then empty workspace, then workspace, then window
+- `cmd-w`: close the focused pane, then close the workspace if it was the last pane, then close the window if it was the last workspace
+- `cmd-option-w`: close the selected workspace directly
+- `cmd-shift-w`: close the current window directly
+- `cmd-shift-o`: undo the most recent workspace close during the current app session
 
 ## Status
 

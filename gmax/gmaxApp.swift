@@ -19,8 +19,13 @@ enum AppWindowRole: String {
 
 @main
 struct gmaxApp: App {
-	@StateObject private var shellModel = ShellModel()
+	@StateObject private var shellModel: ShellModel
 	@State private var isBypassingLastPaneCloseConfirmation = false
+
+	init() {
+		WorkspacePersistenceDefaults.registerDefaults()
+		_shellModel = StateObject(wrappedValue: ShellModel())
+	}
 
 	var body: some Scene {
 		Window("gmax exploration", id: "main-window") {
@@ -38,21 +43,29 @@ struct gmaxApp: App {
 				.keyboardShortcut("n", modifiers: [.command])
 			}
 
+			CommandGroup(after: .newItem) {
+				Button("Undo Close Workspace") {
+					shellModel.undoCloseWorkspace()
+				}
+				.keyboardShortcut("o", modifiers: [.command, .shift])
+				.disabled(!shellModel.canUndoCloseWorkspace())
+			}
+
 			CommandGroup(replacing: .saveItem) {
 				Button("Close") {
-					if NSApp.keyWindow?.identifier == AppWindowRole.settings.identifier {
-						NSApp.keyWindow?.performClose(nil)
-						return
-					}
-
-						switch shellModel.performCloseCommand() {
-							case .closeWindow:
-								NSApp.keyWindow?.performClose(nil)
-							case .closedPane, .closedWorkspace, .noAction:
-								break
-						}
-					}
+					performContextualClose()
+				}
 				.keyboardShortcut("w", modifiers: [.command])
+
+				Button("Close Workspace") {
+					performWorkspaceClose()
+				}
+				.keyboardShortcut("w", modifiers: [.command, .option])
+
+				Button("Close Window") {
+					performWindowClose()
+				}
+				.keyboardShortcut("w", modifiers: [.command, .shift])
 			}
 
 			CommandGroup(after: .windowSize) {
@@ -133,15 +146,47 @@ struct gmaxApp: App {
 
 				Divider()
 
-				Button("Close Pane") {
+				Button("Close") {
 					_ = shellModel.performCloseCommand()
 				}
 			}
 		}
 		Settings {
-			SettingsUtilityWindow()
+			SettingsUtilityWindow(model: shellModel)
 				.windowRole(.settings)
 		}
+	}
+
+	private func performContextualClose() {
+		if NSApp.keyWindow?.identifier == AppWindowRole.settings.identifier {
+			NSApp.keyWindow?.performClose(nil)
+			return
+		}
+
+		switch shellModel.performCloseCommand() {
+			case .closeWindow:
+				NSApp.keyWindow?.performClose(nil)
+			case .closedPane, .closedWorkspace, .noAction:
+				break
+		}
+	}
+
+	private func performWorkspaceClose() {
+		if NSApp.keyWindow?.identifier == AppWindowRole.settings.identifier {
+			NSApp.keyWindow?.performClose(nil)
+			return
+		}
+
+		switch shellModel.closeSelectedWorkspace() {
+			case .closeWindow:
+				NSApp.keyWindow?.performClose(nil)
+			case .closedWorkspace, .closedPane, .noAction:
+				break
+		}
+	}
+
+	private func performWindowClose() {
+		NSApp.keyWindow?.performClose(nil)
 	}
 }
 

@@ -9,6 +9,8 @@ import AppKit
 import SwiftUI
 
 struct SettingsUtilityWindow: View {
+	@ObservedObject var model: ShellModel
+
 	@AppStorage(TerminalAppearanceDefaults.fontNameKey)
 	private var terminalFontName = TerminalAppearance.fallback.fontName
 
@@ -17,6 +19,12 @@ struct SettingsUtilityWindow: View {
 
 	@AppStorage(TerminalAppearanceDefaults.themeKey)
 	private var terminalThemeName = TerminalTheme.defaultTerminal.rawValue
+
+	@AppStorage(WorkspacePersistenceDefaults.restoreWorkspacesOnLaunchKey)
+	private var restoreWorkspacesOnLaunch = WorkspacePersistenceDefaults.systemRestoresWindowsByDefault()
+
+	@AppStorage(WorkspacePersistenceDefaults.keepRecentlyClosedWorkspacesKey)
+	private var keepRecentlyClosedWorkspaces = true
 
 	private let availableFonts = TerminalAppearance.availableFontOptions()
 
@@ -49,6 +57,21 @@ struct SettingsUtilityWindow: View {
 				}
 
 				TerminalAppearancePreview(appearance: currentAppearance)
+			}
+
+			Section("Workspaces") {
+				Toggle("Restore workspaces on launch", isOn: $restoreWorkspacesOnLaunch)
+
+				Toggle("Keep recently closed workspaces", isOn: $keepRecentlyClosedWorkspaces)
+					.onChange(of: keepRecentlyClosedWorkspaces) { _, isEnabled in
+						if !isEnabled {
+							model.clearRecentlyClosedWorkspaces()
+						}
+					}
+
+				Text("Restore applies the next time you launch gmax. Recently closed workspaces stay in-memory only for this running session.")
+					.font(.caption)
+					.foregroundStyle(.secondary)
 			}
 		}
 		.formStyle(.grouped)
@@ -91,5 +114,5 @@ private struct TerminalAppearancePreview: View {
 }
 
 #Preview {
-	SettingsUtilityWindow()
+	SettingsUtilityWindow(model: ShellModel())
 }

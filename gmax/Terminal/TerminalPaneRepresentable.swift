@@ -29,12 +29,12 @@ struct TerminalPaneRepresentable: NSViewRepresentable {
 
 	func makeNSView(context: Context) -> TerminalHostingContainerView {
 		let hostingView = context.coordinator.makeHostingView()
-		currentAppearance.apply(to: hostingView.terminalView)
+		applyCurrentAppearance(to: hostingView)
 		return hostingView
 	}
 
 	func updateNSView(_ nsView: TerminalHostingContainerView, context: Context) {
-		currentAppearance.apply(to: nsView.terminalView)
+		applyCurrentAppearance(to: nsView)
 		context.coordinator.update(hostingView: nsView, isFocused: isFocused)
 	}
 
@@ -48,6 +48,18 @@ struct TerminalPaneRepresentable: NSViewRepresentable {
 			fontSize: terminalFontSize,
 			themeName: terminalThemeName
 		)
+	}
+
+	private func applyCurrentAppearance(to hostingView: TerminalHostingContainerView) {
+		let appearance = currentAppearance
+		appearance.apply(to: hostingView.terminalView)
+		hostingView.onEffectiveAppearanceChange = { [weak terminalView = hostingView.terminalView] _ in
+			guard let terminalView else {
+				return
+			}
+
+			appearance.apply(to: terminalView)
+		}
 	}
 
 	@MainActor
@@ -136,6 +148,7 @@ struct TerminalPaneRepresentable: NSViewRepresentable {
 
 final class TerminalHostingContainerView: NSView {
 	let terminalView: LocalProcessTerminalView
+	var onEffectiveAppearanceChange: ((NSAppearance) -> Void)?
 
 	init(terminalView: LocalProcessTerminalView) {
 		self.terminalView = terminalView
@@ -159,5 +172,10 @@ final class TerminalHostingContainerView: NSView {
 			terminalView.topAnchor.constraint(equalTo: topAnchor),
 			terminalView.bottomAnchor.constraint(equalTo: bottomAnchor)
 		])
+	}
+
+	override func viewDidChangeEffectiveAppearance() {
+		super.viewDidChangeEffectiveAppearance()
+		onEffectiveAppearanceChange?(effectiveAppearance)
 	}
 }

@@ -110,6 +110,11 @@ struct SidebarPane: View {
 
 		Divider()
 
+		Button("Close Workspace") {
+			_ = model.closeWorkspace(workspace.id)
+		}
+		.disabled(model.workspaces.count == 1)
+
 		Button("Delete Workspace", role: .destructive) {
 			workspacePendingDeletion = workspace
 		}

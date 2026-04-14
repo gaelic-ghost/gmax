@@ -204,8 +204,12 @@ private struct PaneLeafCard: View {
 				isFocused: isFocused,
 				onFocus: onFocus
 			)
+			.id(session.relaunchGeneration)
 			.background(.black)
 
+			if case .exited(let exitCode) = session.state {
+				exitedSessionOverlay(exitCode: exitCode)
+			}
 
 				VStack(alignment: .leading, spacing: 10) {
 					HStack(spacing: 8) {
@@ -241,6 +245,34 @@ private struct PaneLeafCard: View {
 		.background(backgroundStyle)
 		.contentShape(Rectangle())
 		.onTapGesture(perform: onFocus)
+	}
+
+	@ViewBuilder
+	private func exitedSessionOverlay(exitCode: Int32?) -> some View {
+		VStack(spacing: 10) {
+			Text("Shell Session Ended")
+				.font(.headline.weight(.semibold))
+
+			Text(exitDescription(exitCode: exitCode))
+				.font(.callout)
+				.foregroundStyle(.secondary)
+				.multilineTextAlignment(.center)
+
+			Button("Restart Shell") {
+				controller.session.prepareForRelaunch()
+			}
+			.buttonStyle(.borderedProminent)
+		}
+		.padding(20)
+		.background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+	}
+
+	private func exitDescription(exitCode: Int32?) -> String {
+		if let exitCode {
+			return "The shell process exited with status \(exitCode). Start a fresh login shell in this pane when you're ready."
+		}
+
+		return "The shell process ended unexpectedly or without a reported exit status. Start a fresh login shell in this pane when you're ready."
 	}
 
 	private var backgroundStyle: some ShapeStyle {
