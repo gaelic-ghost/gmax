@@ -10,6 +10,9 @@
 - [ ] Add broader save and restore coverage for stale or more deeply corrupted persisted layouts beyond the current missing-session and corrupted-pane-tree cases.
 - [ ] Add broader UI coverage for pane lifecycle flows and multi-window command routing beyond the current sidebar and saved-workspace suites.
 - [ ] Revisit frontmost-window command-routing UITest coverage with a minimal same-app window-focus strategy; the first inspector-toggle shortcut hid only the frontmost shell window, but macOS XCTest still failed to make the background shell window consume the second shortcut reliably.
+- [ ] Fix the multi-window selection leak in workspace-creation flows; the manual two-window pass showed `New Workspace` selecting the new workspace in both shell windows instead of only the frontmost one.
+- [ ] Fix workspace-close behavior when a library sheet is open; `cmd-w` should dismiss the frontmost sheet before it closes the selected workspace underneath it.
+- [ ] Re-run the manual two-window command pass after the selection leak is fixed; `Close Workspace` currently closes the frontmost selected workspace, but the result still propagates across both windows.
 - [ ] Investigate macOS XCTest toolbar hittability for the split-pane buttons before adding direct toolbar split coverage; the buttons are enabled with stable frames, but XCTest still reports them as non-hittable in the default shell window.
 - [ ] Sift the current UI-test work before extending it further: keep the app-side accessibility hooks and durable pane/inspector coverage, strip out multi-window-specific workaround scaffolding, then revisit frontmost-window command routing as a separate focused investigation.
 - [ ] Keep trimming legacy global-selection and fallback-routing anti-patterns so scene-local window state stays authoritative and future features do not build on retired backchannels.
