@@ -100,6 +100,7 @@ Build `gmax` into a finished macOS terminal workspace app:
 - [ ] Add persistence-layer tests for load and save behavior
 - [ ] Add UI coverage for workspace and pane lifecycle flows
 - [ ] Tighten operator-facing logs and error messages throughout the app
+- [ ] Choose a lightweight logging and diagnostics baseline that supports support-bundle export and future crash or hang reporting
 - [ ] Write onboarding and maintainer docs for release-oriented development
 - [x] Prepare a release checklist for first usable internal builds
 
@@ -161,5 +162,6 @@ Build `gmax` into a finished macOS terminal workspace app:
 ## Reference Docs
 
 - [docs/maintainers/accessibility-and-keyboard-plan.md](docs/maintainers/accessibility-and-keyboard-plan.md)
+- [docs/maintainers/logging-and-telemetry-options.md](docs/maintainers/logging-and-telemetry-options.md)
 - [docs/maintainers/swiftui-terminal-shell-architecture.md](docs/maintainers/swiftui-terminal-shell-architecture.md)
 - [docs/maintainers/v0.1.0-release-checklist.md](docs/maintainers/v0.1.0-release-checklist.md)

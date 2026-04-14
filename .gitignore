@@ -7,5 +7,6 @@ docs/*
 !docs/maintainers/
 docs/maintainers/*
 !docs/maintainers/accessibility-and-keyboard-plan.md
+!docs/maintainers/logging-and-telemetry-options.md
 !docs/maintainers/swiftui-terminal-shell-architecture.md
 !docs/maintainers/v0.1.0-release-checklist.md
