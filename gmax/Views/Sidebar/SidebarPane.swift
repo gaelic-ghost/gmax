@@ -20,6 +20,8 @@ struct SidebarPane: View {
 				workspaceRow(for: workspace)
 					.tag(workspace.id)
 					.accessibilityElement(children: .combine)
+					.accessibilityLabel(workspace.title)
+					.accessibilityValue(paneCountText(for: workspace))
 					.accessibilityIdentifier("sidebar.workspaceRow.\(workspace.title)")
 					.contextMenu {
 						workspaceActions(for: workspace)
@@ -81,6 +83,7 @@ struct SidebarPane: View {
 			Text(paneCountText(for: workspace))
 				.font(.caption)
 				.foregroundStyle(.secondary)
+				.accessibilityIdentifier("sidebar.workspacePaneCount.\(workspace.title)")
 		}
 	}
 

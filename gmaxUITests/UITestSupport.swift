@@ -140,22 +140,32 @@ class GmaxUITestCase: XCTestCase {
 		app.buttons["sidebar.deleteWorkspaceConfirmButton"]
 	}
 
-	func sidebarWorkspaceRow(titled title: String, in app: XCUIApplication) -> XCUIElement {
-		let workspaceList = app.descendants(matching: .any)[UIProbe.sidebarWorkspaceListIdentifier]
+	func sidebarWorkspaceRow(titled title: String, in scope: XCUIElement) -> XCUIElement {
+		let workspaceList = scope.descendants(matching: .any)[UIProbe.sidebarWorkspaceListIdentifier]
 		return workspaceList.descendants(matching: .any)["sidebar.workspaceRow.\(title)"]
 	}
 
 	func savedWorkspaceLibraryRow(titled title: String, in app: XCUIApplication) -> XCUIElement {
-		let identifiedTitle = app.staticTexts["savedWorkspaceLibrary.title.\(title)"]
+		let libraryList = app.descendants(matching: .any)["savedWorkspaceLibrary.list"]
+		let identifiedTitle = libraryList.staticTexts["savedWorkspaceLibrary.title.\(title)"]
 		if identifiedTitle.exists {
 			return identifiedTitle
 		}
 
-		let sheetScopedTitle = app.sheets.firstMatch.staticTexts[title]
-		if sheetScopedTitle.exists {
-			return sheetScopedTitle
+		let visibleTitle = libraryList.staticTexts[title]
+		if visibleTitle.exists {
+			return visibleTitle
 		}
 
-		return app.staticTexts[title]
+		let identifiedRow = libraryList.outlines.cells.containing(.staticText, identifier: "savedWorkspaceLibrary.title.\(title)").firstMatch
+		if identifiedRow.exists {
+			return identifiedRow
+		}
+
+		return libraryList.staticTexts[title]
+	}
+
+	func toggleInspectorButton(in app: XCUIApplication) -> XCUIElement {
+		app.buttons["mainShell.toggleInspectorButton"]
 	}
 }

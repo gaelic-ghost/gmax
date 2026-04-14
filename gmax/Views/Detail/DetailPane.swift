@@ -46,7 +46,11 @@ private struct ActivePaneDetails: View {
 				.font(.title2.weight(.semibold))
 
 			Group {
-				labelValue("Workspace", workspaceTitle)
+				labelValue(
+					"Workspace",
+					workspaceTitle,
+					valueIdentifier: "detailPane.workspaceTitleValue"
+				)
 				labelValue("Title", session.title)
 				labelValue("State", stateText(session.state))
 				labelValue("Current Directory", session.currentDirectory ?? "Unavailable")
@@ -57,17 +61,25 @@ private struct ActivePaneDetails: View {
 			Spacer()
 		}
 		.padding()
+		.accessibilityIdentifier("detailPane.activePane")
 	}
 
 	@ViewBuilder
-	private func labelValue(_ label: String, _ value: String) -> some View {
+	private func labelValue(_ label: String, _ value: String, valueIdentifier: String? = nil) -> some View {
 		VStack(alignment: .leading, spacing: 4) {
 			Text(label)
 				.font(.caption.weight(.semibold))
 				.foregroundStyle(.secondary)
-			Text(value)
-				.font(.system(.body, design: .monospaced))
-				.textSelection(.enabled)
+			if let valueIdentifier {
+				Text(value)
+					.font(.system(.body, design: .monospaced))
+					.textSelection(.enabled)
+					.accessibilityIdentifier(valueIdentifier)
+			} else {
+				Text(value)
+					.font(.system(.body, design: .monospaced))
+					.textSelection(.enabled)
+			}
 		}
 	}
 
@@ -96,30 +108,47 @@ private struct WorkspaceDetails: View {
 				.font(.title2.weight(.semibold))
 
 			Group {
-				labelValue("Workspace", workspaceTitle)
-				labelValue("Pane Count", paneCount == 1 ? "1 pane" : "\(paneCount) panes")
+				labelValue(
+					"Workspace",
+					workspaceTitle,
+					valueIdentifier: "detailPane.workspaceTitleValue"
+				)
+				labelValue(
+					"Pane Count",
+					paneCount == 1 ? "1 pane" : "\(paneCount) panes",
+					valueIdentifier: "detailPane.paneCountValue"
+				)
 				labelValue(
 					"Status",
 					paneCount == 0
 						? "This workspace is empty and ready for a fresh shell."
-						: "Select a pane to inspect its shell session."
+						: "Select a pane to inspect its shell session.",
+					valueIdentifier: "detailPane.statusValue"
 				)
 			}
 
 			Spacer()
 		}
 		.padding()
+		.accessibilityIdentifier("detailPane.workspace")
 	}
 
 	@ViewBuilder
-	private func labelValue(_ label: String, _ value: String) -> some View {
+	private func labelValue(_ label: String, _ value: String, valueIdentifier: String? = nil) -> some View {
 		VStack(alignment: .leading, spacing: 4) {
 			Text(label)
 				.font(.caption.weight(.semibold))
 				.foregroundStyle(.secondary)
-			Text(value)
-				.font(.system(.body, design: .monospaced))
-				.textSelection(.enabled)
+			if let valueIdentifier {
+				Text(value)
+					.font(.system(.body, design: .monospaced))
+					.textSelection(.enabled)
+					.accessibilityIdentifier(valueIdentifier)
+			} else {
+				Text(value)
+					.font(.system(.body, design: .monospaced))
+					.textSelection(.enabled)
+			}
 		}
 	}
 }
