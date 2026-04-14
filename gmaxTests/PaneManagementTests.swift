@@ -42,7 +42,7 @@ struct PaneManagementTests {
 		#expect(nestedSplit.axis == .vertical)
 		#expect(nestedFirstLeaf.id == firstInsertedPaneID)
 		#expect(updatedWorkspace.focusedPaneID == nestedSecondLeaf.id)
-		#expect(model.paneFocusHistoryByWorkspace[workspace.id] == [firstInsertedPaneID, nestedSecondLeaf.id])
+		#expect(model.paneFocusHistoryByWorkspace[workspace.id] == [originalPane.id, firstInsertedPaneID, nestedSecondLeaf.id])
 		#expect(newestSession.currentDirectory == "/tmp/nested-split")
 	}
 
@@ -280,10 +280,10 @@ struct PaneManagementTests {
 		)
 
 		model.movePaneFocus(.right)
-		#expect(model.selectedWorkspace?.focusedPaneID == topRightPane.id)
-
-		model.movePaneFocus(.down)
 		#expect(model.selectedWorkspace?.focusedPaneID == bottomRightPane.id)
+
+		model.movePaneFocus(.up)
+		#expect(model.selectedWorkspace?.focusedPaneID == topRightPane.id)
 	}
 }
 
