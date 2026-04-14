@@ -9,6 +9,24 @@ import XCTest
 
 final class SavedWorkspaceLibraryUITests: GmaxUITestCase {
 	@MainActor
+	func testToolbarNewWorkspaceButtonCreatesWorkspace() throws {
+		let app = launchApp()
+		let toolbarButton = newWorkspaceButton(in: app)
+
+		XCTAssertTrue(
+			toolbarButton.waitForExistence(timeout: 5),
+			"The main shell toolbar should expose the new-workspace action."
+		)
+		XCTAssertTrue(
+			toolbarButton.isHittable,
+			"The new-workspace toolbar action should stay directly clickable in the default shell window."
+		)
+
+		toolbarButton.click()
+		assertWorkspaceExists("Workspace 2", in: app)
+	}
+
+	@MainActor
 	func testPaneSplitButtonsAndContextualCloseUpdateInspectorPaneCount() throws {
 		let app = launchApp()
 		let workspaceRow = sidebarWorkspaceRow(titled: "Workspace 1", in: app)
@@ -137,6 +155,23 @@ final class SavedWorkspaceLibraryUITests: GmaxUITestCase {
 		XCTAssertFalse(
 			snapshotTitle.waitForExistence(timeout: 1),
 			"The deleted saved-workspace snapshot should no longer appear in the library list."
+		)
+	}
+
+	@MainActor
+	func testToolbarOpenSavedWorkspacesButtonPresentsAndDismissesLibrary() throws {
+		let app = launchApp()
+
+		openSavedWorkspaceLibraryFromToolbar(in: app)
+		XCTAssertTrue(
+			savedWorkspaceLibraryCancelButton(in: app).waitForExistence(timeout: 5),
+			"The saved-workspace library sheet should show its cancel control after the toolbar opens it."
+		)
+
+		savedWorkspaceLibraryCancelButton(in: app).click()
+		XCTAssertFalse(
+			savedWorkspaceLibraryCancelButton(in: app).waitForExistence(timeout: 1),
+			"The saved-workspace library sheet should dismiss after the cancel action."
 		)
 	}
 }

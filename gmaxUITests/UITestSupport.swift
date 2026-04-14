@@ -116,12 +116,33 @@ class GmaxUITestCase: XCTestCase {
 		)
 	}
 
+	func openSavedWorkspaceLibraryFromToolbar(in app: XCUIApplication) {
+		let button = openSavedWorkspacesButton(in: app)
+		XCTAssertTrue(
+			button.waitForExistence(timeout: 5),
+			"The main shell toolbar should expose the saved-workspace library button."
+		)
+		button.click()
+		XCTAssertTrue(
+			savedWorkspaceLibraryCancelButton(in: app).waitForExistence(timeout: 5),
+			"The saved-workspace library sheet should appear after invoking the toolbar button."
+		)
+	}
+
 	func savedWorkspaceLibraryOpenButton(in app: XCUIApplication) -> XCUIElement {
 		let identifiedButton = app.buttons["savedWorkspaceLibrary.openButton"]
 		if identifiedButton.exists {
 			return identifiedButton
 		}
 		return app.buttons["Open"]
+	}
+
+	func savedWorkspaceLibraryCancelButton(in app: XCUIApplication) -> XCUIElement {
+		let identifiedButton = app.buttons["savedWorkspaceLibrary.cancelButton"]
+		if identifiedButton.exists {
+			return identifiedButton
+		}
+		return app.buttons["Cancel"]
 	}
 
 	func savedWorkspaceLibraryDeleteButton(in app: XCUIApplication) -> XCUIElement {
@@ -167,5 +188,13 @@ class GmaxUITestCase: XCTestCase {
 
 	func toggleInspectorButton(in app: XCUIApplication) -> XCUIElement {
 		app.buttons["mainShell.toggleInspectorButton"]
+	}
+
+	func openSavedWorkspacesButton(in app: XCUIApplication) -> XCUIElement {
+		app.buttons["mainShell.openSavedWorkspacesButton"]
+	}
+
+	func newWorkspaceButton(in app: XCUIApplication) -> XCUIElement {
+		app.buttons["mainShell.newWorkspaceButton"]
 	}
 }
