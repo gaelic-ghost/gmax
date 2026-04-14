@@ -5,6 +5,7 @@
 //  Created by Gale Williams on 4/6/26.
 //
 
+import AppKit
 import SwiftUI
 
 struct ContentPane: View {
@@ -15,24 +16,36 @@ struct ContentPane: View {
 		if let workspace = selectedWorkspaceID.flatMap(model.workspace(for:)) {
 			Group {
 				if workspace.root != nil {
-					WorkspacePaneTreeView(
-						workspace: workspace,
-						controllerForPane: { pane in
-							model.controller(for: pane)
-						},
+						WorkspacePaneTreeView(
+							workspace: workspace,
+							controllerForPane: { pane in
+								model.controller(for: pane)
+							},
 						onUpdateSplitFraction: { splitID, fraction in
 							model.setSplitFraction(fraction, for: splitID, in: workspace.id)
 						},
 						onUpdatePaneFrames: { paneFrames in
 							model.updatePaneFrames(paneFrames, in: workspace.id)
 						},
-						onFocusPane: { paneID in
-							Task { @MainActor in
-								await Task.yield()
+							onFocusPane: { paneID in
+								Task { @MainActor in
+									await Task.yield()
+									model.focusPane(paneID, in: workspace.id)
+								}
+							},
+							onSplitPane: { paneID, direction in
 								model.focusPane(paneID, in: workspace.id)
+								model.splitPane(paneID, in: workspace.id, direction: direction)
+							},
+							onClosePane: { paneID in
+								model.focusPane(paneID, in: workspace.id)
+								let outcome = model.closeFocusedPane(in: workspace.id)
+								selectedWorkspaceID = outcome.nextSelectedWorkspaceID
+								if outcome.result == .closeWindow {
+									NSApp.keyWindow?.performClose(nil)
+								}
 							}
-						}
-					)
+						)
 				} else {
 					ContentUnavailableView {
 						Label("This Workspace Has No Panes", systemImage: "rectangle.dashed")

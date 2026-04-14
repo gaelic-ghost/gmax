@@ -14,6 +14,8 @@ struct WorkspacePaneTreeView: View {
 	let onUpdateSplitFraction: (SplitID, CGFloat) -> Void
 	let onUpdatePaneFrames: ([PaneID: CGRect]) -> Void
 	let onFocusPane: (PaneID) -> Void
+	let onSplitPane: (PaneID, SplitDirection) -> Void
+	let onClosePane: (PaneID) -> Void
 
 	var body: some View {
 		Group {
@@ -21,13 +23,19 @@ struct WorkspacePaneTreeView: View {
 				PaneNodeView(
 					node: root,
 					focusedPaneID: workspace.focusedPaneID,
-						controllerForPane: controllerForPane,
-						onUpdateSplitFraction: onUpdateSplitFraction,
-						onFocusPane: onFocusPane
-					)
-				}
+					workspaceID: workspace.id,
+					controllerForPane: controllerForPane,
+					onUpdateSplitFraction: onUpdateSplitFraction,
+					onFocusPane: onFocusPane,
+					onSplitPane: onSplitPane,
+					onClosePane: onClosePane
+				)
 			}
-			.coordinateSpace(name: "workspace-pane-tree")
+		}
+		.coordinateSpace(name: "workspace-pane-tree")
+		.focusSection()
+		.accessibilityElement(children: .contain)
+		.accessibilityLabel("Workspace pane area")
 		.onPreferenceChange(PaneFramePreferenceKey.self, perform: onUpdatePaneFrames)
 	}
 }
@@ -35,9 +43,12 @@ struct WorkspacePaneTreeView: View {
 private struct PaneNodeView: View {
 	let node: PaneNode
 	let focusedPaneID: PaneID?
+	let workspaceID: WorkspaceID
 	let controllerForPane: (PaneLeaf) -> TerminalPaneController
 	let onUpdateSplitFraction: (SplitID, CGFloat) -> Void
 	let onFocusPane: (PaneID) -> Void
+	let onSplitPane: (PaneID, SplitDirection) -> Void
+	let onClosePane: (PaneID) -> Void
 
 	var body: some View {
 		switch node {
@@ -45,11 +56,20 @@ private struct PaneNodeView: View {
 				let controller = controllerForPane(leaf)
 				PaneLeafCard(
 					pane: leaf,
-						controller: controller,
-						session: controller.session,
-						isFocused: leaf.id == focusedPaneID,
-						onFocus: { onFocusPane(leaf.id) }
-					)
+					controller: controller,
+					session: controller.session,
+					isFocused: leaf.id == focusedPaneID,
+					onFocus: { onFocusPane(leaf.id) },
+					onSplitRight: {
+						onSplitPane(leaf.id, .right)
+					},
+					onSplitDown: {
+						onSplitPane(leaf.id, .down)
+					},
+					onClose: {
+						onClosePane(leaf.id)
+					}
+				)
 
 			case .split(let split):
 				PaneSplitContainer(
@@ -60,19 +80,25 @@ private struct PaneNodeView: View {
 					PaneNodeView(
 						node: split.first,
 						focusedPaneID: focusedPaneID,
-							controllerForPane: controllerForPane,
-							onUpdateSplitFraction: onUpdateSplitFraction,
-							onFocusPane: onFocusPane
-						)
-					} second: {
-						PaneNodeView(
+						workspaceID: workspaceID,
+						controllerForPane: controllerForPane,
+						onUpdateSplitFraction: onUpdateSplitFraction,
+						onFocusPane: onFocusPane,
+						onSplitPane: onSplitPane,
+						onClosePane: onClosePane
+					)
+				} second: {
+					PaneNodeView(
 						node: split.second,
 						focusedPaneID: focusedPaneID,
-							controllerForPane: controllerForPane,
-							onUpdateSplitFraction: onUpdateSplitFraction,
-							onFocusPane: onFocusPane
-						)
-					}
+						workspaceID: workspaceID,
+						controllerForPane: controllerForPane,
+						onUpdateSplitFraction: onUpdateSplitFraction,
+						onFocusPane: onFocusPane,
+						onSplitPane: onSplitPane,
+						onClosePane: onClosePane
+					)
+				}
 		}
 	}
 }
@@ -196,6 +222,9 @@ private struct PaneLeafCard: View {
 	@ObservedObject var session: TerminalSession
 	let isFocused: Bool
 	let onFocus: () -> Void
+	let onSplitRight: () -> Void
+	let onSplitDown: () -> Void
+	let onClose: () -> Void
 
 	var body: some View {
 		ZStack(alignment: .topLeading) {
@@ -234,6 +263,7 @@ private struct PaneLeafCard: View {
 			.padding(12)
 		}
 		.frame(maxWidth: .infinity, maxHeight: .infinity)
+		.focusable(interactions: .activate)
 		.background {
 			GeometryReader { geometry in
 				Color.clear.preference(
@@ -245,6 +275,30 @@ private struct PaneLeafCard: View {
 		.background(backgroundStyle)
 		.contentShape(Rectangle())
 		.onTapGesture(perform: onFocus)
+		.accessibilityElement(children: .contain)
+		.accessibilityLabel(accessibilityLabel)
+		.accessibilityValue(accessibilityValue)
+		.accessibilityHint(accessibilityHint)
+		.accessibilityRespondsToUserInteraction(true)
+		.accessibilityAddTraits(isFocused ? .isSelected : [])
+		.accessibilityAction(.default) {
+			onFocus()
+		}
+		.accessibilityAction(named: Text("Split Right")) {
+			onSplitRight()
+		}
+		.accessibilityAction(named: Text("Split Down")) {
+			onSplitDown()
+		}
+		.accessibilityAction(named: Text("Close Pane")) {
+			onClose()
+		}
+		.accessibilityAction(named: Text("Restart Shell")) {
+			guard session.state != .running else {
+				return
+			}
+			controller.session.prepareForRelaunch()
+		}
 	}
 
 	@ViewBuilder
@@ -280,6 +334,44 @@ private struct PaneLeafCard: View {
 			return AnyShapeStyle(.tint.opacity(0.18))
 		}
 		return AnyShapeStyle(.quaternary.opacity(0.35))
+	}
+
+	private var accessibilityLabel: String {
+		let trimmedTitle = session.title.trimmingCharacters(in: .whitespacesAndNewlines)
+		if trimmedTitle.isEmpty || trimmedTitle == "Shell" {
+			return "Shell pane"
+		}
+		return "\(trimmedTitle) pane"
+	}
+
+	private var accessibilityValue: String {
+		var details: [String] = []
+		if isFocused {
+			details.append("Focused")
+		}
+		details.append(stateAccessibilityValue)
+		if let currentDirectory = session.currentDirectory, !currentDirectory.isEmpty {
+			details.append("Directory \(currentDirectory)")
+		}
+		return details.joined(separator: ". ")
+	}
+
+	private var accessibilityHint: String {
+		"Activate to focus this pane. Additional actions are available for splitting, closing, and restarting the shell."
+	}
+
+	private var stateAccessibilityValue: String {
+		switch session.state {
+			case .idle:
+				return "Shell ready to launch"
+			case .running:
+				return "Shell running"
+			case .exited(let exitCode):
+				if let exitCode {
+					return "Shell exited with status \(exitCode)"
+				}
+				return "Shell exited"
+		}
 	}
 }
 
