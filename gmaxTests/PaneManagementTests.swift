@@ -11,6 +11,41 @@ import Testing
 
 @MainActor
 struct PaneManagementTests {
+	@Test func splitFocusedPaneTwiceCreatesANestedTreeAndTracksTheNewestPane() throws {
+		let workspace = TestSupport.makeWorkspace(title: "Workspace 1")
+		let model = ShellModel(
+			workspaces: [workspace],
+			selectedWorkspaceID: workspace.id,
+			persistence: .inMemoryForTesting(),
+			launchContextBuilder: TestSupport.makeLaunchContextBuilder(defaultCurrentDirectory: "/tmp/gmax-tests")
+		)
+
+		let originalPane = try #require(workspace.root?.firstLeaf())
+		let originalSession = model.sessions.ensureSession(id: originalPane.sessionID)
+		originalSession.currentDirectory = "/tmp/nested-split"
+
+		model.splitFocusedPane(.right)
+		let firstInsertedPaneID = try #require(model.selectedWorkspace?.focusedPaneID)
+		model.splitFocusedPane(.down)
+
+		let updatedWorkspace = try #require(model.selectedWorkspace)
+		let root = try #require(updatedWorkspace.root)
+		let outerSplit = try #require(extractRootSplit(from: root))
+		let nestedSplit = try #require(extractRootSplit(from: outerSplit.second))
+		let nestedFirstLeaf = try #require(extractRootLeaf(from: nestedSplit.first))
+		let nestedSecondLeaf = try #require(extractRootLeaf(from: nestedSplit.second))
+		let newestSession = try #require(model.sessions.session(for: nestedSecondLeaf.sessionID))
+
+		#expect(updatedWorkspace.paneCount == 3)
+		#expect(outerSplit.axis == .horizontal)
+		#expect(extractRootLeaf(from: outerSplit.first)?.id == originalPane.id)
+		#expect(nestedSplit.axis == .vertical)
+		#expect(nestedFirstLeaf.id == firstInsertedPaneID)
+		#expect(updatedWorkspace.focusedPaneID == nestedSecondLeaf.id)
+		#expect(model.paneFocusHistoryByWorkspace[workspace.id] == [firstInsertedPaneID, nestedSecondLeaf.id])
+		#expect(newestSession.currentDirectory == "/tmp/nested-split")
+	}
+
 	@Test func splitFocusedPaneInheritsTheLaunchDirectoryAndMovesFocus() throws {
 		let workspace = TestSupport.makeWorkspace(title: "Workspace 1")
 		let launchContextBuilder = TestSupport.makeLaunchContextBuilder(defaultCurrentDirectory: "/tmp/gmax-tests")
@@ -97,6 +132,49 @@ struct PaneManagementTests {
 		#expect(model.paneFocusHistoryByWorkspace[workspace.id] == [leftPane.id, bottomRightPane.id])
 	}
 
+	@Test func closingTheFocusedPaneAfterMultipleSplitsPrefersTheMostRecentSurvivingFocus() throws {
+		let workspace = TestSupport.makeWorkspace(title: "Workspace 1")
+		let model = ShellModel(
+			workspaces: [workspace],
+			selectedWorkspaceID: workspace.id,
+			persistence: .inMemoryForTesting(),
+			launchContextBuilder: TestSupport.makeLaunchContextBuilder(defaultCurrentDirectory: "/tmp/gmax-tests")
+		)
+
+		let originalPane = try #require(workspace.root?.firstLeaf())
+		model.splitFocusedPane(.right)
+		let rightPaneID = try #require(model.selectedWorkspace?.focusedPaneID)
+		model.splitFocusedPane(.down)
+		let bottomRightPaneID = try #require(model.selectedWorkspace?.focusedPaneID)
+		let bottomRightSessionID = try #require(
+			model.selectedWorkspace?.paneLeaves.first(where: { $0.id == bottomRightPaneID })?.sessionID
+		)
+
+		model.focusPane(originalPane.id, in: workspace.id)
+		model.focusPane(rightPaneID, in: workspace.id)
+		model.focusPane(bottomRightPaneID, in: workspace.id)
+		model.updatePaneFrames(
+			[
+				originalPane.id: CGRect(x: 0, y: 0, width: 300, height: 600),
+				rightPaneID: CGRect(x: 300, y: 0, width: 300, height: 300),
+				bottomRightPaneID: CGRect(x: 300, y: 300, width: 300, height: 300)
+			],
+			in: workspace.id
+		)
+
+		model.closePane(bottomRightPaneID, in: workspace.id)
+
+		let updatedWorkspace = try #require(model.selectedWorkspace)
+		let survivingLeaves = updatedWorkspace.paneLeaves
+		let framePaneIDs = Set(model.paneFramesByWorkspace[workspace.id]?.map(\.key) ?? [])
+
+		#expect(updatedWorkspace.focusedPaneID == rightPaneID)
+		#expect(survivingLeaves.map(\.id) == [originalPane.id, rightPaneID])
+		#expect(framePaneIDs == Set([originalPane.id, rightPaneID]))
+		#expect(model.sessions.session(for: bottomRightSessionID) == nil)
+		#expect(model.paneFocusHistoryByWorkspace[workspace.id] == [originalPane.id, rightPaneID])
+	}
+
 	@Test func setSplitFractionUpdatesTheWorkspaceTree() throws {
 		let leftPane = PaneLeaf()
 		let rightPane = PaneLeaf()
@@ -160,6 +238,52 @@ struct PaneManagementTests {
 
 		model.movePaneFocus(.left)
 		#expect(model.selectedWorkspace?.focusedPaneID == leftPane.id)
+	}
+
+	@Test func movePaneFocusChoosesTheClosestCandidateInTheRequestedDirection() throws {
+		let leftPane = PaneLeaf()
+		let topRightPane = PaneLeaf()
+		let bottomRightPane = PaneLeaf()
+		let workspace = Workspace(
+			title: "Workspace 1",
+			root: .split(
+				PaneSplit(
+					axis: .horizontal,
+					fraction: 0.5,
+					first: .leaf(leftPane),
+					second: .split(
+						PaneSplit(
+							axis: .vertical,
+							fraction: 0.5,
+							first: .leaf(topRightPane),
+							second: .leaf(bottomRightPane)
+						)
+					)
+				)
+			),
+			focusedPaneID: leftPane.id
+		)
+		let model = ShellModel(
+			workspaces: [workspace],
+			selectedWorkspaceID: workspace.id,
+			persistence: .inMemoryForTesting(),
+			launchContextBuilder: TestSupport.makeLaunchContextBuilder(defaultCurrentDirectory: "/tmp/gmax-tests")
+		)
+
+		model.updatePaneFrames(
+			[
+				leftPane.id: CGRect(x: 0, y: 0, width: 300, height: 600),
+				topRightPane.id: CGRect(x: 300, y: 0, width: 300, height: 260),
+				bottomRightPane.id: CGRect(x: 300, y: 260, width: 300, height: 340)
+			],
+			in: workspace.id
+		)
+
+		model.movePaneFocus(.right)
+		#expect(model.selectedWorkspace?.focusedPaneID == topRightPane.id)
+
+		model.movePaneFocus(.down)
+		#expect(model.selectedWorkspace?.focusedPaneID == bottomRightPane.id)
 	}
 }
 

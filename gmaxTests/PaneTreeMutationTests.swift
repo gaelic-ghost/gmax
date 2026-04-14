@@ -10,6 +10,24 @@ import Testing
 @testable import gmax
 
 struct PaneTreeMutationTests {
+	@Test func splitReturnsFalseWhenThePaneDoesNotExist() throws {
+		let existingPane = PaneLeaf()
+		let insertedPane = PaneLeaf()
+		let originalRoot = PaneNode.leaf(existingPane)
+		var root = originalRoot
+
+		let didSplit = root.split(
+			paneID: PaneID(),
+			direction: .right,
+			newPane: insertedPane
+		)
+
+		#expect(didSplit == false)
+		#expect(extractLeaf(from: root)?.id == existingPane.id)
+		#expect(root.paneCount() == 1)
+		#expect(extractLeaf(from: originalRoot)?.id == existingPane.id)
+	}
+
 	@Test func splitLeafReplacesLeafWithExpectedSplit() throws {
 		let originalPane = PaneLeaf()
 		let insertedPane = PaneLeaf()
@@ -111,6 +129,30 @@ struct PaneTreeMutationTests {
 		#expect(root.leaves().map(\.id) == [leftPane.id, bottomRightPane.id])
 	}
 
+	@Test func removePaneReturnsNilWhenThePaneDoesNotExist() throws {
+		let leftPane = PaneLeaf()
+		let rightPane = PaneLeaf()
+		let originalRoot = PaneNode.split(
+			PaneSplit(
+				axis: .horizontal,
+				fraction: 0.5,
+				first: .leaf(leftPane),
+				second: .leaf(rightPane)
+			)
+		)
+		var root = originalRoot
+
+		let result = root.removePane(id: PaneID())
+
+		#expect(result == nil)
+		let resolvedSplit = try #require(extractSplit(from: root))
+		let expectedSplit = try #require(extractSplit(from: originalRoot))
+		#expect(resolvedSplit.id == expectedSplit.id)
+		#expect(resolvedSplit.axis == expectedSplit.axis)
+		#expect(resolvedSplit.fraction == expectedSplit.fraction)
+		#expect(root.leaves().map(\.id) == [leftPane.id, rightPane.id])
+	}
+
 	@Test func updateSplitFractionOnlyMutatesTheMatchingSplit() throws {
 		let leftPane = PaneLeaf()
 		let topRightPane = PaneLeaf()
@@ -136,6 +178,56 @@ struct PaneTreeMutationTests {
 		#expect(resolvedOuterSplit.fraction == 0.6)
 		let resolvedNestedSplit = try #require(extractSplit(from: resolvedOuterSplit.second))
 		#expect(resolvedNestedSplit.fraction == 0.7)
+	}
+
+	@Test func updateSplitFractionReturnsFalseWhenTheSplitDoesNotExist() throws {
+		let leftPane = PaneLeaf()
+		let rightPane = PaneLeaf()
+		let originalSplit = PaneSplit(
+			axis: .horizontal,
+			fraction: 0.5,
+			first: .leaf(leftPane),
+			second: .leaf(rightPane)
+		)
+		let originalRoot = PaneNode.split(originalSplit)
+		var root = originalRoot
+
+		let didUpdate = root.updateSplitFraction(splitID: SplitID(), fraction: 0.8)
+
+		#expect(didUpdate == false)
+		let resolvedSplit = try #require(extractSplit(from: root))
+		let expectedSplit = try #require(extractSplit(from: originalRoot))
+		#expect(resolvedSplit.id == expectedSplit.id)
+		#expect(resolvedSplit.axis == expectedSplit.axis)
+		#expect(resolvedSplit.fraction == expectedSplit.fraction)
+	}
+
+	@Test func removePaneAfterNestedSplitPreservesTheOtherNestedLeaf() throws {
+		let firstPane = PaneLeaf()
+		let secondPane = PaneLeaf()
+		let insertedPane = PaneLeaf()
+		var root = PaneNode.split(
+			PaneSplit(
+				axis: .horizontal,
+				fraction: 0.5,
+				first: .leaf(firstPane),
+				second: .leaf(secondPane)
+			)
+		)
+
+		let didSplit = root.split(
+			paneID: secondPane.id,
+			direction: .down,
+			newPane: insertedPane
+		)
+		let removalResult = root.removePane(id: secondPane.id)
+
+		#expect(didSplit)
+		_ = try #require(extractCollapsedNode(from: removalResult))
+		let outerSplit = try #require(extractSplit(from: root))
+		#expect(extractLeaf(from: outerSplit.first)?.id == firstPane.id)
+		#expect(extractLeaf(from: outerSplit.second)?.id == insertedPane.id)
+		#expect(root.leaves().map(\.id) == [firstPane.id, insertedPane.id])
 	}
 }
 
