@@ -13,6 +13,8 @@ The goal is to keep the first release lightweight and Swift-friendly while leavi
 
 This is an evaluation note, not a claim that every option here should be adopted immediately.
 
+For the current maintainer workflow that verifies the shipped `Logger` baseline in Console and `/usr/bin/log`, see [logging-validation-guide.md](logging-validation-guide.md).
+
 ## What `gmax` Actually Needs First
 
 Near-term, `gmax` does not need a large observability stack. It needs a reliable local-first diagnostics story for a native macOS app.

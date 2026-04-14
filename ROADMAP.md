@@ -106,8 +106,9 @@ Build `gmax` into a finished macOS terminal workspace app:
 
 ## Milestone 6A: Observability And Diagnostics Follow-Through
 
-- [ ] Land the initial Apple `Logger` subsystem and category taxonomy across app, workspace, pane, persistence, and diagnostics surfaces
-- [ ] Standardize operator-facing log message shape so restore, reopen, and relaunch failures are immediately understandable in Console
+- [x] Land the initial Apple `Logger` subsystem and category taxonomy across app, workspace, pane, persistence, and diagnostics surfaces
+- [x] Standardize operator-facing log message shape so restore, reopen, and relaunch failures are immediately understandable in Console
+- [x] Add a maintainer logging-validation note that documents Console filters, `/usr/bin/log` commands, and expected noise during UI and launch-performance tests
 - [ ] Add an `OSLogStore`-based recent-diagnostics export path suitable for future user-facing feedback bundles
 - [ ] Decide what support-bundle metadata should accompany exported logs, such as workspace summaries, pane state, persistence outcomes, or recent alerts
 - [ ] Evaluate `MetricKit` intake for crash and hang diagnostics once the ordinary logging baseline is stable
