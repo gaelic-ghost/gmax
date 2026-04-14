@@ -5,12 +5,113 @@
 //  Created by Gale Williams on 4/14/26.
 //
 
+import CoreData
 import CoreGraphics
 import Testing
 @testable import gmax
 
 @MainActor
 struct WorkspacePersistenceTests {
+	@Test func saveAndOpenSavedWorkspaceRestoreLargeNestedLayoutAcrossFivePanes() throws {
+		let leftTopPane = PaneLeaf()
+		let leftBottomPane = PaneLeaf()
+		let rightTopPane = PaneLeaf()
+		let rightMiddlePane = PaneLeaf()
+		let rightBottomPane = PaneLeaf()
+		let workspace = Workspace(
+			title: "Workspace 1",
+			root: .split(
+				PaneSplit(
+					axis: .horizontal,
+					fraction: 0.42,
+					first: .split(
+						PaneSplit(
+							axis: .vertical,
+							fraction: 0.38,
+							first: .leaf(leftTopPane),
+							second: .leaf(leftBottomPane)
+						)
+					),
+					second: .split(
+						PaneSplit(
+							axis: .vertical,
+							fraction: 0.48,
+							first: .leaf(rightTopPane),
+							second: .split(
+								PaneSplit(
+									axis: .horizontal,
+									fraction: 0.57,
+									first: .leaf(rightMiddlePane),
+									second: .leaf(rightBottomPane)
+								)
+							)
+						)
+					)
+				)
+			),
+			focusedPaneID: rightMiddlePane.id
+		)
+		let persistence = ShellPersistenceController.inMemoryForTesting()
+		let model = ShellModel(
+			workspaces: [workspace],
+			selectedWorkspaceID: workspace.id,
+			persistence: persistence,
+			launchContextBuilder: TestSupport.makeLaunchContextBuilder(defaultCurrentDirectory: "/tmp/gmax-tests")
+		)
+
+		let originalLeaves = workspace.paneLeaves
+		let originalFocusedPath = try #require(
+			leafPaths(in: workspace.root).first(where: { $0.leaf.id == rightMiddlePane.id })?.path
+		)
+		let expectedSignature = try #require(workspace.root.map(nodeSignature(from:)))
+
+		let metadataBySessionID: [TerminalSessionID: (title: String, directory: String, transcript: String)] = [
+			leftTopPane.sessionID: ("Left Top Shell", "/tmp/layout/left-top", "printf left-top\n"),
+			leftBottomPane.sessionID: ("Left Bottom Shell", "/tmp/layout/left-bottom", "printf left-bottom\n"),
+			rightTopPane.sessionID: ("Right Top Shell", "/tmp/layout/right-top", "printf right-top\n"),
+			rightMiddlePane.sessionID: ("Right Middle Shell", "/tmp/layout/right-middle", "printf right-middle\n"),
+			rightBottomPane.sessionID: ("Right Bottom Shell", "/tmp/layout/right-bottom", "printf right-bottom\n")
+		]
+
+		for leaf in originalLeaves {
+			let session = model.sessions.ensureSession(id: leaf.sessionID)
+			let metadata = try #require(metadataBySessionID[leaf.sessionID])
+			session.title = metadata.title
+			session.currentDirectory = metadata.directory
+		}
+
+		let summary = try #require(
+			model.saveWorkspaceToLibrary(
+				workspace.id,
+				transcriptsBySessionID: Dictionary(
+					uniqueKeysWithValues: metadataBySessionID.map { ($0.key, $0.value.transcript) }
+				)
+			)
+		)
+		let reopenedWorkspaceID = try #require(model.openSavedWorkspace(summary.id))
+		let reopenedWorkspace = try #require(model.workspace(for: reopenedWorkspaceID))
+		let reopenedRoot = try #require(reopenedWorkspace.root)
+		let reopenedLeaves = reopenedWorkspace.paneLeaves
+		let reopenedFocusedPath = try #require(
+			leafPaths(in: reopenedRoot).first(where: { $0.leaf.id == reopenedWorkspace.focusedPaneID })?.path
+		)
+
+		#expect(summary.paneCount == 5)
+		#expect(nodeSignature(from: reopenedRoot) == expectedSignature)
+		#expect(reopenedWorkspace.paneCount == 5)
+		#expect(reopenedFocusedPath == originalFocusedPath)
+		#expect(reopenedLeaves.count == originalLeaves.count)
+
+		for (index, originalLeaf) in originalLeaves.enumerated() {
+			let reopenedLeaf = reopenedLeaves[index]
+			let restoredSession = try #require(model.sessions.session(for: reopenedLeaf.sessionID))
+			let metadata = try #require(metadataBySessionID[originalLeaf.sessionID])
+			#expect(restoredSession.title == metadata.title)
+			#expect(restoredSession.currentDirectory == metadata.directory)
+			#expect(restoredSession.consumeRestoredTranscript() == metadata.transcript)
+		}
+	}
+
 	@Test func saveAndOpenSavedWorkspaceRestoreComplexLayoutFocusedPaneAndSessionMetadata() throws {
 		let leftPane = PaneLeaf()
 		let topRightPane = PaneLeaf()
@@ -198,6 +299,110 @@ struct WorkspacePersistenceTests {
 		}
 	}
 
+	@Test func openSavedWorkspaceReturnsNilWhenSnapshotPaneTreeIsCorrupted() throws {
+		let leftPane = PaneLeaf()
+		let rightPane = PaneLeaf()
+		let workspace = Workspace(
+			title: "Workspace 1",
+			root: .split(
+				PaneSplit(
+					axis: .horizontal,
+					fraction: 0.5,
+					first: .leaf(leftPane),
+					second: .leaf(rightPane)
+				)
+			),
+			focusedPaneID: leftPane.id
+		)
+		let persistence = ShellPersistenceController.inMemoryForTesting()
+		let model = ShellModel(
+			workspaces: [workspace],
+			selectedWorkspaceID: workspace.id,
+			persistence: persistence,
+			launchContextBuilder: TestSupport.makeLaunchContextBuilder(defaultCurrentDirectory: "/tmp/gmax-tests")
+		)
+
+		let summary = try #require(model.saveWorkspaceToLibrary(workspace.id))
+		let context = persistence.container.viewContext
+
+		let snapshotEntity = try #require(try fetchSnapshotEntity(id: summary.id, in: context))
+		let rootNode = try #require(snapshotEntity.rootNode)
+		rootNode.firstChild = nil
+		try context.save()
+
+		let reopenedWorkspaceID = model.openSavedWorkspace(summary.id)
+
+		#expect(reopenedWorkspaceID == nil)
+		#expect(model.workspaces.count == 1)
+		#expect(model.listSavedWorkspaceSnapshots().count == 1)
+	}
+
+	@Test func openSavedWorkspaceFallsBackToDefaultLaunchConfigurationWhenAPaneSessionSnapshotIsMissing() throws {
+		let leftPane = PaneLeaf()
+		let rightPane = PaneLeaf()
+		let workspace = Workspace(
+			title: "Workspace 1",
+			root: .split(
+				PaneSplit(
+					axis: .horizontal,
+					fraction: 0.5,
+					first: .leaf(leftPane),
+					second: .leaf(rightPane)
+				)
+			),
+			focusedPaneID: rightPane.id
+		)
+		let persistence = ShellPersistenceController.inMemoryForTesting()
+		let launchContextBuilder = TestSupport.makeLaunchContextBuilder(defaultCurrentDirectory: "/tmp/default-fallback")
+		let model = ShellModel(
+			workspaces: [workspace],
+			selectedWorkspaceID: workspace.id,
+			persistence: persistence,
+			launchContextBuilder: launchContextBuilder
+		)
+
+		let metadataBySessionID: [TerminalSessionID: (title: String, directory: String, transcript: String)] = [
+			leftPane.sessionID: ("Left Shell", "/tmp/layout/left", "printf left\n"),
+			rightPane.sessionID: ("Right Shell", "/tmp/layout/right", "printf right\n")
+		]
+
+		for leaf in workspace.paneLeaves {
+			let session = model.sessions.ensureSession(id: leaf.sessionID)
+			let metadata = try #require(metadataBySessionID[leaf.sessionID])
+			session.title = metadata.title
+			session.currentDirectory = metadata.directory
+		}
+
+		let summary = try #require(
+			model.saveWorkspaceToLibrary(
+				workspace.id,
+				transcriptsBySessionID: Dictionary(
+					uniqueKeysWithValues: metadataBySessionID.map { ($0.key, $0.value.transcript) }
+				)
+			)
+		)
+		let context = persistence.container.viewContext
+
+		let missingSessionEntity = try #require(try fetchPaneSessionSnapshotEntity(id: rightPane.sessionID, in: context))
+		context.delete(missingSessionEntity)
+		try context.save()
+
+		let reopenedWorkspaceID = try #require(model.openSavedWorkspace(summary.id))
+		let reopenedWorkspace = try #require(model.workspace(for: reopenedWorkspaceID))
+		let reopenedLeaves = reopenedWorkspace.paneLeaves
+		#expect(reopenedLeaves.count == 2)
+
+		let unaffectedSession = try #require(model.sessions.session(for: reopenedLeaves[0].sessionID))
+		#expect(unaffectedSession.title == "Left Shell")
+		#expect(unaffectedSession.currentDirectory == "/tmp/layout/left")
+		#expect(unaffectedSession.consumeRestoredTranscript() == "printf left\n")
+
+		let fallbackSession = try #require(model.sessions.session(for: reopenedLeaves[1].sessionID))
+		#expect(fallbackSession.title == "Shell")
+		#expect(fallbackSession.currentDirectory == "/tmp/default-fallback")
+		#expect(fallbackSession.consumeRestoredTranscript() == nil)
+	}
+
 	@Test func closeWorkspaceToLibraryCreatesAReusableSnapshotAndSelectsTheNeighbor() throws {
 		let firstWorkspace = TestSupport.makeWorkspace(title: "Workspace 1")
 		let secondWorkspace = TestSupport.makeWorkspace(title: "Workspace 2")
@@ -225,6 +430,35 @@ struct WorkspacePersistenceTests {
 		#expect(model.workspaces.count == 2)
 		#expect(model.selectedWorkspace?.id == reopenedWorkspaceID)
 		#expect(reopenedWorkspace.title == "Workspace 1")
+	}
+
+	@Test func loadWorkspacesDiscardsPersistedWorkspaceWhenItsPaneTreeIsCorrupted() throws {
+		let leftPane = PaneLeaf()
+		let rightPane = PaneLeaf()
+		let workspace = Workspace(
+			title: "Workspace 1",
+			root: .split(
+				PaneSplit(
+					axis: .horizontal,
+					fraction: 0.5,
+					first: .leaf(leftPane),
+					second: .leaf(rightPane)
+				)
+			),
+			focusedPaneID: leftPane.id
+		)
+		let persistence = ShellPersistenceController.inMemoryForTesting()
+		persistence.save(workspaces: [workspace])
+		let context = persistence.container.viewContext
+
+		let workspaceEntity = try #require(try fetchWorkspaceEntity(id: workspace.id, in: context))
+		let rootNode = try #require(workspaceEntity.rootNode)
+		rootNode.axis = nil
+		try context.save()
+
+		let restoredWorkspaces = persistence.loadWorkspaces()
+
+		#expect(restoredWorkspaces.isEmpty)
 	}
 }
 
@@ -258,4 +492,34 @@ private func leafPaths(in node: PaneNode?, path: [Int] = []) -> [(leaf: PaneLeaf
 		case .split(let split):
 			return leafPaths(in: split.first, path: path + [0]) + leafPaths(in: split.second, path: path + [1])
 	}
+}
+
+private func fetchSnapshotEntity(
+	id: WorkspaceSnapshotID,
+	in context: NSManagedObjectContext
+) throws -> WorkspaceSnapshotEntity? {
+	let request = WorkspaceSnapshotEntity.fetchRequest()
+	request.fetchLimit = 1
+	request.predicate = NSPredicate(format: "id == %@", id.rawValue as CVarArg)
+	return try context.fetch(request).first
+}
+
+private func fetchPaneSessionSnapshotEntity(
+	id: TerminalSessionID,
+	in context: NSManagedObjectContext
+) throws -> PaneSessionSnapshotEntity? {
+	let request = PaneSessionSnapshotEntity.fetchRequest()
+	request.fetchLimit = 1
+	request.predicate = NSPredicate(format: "id == %@", id.rawValue as CVarArg)
+	return try context.fetch(request).first
+}
+
+private func fetchWorkspaceEntity(
+	id: WorkspaceID,
+	in context: NSManagedObjectContext
+) throws -> WorkspaceEntity? {
+	let request = WorkspaceEntity.fetchRequest()
+	request.fetchLimit = 1
+	request.predicate = NSPredicate(format: "id == %@", id.rawValue as CVarArg)
+	return try context.fetch(request).first
 }
