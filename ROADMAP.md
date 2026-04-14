@@ -104,6 +104,16 @@ Build `gmax` into a finished macOS terminal workspace app:
 - [ ] Write onboarding and maintainer docs for release-oriented development
 - [x] Prepare a release checklist for first usable internal builds
 
+## Milestone 6A: Observability And Diagnostics Follow-Through
+
+- [ ] Land the initial Apple `Logger` subsystem and category taxonomy across app, workspace, pane, persistence, and diagnostics surfaces
+- [ ] Standardize operator-facing log message shape so restore, reopen, and relaunch failures are immediately understandable in Console
+- [ ] Add an `OSLogStore`-based recent-diagnostics export path suitable for future user-facing feedback bundles
+- [ ] Decide what support-bundle metadata should accompany exported logs, such as workspace summaries, pane state, persistence outcomes, or recent alerts
+- [ ] Evaluate `MetricKit` intake for crash and hang diagnostics once the ordinary logging baseline is stable
+- [ ] Revisit distributed tracing and `swift-otel` only when `gmax` has a concrete telemetry destination or cross-process workflow that needs correlation
+- [ ] Keep observability scope lightweight and product-driven instead of introducing server-style telemetry by default
+
 ## Milestone 7: Deeper Terminal Integrations / Remote / SSH / Etc.
 
 - [ ] Explore other SwiftTerm types, particularly `TerminalView`

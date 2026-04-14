@@ -187,6 +187,82 @@ That means:
 - keep messages descriptive and support-oriented
 - avoid introducing `swift-log`, distributed tracing, or OpenTelemetry as release blockers
 
+### Initial `Logger` Adoption Plan
+
+The first implementation pass should stay intentionally small and structural.
+
+#### Step 1: Choose One Subsystem
+
+Pick one stable subsystem identifier for the app and keep it consistent everywhere.
+
+A reasonable default is:
+
+- subsystem: `com.gaelic-ghost.gmax`
+
+That gives Console and Instruments one canonical filter surface and avoids category drift turning into pseudo-subsystems later.
+
+#### Step 2: Start With A Small Category Set
+
+Do not try to map every type in the project to its own category immediately.
+
+For the first pass, a compact category set is enough:
+
+- `app`: app lifecycle, scene lifecycle, settings, window-level actions
+- `workspace`: workspace selection, create, rename, duplicate, close, save, reopen
+- `pane`: pane focus, split, close, relaunch, terminal host state changes
+- `persistence`: Core Data load, save, restore, migration, snapshot reopen
+- `diagnostics`: support-bundle export, internal diagnostics helpers, future MetricKit intake
+
+If a category is not clearly needed yet, it should not exist yet.
+
+#### Step 3: Keep Logger Ownership Close To The Feature
+
+Prefer feature-local `Logger` instances over one central logging manager.
+
+That means:
+
+- view-model or model-layer code logs its own state transitions
+- persistence code logs persistence outcomes
+- terminal-host code logs shell launch, relaunch, and host-bridge failures
+
+If message consistency starts drifting, add a thin shared helper for naming or formatting later. Do not start with a logging manager unless the code proves it is needed.
+
+#### Step 4: Standardize Message Shape
+
+Every operator-facing message should answer most of these questions in one line:
+
+- what operation was happening
+- which surface or model it belonged to
+- what state was involved
+- what failed or changed
+- what the most plausible cause was, when failure is known
+
+That is especially important for:
+
+- persistence save and restore
+- workspace reopen from library
+- pane relaunch after shell exit
+- startup restoration and scene restoration
+
+#### Step 5: Decide Privacy Rules Early
+
+Assume logs may eventually be exportable by the user.
+
+That means:
+
+- log pane titles, workspace titles, state, counts, and identifiers intentionally
+- be cautious with full terminal transcript text, raw command lines, environment values, and filesystem paths
+- use privacy annotations deliberately instead of letting sensitive strings slip into future support bundles accidentally
+
+#### Step 6: Leave One Clear Expansion Path
+
+After the baseline is in place, the next additions should happen in this order:
+
+1. stable category and message cleanup
+2. `OSLogStore` export for recent app diagnostics
+3. MetricKit subscriber work for crash and hang diagnostics
+4. only then consider tracing or OpenTelemetry if the product architecture has actually grown into needing them
+
 ### For the First Support-Bundle Pass
 
 Build the support story around unified logging instead of custom files first.
@@ -235,6 +311,17 @@ This is the smallest approach that still leaves us a clean growth path.
 - Do we want a thin `gmax` diagnostics helper for message consistency, or should feature code call `Logger` directly?
 - What should a future feedback bundle include besides logs: workspace summaries, persistence diagnostics, recent alerts, terminal-session state, or saved-workspace metadata?
 - When we add crash and hang diagnostics, do we want the app to store summarized MetricKit payloads locally, or only surface them when the user exports feedback?
+
+## Suggested Near-Term Decision
+
+Unless implementation work uncovers a constraint we do not currently see, the near-term decision should be:
+
+- use feature-local Apple `Logger` instances
+- keep one app subsystem
+- start with a small category set
+- plan `OSLogStore` as the first export mechanism
+- treat MetricKit as the first native diagnostics expansion
+- keep `swift-otel` and distributed tracing explicitly parked for later roadmap work
 
 ## References
 
