@@ -93,6 +93,7 @@ Build `gmax` into a finished macOS terminal workspace app:
 - [ ] Add configurable transcript retention limits for saved workspace history
 - [ ] Add crash-safe and operator-friendly persistence diagnostics
 - [x] Add initial failure-mode coverage for corrupted and partial workspace snapshots so restore degrades safely instead of unpredictably
+- [ ] Continue retiring legacy global-selection and fallback-routing patterns so scene-local window state remains the default foundation for future shell features
 - [ ] Decide which settings and metadata are sync-worthy
 - [ ] Evaluate `NSPersistentCloudKitContainer` for future sync support
 - [ ] Keep sync design scoped to durable product value, not novelty

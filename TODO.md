@@ -10,6 +10,7 @@
 - [ ] Add broader save and restore coverage for stale or more deeply corrupted persisted layouts beyond the current missing-session and corrupted-pane-tree cases.
 - [ ] Add broader UI coverage for pane lifecycle flows and multi-window command routing beyond the current sidebar and saved-workspace suites.
 - [ ] Sift the current UI-test work before extending it further: keep the app-side accessibility hooks and durable pane/inspector coverage, strip out multi-window-specific workaround scaffolding, then revisit frontmost-window command routing as a separate focused investigation.
+- [ ] Keep trimming legacy global-selection and fallback-routing anti-patterns so scene-local window state stays authoritative and future features do not build on retired backchannels.
 - [ ] Tighten operator-facing logs and error messages around persistence, restore, and shell relaunch failures.
 - [ ] Keep resiliency and recovery behavior explicit during feature work, especially where persistence, restore, and pane lifecycle flows can fail partially.
 - [ ] Walk the first internal-build release checklist for `v0.1.0`.
