@@ -175,6 +175,20 @@ That is normal for:
 
 Do not treat repeated launch-restoration logs during those runs as an app bug by default. The first question should be whether the test intentionally launched the app again.
 
+### Known Build Warning Noise
+
+Current local `xcodebuild` runs may also emit this warning during metadata extraction:
+
+```text
+Metadata extraction skipped. No AppIntents.framework dependency found.
+```
+
+That warning is currently expected build noise for `gmax`.
+
+It does not mean the app has a partially configured App Intents feature. The repository does not currently define any `AppIntent`, `AppShortcutsProvider`, `AppEntity`, `.intentdefinition`, or related App Intents surface. Xcode is invoking its metadata-export step generically and then skipping it because the app target does not link `AppIntents.framework`.
+
+Treat this warning as non-blocking unless the project intentionally starts adopting App Intents or Shortcuts support.
+
 ### Manual Accessibility Passes
 
 When running the manual accessibility and keyboard audit, the most useful categories are usually:
