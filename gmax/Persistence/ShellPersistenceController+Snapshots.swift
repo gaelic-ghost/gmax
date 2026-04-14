@@ -10,7 +10,7 @@ import Foundation
 import OSLog
 
 extension ShellPersistenceController {
-	static func existingSnapshotEntity(
+	nonisolated static func existingSnapshotEntity(
 		forSourceWorkspaceID workspaceID: WorkspaceID,
 		in context: NSManagedObjectContext
 	) throws -> WorkspaceSnapshotEntity? {
@@ -20,7 +20,7 @@ extension ShellPersistenceController {
 		return try context.fetch(request).first
 	}
 
-	static func deleteExistingSnapshotContents(
+	nonisolated static func deleteExistingSnapshotContents(
 		from snapshotEntity: WorkspaceSnapshotEntity,
 		in context: NSManagedObjectContext
 	) {
@@ -37,7 +37,7 @@ extension ShellPersistenceController {
 		snapshotEntity.sessionSnapshots = nil
 	}
 
-	static func syncSnapshotNode(
+	nonisolated static func syncSnapshotNode(
 		_ node: PaneNode?,
 		context: NSManagedObjectContext,
 		sessionSnapshotsByID: [UUID: PaneSessionSnapshotEntity]
@@ -83,7 +83,7 @@ extension ShellPersistenceController {
 		}
 	}
 
-	static func decodeSnapshotNode(_ nodeEntity: PaneSnapshotNodeEntity?, logger: Logger) -> PaneNode? {
+	nonisolated static func decodeSnapshotNode(_ nodeEntity: PaneSnapshotNodeEntity?, logger: Logger) -> PaneNode? {
 		guard let nodeEntity else {
 			return nil
 		}
@@ -128,7 +128,7 @@ extension ShellPersistenceController {
 		}
 	}
 
-	static func lineCount(for transcript: String?) -> Int {
+	nonisolated static func lineCount(for transcript: String?) -> Int {
 		guard let transcript, !transcript.isEmpty else {
 			return 0
 		}
@@ -139,7 +139,7 @@ extension ShellPersistenceController {
 		}
 	}
 
-	static func previewText(for transcript: String?) -> String? {
+	nonisolated static func previewText(for transcript: String?) -> String? {
 		guard let transcript else {
 			return nil
 		}
@@ -173,7 +173,7 @@ extension ShellPersistenceController {
 			.joined(separator: "\n")
 	}
 
-	static func snapshotPaneCount(from rootNode: PaneSnapshotNodeEntity?) -> Int {
+	nonisolated static func snapshotPaneCount(from rootNode: PaneSnapshotNodeEntity?) -> Int {
 		guard let rootNode else {
 			return 0
 		}
@@ -188,7 +188,7 @@ extension ShellPersistenceController {
 		}
 	}
 
-	static func makeSnapshotSummary(
+	nonisolated static func makeSnapshotSummary(
 		from entity: WorkspaceSnapshotEntity,
 		paneCount: Int
 	) -> SavedWorkspaceSnapshotSummary {
@@ -204,7 +204,7 @@ extension ShellPersistenceController {
 		)
 	}
 
-	static func decodePaneSessionSnapshot(
+	nonisolated static func decodePaneSessionSnapshot(
 		_ entity: PaneSessionSnapshotEntity,
 		logger: Logger
 	) -> SavedPaneSessionSnapshot? {
@@ -231,11 +231,11 @@ extension ShellPersistenceController {
 		}
 	}
 
-	static func encode<T: Encodable>(_ value: T) throws -> Data {
+	nonisolated static func encode<T: Encodable>(_ value: T) throws -> Data {
 		try JSONEncoder().encode(value)
 	}
 
-	static func decode<T: Decodable>(_ type: T.Type, from data: Data?) throws -> T {
+	nonisolated static func decode<T: Decodable>(_ type: T.Type, from data: Data?) throws -> T {
 		guard let data else {
 			throw SnapshotPersistenceError.missingEncodedPayload(typeName: String(describing: type))
 		}

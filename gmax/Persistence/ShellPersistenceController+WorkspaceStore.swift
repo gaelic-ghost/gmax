@@ -10,7 +10,7 @@ import Foundation
 import OSLog
 
 extension ShellPersistenceController {
-	static func syncNode(
+	nonisolated static func syncNode(
 		_ node: PaneNode?,
 		context: NSManagedObjectContext,
 		nodesByID: inout [UUID: PaneNodeEntity],
@@ -59,7 +59,7 @@ extension ShellPersistenceController {
 		}
 	}
 
-	static func decodeNode(_ nodeEntity: PaneNodeEntity?, logger: Logger) -> PaneNode? {
+	nonisolated static func decodeNode(_ nodeEntity: PaneNodeEntity?, logger: Logger) -> PaneNode? {
 		guard let nodeEntity else {
 			return nil
 		}
@@ -104,7 +104,7 @@ extension ShellPersistenceController {
 		}
 	}
 
-	static func normalizedWorkspace(_ workspace: Workspace, logger: Logger) -> Workspace? {
+	nonisolated static func normalizedWorkspace(_ workspace: Workspace, logger: Logger) -> Workspace? {
 		guard let root = workspace.root else {
 			logger.error("A persisted workspace has no root pane tree. That empty workspace will be discarded during restore. Workspace ID: \(workspace.id.rawValue.uuidString, privacy: .public)")
 			return nil

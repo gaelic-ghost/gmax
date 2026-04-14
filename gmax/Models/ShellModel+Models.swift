@@ -34,11 +34,11 @@ struct WorkspaceID: RawRepresentable, Hashable, Codable, Identifiable {
 
 	var id: UUID { rawValue }
 
-	init(rawValue: UUID) {
+	nonisolated init(rawValue: UUID) {
 		self.rawValue = rawValue
 	}
 
-	init() {
+	nonisolated init() {
 		self.rawValue = UUID()
 	}
 }
@@ -48,11 +48,11 @@ struct PaneID: RawRepresentable, Hashable, Codable, Identifiable {
 
 	var id: UUID { rawValue }
 
-	init(rawValue: UUID) {
+	nonisolated init(rawValue: UUID) {
 		self.rawValue = rawValue
 	}
 
-	init() {
+	nonisolated init() {
 		self.rawValue = UUID()
 	}
 }
@@ -62,11 +62,11 @@ struct SplitID: RawRepresentable, Hashable, Codable, Identifiable {
 
 	var id: UUID { rawValue }
 
-	init(rawValue: UUID) {
+	nonisolated init(rawValue: UUID) {
 		self.rawValue = rawValue
 	}
 
-	init() {
+	nonisolated init() {
 		self.rawValue = UUID()
 	}
 }
@@ -76,11 +76,11 @@ struct TerminalSessionID: RawRepresentable, Hashable, Codable, Identifiable {
 
 	var id: UUID { rawValue }
 
-	init(rawValue: UUID) {
+	nonisolated init(rawValue: UUID) {
 		self.rawValue = rawValue
 	}
 
-	init() {
+	nonisolated init() {
 		self.rawValue = UUID()
 	}
 }
@@ -90,11 +90,11 @@ struct WorkspaceSnapshotID: RawRepresentable, Hashable, Codable, Identifiable {
 
 	var id: UUID { rawValue }
 
-	init(rawValue: UUID) {
+	nonisolated init(rawValue: UUID) {
 		self.rawValue = rawValue
 	}
 
-	init() {
+	nonisolated init() {
 		self.rawValue = UUID()
 	}
 }
@@ -200,7 +200,7 @@ struct PaneLeaf: Identifiable, Hashable, Codable {
 	var id: PaneID
 	var sessionID: TerminalSessionID
 
-	init(id: PaneID = PaneID(), sessionID: TerminalSessionID = TerminalSessionID()) {
+	nonisolated init(id: PaneID = PaneID(), sessionID: TerminalSessionID = TerminalSessionID()) {
 		self.id = id
 		self.sessionID = sessionID
 	}
@@ -218,7 +218,7 @@ struct PaneSplit: Hashable, Codable {
 	var first: PaneNode
 	var second: PaneNode
 
-	init(
+	nonisolated init(
 		id: SplitID = SplitID(),
 		axis: Axis,
 		fraction: CGFloat,
