@@ -162,7 +162,10 @@ private struct PaneSplitContainer<First: View, Second: View>: View {
 	}
 
 	private func divider(for size: CGSize) -> some View {
-		Rectangle()
+		let totalLength = axis == .horizontal ? size.width : size.height
+		let currentFraction = clampedFraction(for: totalLength)
+
+		return Rectangle()
 			.fill(.separator.opacity(0.9))
 			.overlay {
 				Rectangle()
@@ -198,6 +201,21 @@ private struct PaneSplitContainer<First: View, Second: View>: View {
 					NSCursor.arrow.set()
 				}
 			}
+			.accessibilityElement()
+			.accessibilityLabel(dividerAccessibilityLabel)
+			.accessibilityValue("\(Int(currentFraction * 100)) percent")
+			.accessibilityHint("Adjust to resize the panes on either side of this divider.")
+			.accessibilityAdjustableAction { direction in
+				let step: CGFloat = 0.05
+				switch direction {
+					case .increment:
+						onFractionChange(clamped(currentFraction + step, for: totalLength))
+					case .decrement:
+						onFractionChange(clamped(currentFraction - step, for: totalLength))
+					@unknown default:
+						break
+				}
+			}
 	}
 
 	private func clampedFraction(for totalLength: CGFloat) -> CGFloat {
@@ -213,6 +231,15 @@ private struct PaneSplitContainer<First: View, Second: View>: View {
 		let minimumFraction = min(minimumPaneLength / usableLength, 0.5)
 		let maximumFraction = max(1 - minimumFraction, 0.5)
 		return min(max(proposedFraction, minimumFraction), maximumFraction)
+	}
+
+	private var dividerAccessibilityLabel: String {
+		switch axis {
+			case .horizontal:
+				return "Vertical pane divider"
+			case .vertical:
+				return "Horizontal pane divider"
+		}
 	}
 }
 
