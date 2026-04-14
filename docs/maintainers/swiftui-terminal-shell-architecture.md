@@ -13,6 +13,20 @@ The immediate product shape is:
 
 This document is intentionally maintainer-facing. It describes the durable primitives we want to build on, the tradeoffs we already considered, and the implementation direction we should preserve while the product grows.
 
+## Current Source Organization
+
+The source tree is now organized to match the current ownership boundaries in the app:
+
+- `gmaxApp.swift` keeps app bootstrap and scene declarations
+- `App/` holds scene actions, menu commands, and AppKit window interop
+- `Models/` keeps shell state plus pane and workspace management split by concern
+- `Persistence/` keeps Core Data setup, snapshot helpers, and workspace storage split by concern
+- `Terminal/` keeps the SwiftUI representable boundary, coordinator, AppKit host, and terminal-session plumbing
+- `Views/Content/` keeps the recursive pane tree, split container, leaf card, and geometry preferences
+- `Views/Settings/` keeps the settings entry view plus the terminal appearance and workspace sections
+
+This is a durable building-block cleanup, not a stopgap. The source layout should continue to reflect ownership boundaries rather than collapsing unrelated shell, persistence, or AppKit code back into oversized single files.
+
 ## High-Level Shell Structure
 
 The root shell should use a three-column `NavigationSplitView`:
@@ -364,6 +378,14 @@ The command surface is also now split intentionally across:
 - `Pane` for pane creation, splitting, and focus movement
 
 That menu split should be treated as current architecture, not as temporary cleanup.
+
+The test surface is also now grouped by domain:
+
+- shared builders and fixtures in `gmaxTests/TestSupport.swift`
+- workspace lifecycle behavior in `gmaxTests/WorkspaceLifecycleTests.swift`
+- workspace persistence and saved-library behavior in `gmaxTests/WorkspacePersistenceTests.swift`
+
+That test grouping should be preserved as the app grows so workspace, persistence, and future pane-tree coverage remain readable and maintainable.
 
 ## Implementation Plan
 

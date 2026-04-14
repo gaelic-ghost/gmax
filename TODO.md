@@ -6,6 +6,7 @@
 - [ ] Replace the temporary pane-header material chip with more intentional terminal-native pane chrome and stronger focus treatment.
 - [ ] Add configurable startup behavior for new panes and new workspaces.
 - [ ] Add configurable transcript retention limits for saved workspace history.
-- [ ] Add persistence-layer tests for workspace restore, save-to-library, and reopen flows.
+- [ ] Add more pane-tree mutation coverage beyond the current workspace lifecycle and persistence test foothold.
+- [ ] Add UI coverage for workspace and pane lifecycle flows beyond the current template and launch-performance scaffolding.
 - [ ] Tighten operator-facing logs and error messages around persistence, restore, and shell relaunch failures.
 - [ ] Walk the first internal-build release checklist for `v0.1.0`.

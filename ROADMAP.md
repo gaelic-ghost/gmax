@@ -23,6 +23,8 @@ Build `gmax` into a finished macOS terminal workspace app:
 - [x] Saved-workspace library with transcript-backed reopen
 - [x] Per-scene restoration for selected workspace and inspector visibility
 - [x] App settings window for terminal appearance
+- [x] Unified logging baseline plus maintainer logging-validation guide
+- [x] Domain-grouped unit-test surface for workspace lifecycle and persistence
 - [x] Maintainer architecture note
 
 ## Milestone 1: Workspace and Pane Core
@@ -51,7 +53,7 @@ Build `gmax` into a finished macOS terminal workspace app:
 - [ ] Audit the SwiftUI shell for keyboard-only reachability
 - [ ] Improve pane focus visibility and command discoverability
 - [ ] Evaluate SwiftTerm host accessibility gaps in the app context
-- [ ] Add app-level accessibility affordances around pane metadata and session state
+- [x] Add app-level accessibility affordances around pane metadata and session state
 - [ ] Design a practical Voice Control and Full Keyboard Access story
 - [ ] Decide whether SwiftTerm should be extended locally for better accessibility support
 - [ ] Integrate SpeakSwiftly for in-process custom TTS and STT
@@ -97,7 +99,7 @@ Build `gmax` into a finished macOS terminal workspace app:
 ## Milestone 6: Quality and Release Readiness
 
 - [ ] Add meaningful unit coverage for pane-tree mutations
-- [ ] Add persistence-layer tests for load and save behavior
+- [x] Add persistence-layer tests for load and save behavior
 - [ ] Add UI coverage for workspace and pane lifecycle flows
 - [ ] Tighten operator-facing logs and error messages throughout the app
 - [ ] Choose a lightweight logging and diagnostics baseline that supports support-bundle export and future crash or hang reporting

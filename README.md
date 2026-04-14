@@ -58,6 +58,7 @@ The shell uses a split-tree model rather than a flat grid:
 - the selected workspace and inspector visibility restore per scene
 - terminal appearance is driven by persisted app settings for font, size, and theme
 - saved workspaces are stored as durable snapshots with pane launch context and preserved transcript text
+- operator-facing diagnostics now flow through Apple's unified logging system using a stable `Logger` subsystem and category taxonomy
 
 SwiftTerm is hosted through AppKit using `NSViewRepresentable`, so live terminal output stays inside the hosted terminal view instead of driving SwiftUI body churn.
 
@@ -67,15 +68,21 @@ The maintainer-facing architecture note lives at [docs/maintainers/swiftui-termi
 
 ## Repository Layout
 
-- `gmax/`: app source
-- `gmax/Models/`: shell and pane model types
-- `gmax/Terminal/`: SwiftTerm hosting and terminal session plumbing
-- `gmax/Persistence/`: Core Data persistence for shell state
-- `gmax/Views/`: sidebar, content, detail, and pane rendering
-- `gmaxTests/`: focused model-level tests
+- `gmax/`: app source root
+- `gmax/App/`: app entry, scene actions, commands, and AppKit window interop
+- `gmax/Models/`: shell model state plus pane and workspace management
+- `gmax/Persistence/`: Core Data stack, snapshot encode and decode, and live workspace storage
+- `gmax/Terminal/`: SwiftTerm hosting boundary, terminal coordinator, and session plumbing
+- `gmax/Views/Content/`: recursive pane tree rendering and split behavior
+- `gmax/Views/Detail/`: active-pane inspector content
+- `gmax/Views/Scenes/`: top-level shell scene composition
+- `gmax/Views/Settings/`: settings window and section views
+- `gmax/Views/Sidebar/`: workspace sidebar and saved-workspace library sheet
+- `gmaxTests/`: unit tests grouped by shared support, workspace lifecycle, and workspace persistence domains
 - `gmaxUITests/`: UI test target scaffolding
 - `docs/maintainers/`: architecture and maintainer notes
 - `docs/maintainers/accessibility-and-keyboard-plan.md`: release-oriented accessibility and keyboard plan
+- `docs/maintainers/logging-validation-guide.md`: maintainer workflow for Console and `/usr/bin/log` validation
 - `docs/maintainers/v0.1.0-release-checklist.md`: first internal release checklist
 - `scripts/repo-maintenance/`: repo validation, sync, and release helpers
 
@@ -135,6 +142,7 @@ For maintainer-oriented repo checks and shared sync steps, use:
 ```sh
 scripts/repo-maintenance/validate-all.sh
 scripts/repo-maintenance/sync-shared.sh
+scripts/repo-maintenance/release.sh --version vX.Y.Z
 ```
 
 ## Keyboard Commands
@@ -161,9 +169,9 @@ The current shell exposes a command-first keyboard model across the `File`, `Wor
 
 The app is already past the pure-prototype stage. The shell shape, pane model, terminal embedding, directional focus movement, saved-workspace library, transcript-backed restore path, and persistence layers are all real.
 
-What remains is product completion work: command-surface polish, library and rename refinements, accessibility, richer terminal controls, deeper integrations, and the details that make the app feel intentional rather than merely viable.
+What remains is product completion work: command-surface polish, library and rename refinements, manual accessibility validation, richer terminal controls, deeper integrations, and the details that make the app feel intentional rather than merely viable.
 
-The test surface is still early. There is a real unit-test foothold around core workspace mutations, but broader persistence, UI-flow, and release-readiness coverage is still ahead of the project.
+The source tree and test surface are now grouped more intentionally by domain. Unit coverage now has a real foothold across both workspace lifecycle and workspace persistence behavior, while broader pane-tree mutation coverage, UI-flow coverage, and release-readiness coverage are still ahead of the project.
 
 ## Verification
 
@@ -181,11 +189,19 @@ For test validation, prefer:
 xcodebuild -project gmax.xcodeproj -scheme gmax -destination 'platform=macOS' test
 ```
 
+For maintainer logging validation during manual verification, use:
+
+```sh
+/usr/bin/log show --last 10m --style compact --predicate 'subsystem == "com.gaelic-ghost.gmax"'
+```
+
 For repo-maintenance validation after guidance syncs, use:
 
 ```sh
 scripts/repo-maintenance/validate-all.sh
 ```
+
+The maintainer-facing validation notes for accessibility, diagnostics, and release readiness live under [docs/maintainers/](docs/maintainers/).
 
 ## License
 
