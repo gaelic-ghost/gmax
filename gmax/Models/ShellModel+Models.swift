@@ -168,7 +168,7 @@ struct Workspace: Identifiable, Hashable, Codable {
 	var root: PaneNode?
 	var focusedPaneID: PaneID?
 
-	init(
+	nonisolated init(
 		id: WorkspaceID = WorkspaceID(),
 		title: String,
 		root: PaneNode? = nil,
@@ -182,11 +182,11 @@ struct Workspace: Identifiable, Hashable, Codable {
 }
 
 extension Workspace {
-	var paneLeaves: [PaneLeaf] {
+	nonisolated var paneLeaves: [PaneLeaf] {
 		root?.leaves() ?? []
 	}
 
-	var paneCount: Int {
+	nonisolated var paneCount: Int {
 		root?.paneCount() ?? 0
 	}
 }

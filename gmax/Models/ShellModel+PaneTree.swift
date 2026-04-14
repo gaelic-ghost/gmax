@@ -12,7 +12,7 @@ import SwiftUI
 // MARK: Structural editing and traversal helpers for recursive pane layouts.
 
 extension PaneNode {
-	func leaves() -> [PaneLeaf] {
+	nonisolated func leaves() -> [PaneLeaf] {
 		switch self {
 			case .leaf(let leaf):
 				return [leaf]
@@ -21,7 +21,7 @@ extension PaneNode {
 		}
 	}
 
-	func findPane(id: PaneID) -> PaneLeaf? {
+	nonisolated func findPane(id: PaneID) -> PaneLeaf? {
 		switch self {
 			case .leaf(let leaf):
 				return leaf.id == id ? leaf : nil
@@ -30,11 +30,11 @@ extension PaneNode {
 		}
 	}
 
-	func containsPane(id: PaneID) -> Bool {
+	nonisolated func containsPane(id: PaneID) -> Bool {
 		findPane(id: id) != nil
 	}
 
-	func firstLeaf() -> PaneLeaf? {
+	nonisolated func firstLeaf() -> PaneLeaf? {
 		switch self {
 			case .leaf(let leaf):
 				return leaf
@@ -43,7 +43,7 @@ extension PaneNode {
 		}
 	}
 
-	func lastLeaf() -> PaneLeaf? {
+	nonisolated func lastLeaf() -> PaneLeaf? {
 		switch self {
 			case .leaf(let leaf):
 				return leaf
@@ -164,7 +164,7 @@ extension PaneNode {
 		}
 	}
 
-	func paneCount() -> Int {
+	nonisolated func paneCount() -> Int {
 		switch self {
 			case .leaf:
 				return 1
