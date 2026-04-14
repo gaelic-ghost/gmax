@@ -151,5 +151,6 @@ Build `gmax` into a finished macOS terminal workspace app:
 
 ## Reference Docs
 
+- [docs/maintainers/accessibility-and-keyboard-plan.md](docs/maintainers/accessibility-and-keyboard-plan.md)
 - [docs/maintainers/swiftui-terminal-shell-architecture.md](docs/maintainers/swiftui-terminal-shell-architecture.md)
 - [docs/maintainers/v0.1.0-release-checklist.md](docs/maintainers/v0.1.0-release-checklist.md)

@@ -75,6 +75,7 @@ The maintainer-facing architecture note lives at [docs/maintainers/swiftui-termi
 - `gmaxTests/`: focused model-level tests
 - `gmaxUITests/`: UI test target scaffolding
 - `docs/maintainers/`: architecture and maintainer notes
+- `docs/maintainers/accessibility-and-keyboard-plan.md`: release-oriented accessibility and keyboard plan
 - `docs/maintainers/v0.1.0-release-checklist.md`: first internal release checklist
 - `scripts/repo-maintenance/`: repo validation, sync, and release helpers
 
