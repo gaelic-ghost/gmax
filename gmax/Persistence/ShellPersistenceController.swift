@@ -13,11 +13,34 @@ import OSLog
 final class ShellPersistenceController {
 	static let shared = ShellPersistenceController()
 
-	private let logger = Logger.gmax(.persistence)
+	private let logger: Logger
 	private let container: NSPersistentContainer
 
 	private init() {
+		let logger = Logger.gmax(.persistence)
+		self.logger = logger
 		self.container = Self.makePersistentContainer(logger: logger)
+	}
+
+	private init(container: NSPersistentContainer, logger: Logger) {
+		self.logger = logger
+		self.container = container
+	}
+
+	static func inMemoryForTesting() -> ShellPersistenceController {
+		let logger = Logger.gmax(.persistence)
+		let container = makeContainer(
+			model: makeManagedObjectModel(),
+			description: inMemoryStoreDescription(),
+			contextName: "ShellPersistence.testInMemoryViewContext"
+		)
+
+		precondition(
+			loadPersistentStores(for: container, logger: logger),
+			"The in-memory shell persistence store must load successfully for tests."
+		)
+
+		return ShellPersistenceController(container: container, logger: logger)
 	}
 
 	func loadWorkspaces() -> [Workspace] {
