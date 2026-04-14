@@ -92,7 +92,7 @@ Build `gmax` into a finished macOS terminal workspace app:
 - [ ] Add UI coverage for workspace and pane lifecycle flows
 - [ ] Tighten operator-facing logs and error messages throughout the app
 - [ ] Write onboarding and maintainer docs for release-oriented development
-- [ ] Prepare a release checklist for first usable internal builds
+- [x] Prepare a release checklist for first usable internal builds
 
 ## Milestone 7: Deeper Terminal Integrations / Remote / SSH / Etc.
 
@@ -148,3 +148,8 @@ Build `gmax` into a finished macOS terminal workspace app:
 - [ ] Saved-workspace library polish and reopen semantics
 - [ ] Keyboard-shortcut and command discoverability pass
 - [ ] Release-readiness pass on logs, errors, and first-run workflow
+
+## Reference Docs
+
+- [docs/maintainers/swiftui-terminal-shell-architecture.md](docs/maintainers/swiftui-terminal-shell-architecture.md)
+- [docs/maintainers/v0.1.0-release-checklist.md](docs/maintainers/v0.1.0-release-checklist.md)

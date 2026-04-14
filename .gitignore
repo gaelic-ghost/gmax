@@ -3,4 +3,8 @@ UserInterfaceState.xcuserstate
 .venv-maintenance/
 .codex/
 __pycache__/
-docs/
+docs/*
+!docs/maintainers/
+docs/maintainers/*
+!docs/maintainers/swiftui-terminal-shell-architecture.md
+!docs/maintainers/v0.1.0-release-checklist.md
