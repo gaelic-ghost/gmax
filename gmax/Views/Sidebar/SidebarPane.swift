@@ -184,6 +184,10 @@ private struct WorkspaceRenameSheet: View {
 			Text("Rename Workspace")
 				.font(.title3.weight(.semibold))
 
+			Text("Choose the name that should appear in the sidebar, window title, and workspace actions.")
+				.font(.subheadline)
+				.foregroundStyle(.secondary)
+
 			TextField("Workspace Name", text: $title)
 				.textFieldStyle(.roundedBorder)
 				.accessibilityIdentifier("sidebar.renameWorkspaceField")

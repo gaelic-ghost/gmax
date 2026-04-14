@@ -50,18 +50,22 @@ struct ContentPane: View {
 					ContentUnavailableView {
 						Label("This Workspace Has No Panes", systemImage: "rectangle.dashed")
 					} description: {
-						Text("Start a fresh shell here to get this workspace back into a usable state.")
-						} actions: {
-							Button("Start Shell") {
-								selectedWorkspaceID = model.createPane(in: workspace.id)
-							}
-							.buttonStyle(.borderedProminent)
+						Text("Start a fresh shell to rebuild this workspace with one live terminal pane.")
+					} actions: {
+						Button("Start Shell") {
+							selectedWorkspaceID = model.createPane(in: workspace.id)
+						}
+						.buttonStyle(.borderedProminent)
 					}
 				}
 			}
 			.navigationTitle(workspace.title)
 		} else {
-			ContentUnavailableView("No Workspace Selected", systemImage: "sidebar.left")
+			ContentUnavailableView {
+				Label("No Workspace Selected", systemImage: "sidebar.left")
+			} description: {
+				Text("Choose a workspace from the sidebar to inspect or edit its panes.")
+			}
 		}
 	}
 }

@@ -129,8 +129,8 @@ struct SavedWorkspaceLibrarySheet: View {
 
 	private var emptyStateDescription: String {
 		searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-			? "Save a workspace to the library to reopen it later with its pane layout and preserved shell history."
-			: "No saved workspaces matched that search."
+			? "Save a workspace to the library to reopen its pane layout and shell history later."
+			: "No saved workspaces matched that search. Try a different title, pane count, or transcript text."
 	}
 
 	private func paneCountText(for paneCount: Int) -> String {

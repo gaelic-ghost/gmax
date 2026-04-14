@@ -33,7 +33,7 @@ struct WorkspaceSettingsSection: View {
 					onAutoSaveClosedWorkspacesChanged(isEnabled)
 				}
 
-			Text("Restore applies the next time you launch gmax. Recently closed workspaces stay in-memory only for this running session. Auto-save closed workspaces sends anything you close into the saved workspace library automatically.")
+			Text("Restore applies the next time you launch gmax. Recently closed workspaces stay in memory only for the current app session. Auto-save closed workspaces writes anything you close into the saved-workspace library automatically.")
 				.font(.caption)
 				.foregroundStyle(.secondary)
 		}
