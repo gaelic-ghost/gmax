@@ -26,10 +26,13 @@ Today the app already has the core product shape in place:
 - a center pane tree with recursive horizontal and vertical splits
 - a right-side inspector for the active pane
 - embedded local shell sessions backed by SwiftTerm
-- explicit workspace creation and pane creation commands
-- keyboard commands for splitting panes, moving focus, and closing panes or workspaces
-- Core Data persistence for workspace and pane topology
-- a settings window for terminal font and theme controls
+- explicit workspace and pane creation commands
+- keyboard commands for workspace, pane, and close lifecycle actions
+- a saved-workspace library with searchable reopen
+- transcript-backed workspace snapshots so reopened workspaces preserve shell history
+- Core Data persistence for both live workspace topology and saved workspace snapshots
+- per-scene restoration for the selected workspace and inspector visibility
+- a settings window for terminal appearance and workspace persistence behavior
 
 This repository is the successor to the earlier exploration work. It is intended to keep moving toward a finished product.
 
@@ -52,11 +55,13 @@ The shell uses a split-tree model rather than a flat grid:
 - leaf nodes host terminal sessions
 - split nodes store axis and fraction
 - the active pane drives the inspector content
+- the selected workspace and inspector visibility restore per scene
 - terminal appearance is driven by persisted app settings for font, size, and theme
+- saved workspaces are stored as durable snapshots with pane launch context and preserved transcript text
 
 SwiftTerm is hosted through AppKit using `NSViewRepresentable`, so live terminal output stays inside the hosted terminal view instead of driving SwiftUI body churn.
 
-Persistence is handled with Core Data using relational workspace and pane-node records, which gives the app a cleaner path toward richer restoration, future undo-friendly operations, and eventual CloudKit-backed sync if that becomes worthwhile.
+Persistence is handled with Core Data using relational live-workspace records plus a parallel saved-workspace snapshot graph. That gives the app a cleaner path toward undo-friendly workspace closure, searchable reopen, richer restoration, and future sync-friendly expansion if that becomes worthwhile.
 
 The maintainer-facing architecture note lives at [docs/maintainers/swiftui-terminal-shell-architecture.md](docs/maintainers/swiftui-terminal-shell-architecture.md).
 
@@ -67,7 +72,10 @@ The maintainer-facing architecture note lives at [docs/maintainers/swiftui-termi
 - `gmax/Terminal/`: SwiftTerm hosting and terminal session plumbing
 - `gmax/Persistence/`: Core Data persistence for shell state
 - `gmax/Views/`: sidebar, content, detail, and pane rendering
+- `gmaxTests/`: focused model-level tests
+- `gmaxUITests/`: UI test target scaffolding
 - `docs/maintainers/`: architecture and maintainer notes
+- `scripts/repo-maintenance/`: repo validation, sync, and release helpers
 
 ## Setup
 
@@ -89,10 +97,14 @@ The app launches as a macOS window with the workspace sidebar, pane content area
 From there you can:
 
 - create a new workspace from the toolbar or `cmd-n`
+- open the saved-workspace library from the toolbar or `cmd-o`
+- save the selected workspace into the library with `cmd-s`
 - create a new pane from the toolbar or `cmd-t`
 - split the focused pane right or down with keyboard commands
+- close a workspace directly or close it into the saved-workspace library
+- reopen a previously saved workspace with its layout and preserved shell history
 - hide or show the sidebar and inspector independently
-- open the settings window to adjust terminal font, size, and theme
+- open the settings window to adjust terminal appearance plus restore, recent-close, and auto-save workspace behavior
 
 ## Development
 
@@ -100,6 +112,12 @@ From there you can:
 
 ```sh
 xcodebuild -project gmax.xcodeproj -scheme gmax -destination 'platform=macOS' build
+```
+
+### Run Tests
+
+```sh
+xcodebuild -project gmax.xcodeproj -scheme gmax -destination 'platform=macOS' test
 ```
 
 ### Run The App
@@ -139,9 +157,11 @@ The current shell exposes a command-first keyboard model across the `File`, `Wor
 
 ## Status
 
-The app is already past the pure-prototype stage. The shell shape, pane model, terminal embedding, directional focus movement, and persistence layer are all real.
+The app is already past the pure-prototype stage. The shell shape, pane model, terminal embedding, directional focus movement, saved-workspace library, transcript-backed restore path, and persistence layers are all real.
 
-What remains is product completion work: fuller workspace lifecycle tooling, terminal-native polish, accessibility, richer settings, deeper terminal integrations, and the details that make the app feel intentional rather than merely viable.
+What remains is product completion work: command-surface polish, library and rename refinements, accessibility, richer terminal controls, deeper integrations, and the details that make the app feel intentional rather than merely viable.
+
+The test surface is still early. There is a real unit-test foothold around core workspace mutations, but broader persistence, UI-flow, and release-readiness coverage is still ahead of the project.
 
 ## Verification
 
@@ -151,6 +171,12 @@ For code changes inside the app, prefer:
 
 ```sh
 xcodebuild -project gmax.xcodeproj -scheme gmax -destination 'platform=macOS' build
+```
+
+For test validation, prefer:
+
+```sh
+xcodebuild -project gmax.xcodeproj -scheme gmax -destination 'platform=macOS' test
 ```
 
 For repo-maintenance validation after guidance syncs, use:
