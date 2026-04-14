@@ -7,7 +7,22 @@
 
 import Foundation
 import Combine
+import OSLog
 import SwiftUI
+
+enum GmaxLogCategory: String {
+	case app
+	case workspace
+	case pane
+	case persistence
+	case diagnostics
+}
+
+extension Logger {
+	static func gmax(_ category: GmaxLogCategory) -> Logger {
+		Logger(subsystem: "com.gaelic-ghost.gmax", category: category.rawValue)
+	}
+}
 
 struct WorkspaceID: RawRepresentable, Hashable, Codable, Identifiable {
 	var rawValue: UUID
@@ -425,6 +440,8 @@ final class ShellModel: ObservableObject {
 	private var paneFocusHistoryByWorkspace: [WorkspaceID: [PaneID]]
 	private var pendingPersistenceTask: Task<Void, Never>?
 	private var recentlyClosedWorkspaces: [RecentlyClosedWorkspace] = []
+	private let workspaceLogger = Logger.gmax(.workspace)
+	private let paneLogger = Logger.gmax(.pane)
 
 	init() {
 		WorkspacePersistenceDefaults.registerDefaults()
@@ -550,6 +567,7 @@ final class ShellModel: ObservableObject {
 		)
 		currentWorkspaceID = workspace.id
 		paneFocusHistoryByWorkspace[workspace.id] = [pane.id]
+		workspaceLogger.notice("Created a new workspace and seeded it with an initial pane. Workspace title: \(workspace.title, privacy: .public). Workspace ID: \(workspace.id.rawValue.uuidString, privacy: .public)")
 		schedulePersistenceSave()
 		return workspace.id
 	}
@@ -564,7 +582,9 @@ final class ShellModel: ObservableObject {
 			return
 		}
 
+		let previousTitle = workspaces[workspaceIndex].title
 		workspaces[workspaceIndex].title = trimmedTitle
+		workspaceLogger.notice("Renamed a workspace. Previous title: \(previousTitle, privacy: .public). New title: \(trimmedTitle, privacy: .public). Workspace ID: \(workspaceID.rawValue.uuidString, privacy: .public)")
 		schedulePersistenceSave()
 	}
 
@@ -578,6 +598,7 @@ final class ShellModel: ObservableObject {
 		workspaces.insert(duplicatedWorkspace, at: workspaceIndex + 1)
 		currentWorkspaceID = duplicatedWorkspace.id
 		paneFocusHistoryByWorkspace[duplicatedWorkspace.id] = [duplicatedWorkspace.focusedPaneID].compactMap { $0 }
+		workspaceLogger.notice("Duplicated a workspace layout into a new workspace. Source workspace ID: \(workspaceID.rawValue.uuidString, privacy: .public). New workspace title: \(duplicatedWorkspace.title, privacy: .public). New workspace ID: \(duplicatedWorkspace.id.rawValue.uuidString, privacy: .public)")
 		schedulePersistenceSave()
 		return duplicatedWorkspace.id
 	}
@@ -626,6 +647,7 @@ final class ShellModel: ObservableObject {
 		}
 
 		updateRecentlyClosedWorkspaceCount()
+		workspaceLogger.notice("Reopened a recently closed workspace from the in-memory history stack. Workspace title: \(closedWorkspace.workspace.title, privacy: .public). Workspace ID: \(closedWorkspace.workspace.id.rawValue.uuidString, privacy: .public)")
 		schedulePersistenceSave()
 		return closedWorkspace.workspace.id
 	}
@@ -645,6 +667,7 @@ final class ShellModel: ObservableObject {
 		transcriptsBySessionID: [TerminalSessionID: String] = [:]
 	) -> SavedWorkspaceSnapshotSummary? {
 		guard let workspace = workspace(for: workspaceID) else {
+			workspaceLogger.error("The app was asked to save a workspace to the library, but that workspace no longer exists in the current shell model. Workspace ID: \(workspaceID.rawValue.uuidString, privacy: .public)")
 			return nil
 		}
 
@@ -658,6 +681,9 @@ final class ShellModel: ObservableObject {
 			sessions: sessions,
 			transcriptsBySessionID: resolvedTranscripts
 		)
+		if let summary {
+			workspaceLogger.notice("Saved a workspace to the library. Workspace title: \(workspace.title, privacy: .public). Workspace ID: \(workspace.id.rawValue.uuidString, privacy: .public). Snapshot ID: \(summary.id.rawValue.uuidString, privacy: .public)")
+		}
 		return summary
 	}
 
@@ -694,6 +720,7 @@ final class ShellModel: ObservableObject {
 	@discardableResult
 	func openSavedWorkspace(_ snapshotID: WorkspaceSnapshotID) -> WorkspaceID? {
 		guard let snapshot = persistence.loadWorkspaceSnapshot(id: snapshotID) else {
+			workspaceLogger.error("The app could not reopen a saved workspace because the requested snapshot could not be loaded from persistence. Snapshot ID: \(snapshotID.rawValue.uuidString, privacy: .public)")
 			return nil
 		}
 
@@ -710,11 +737,13 @@ final class ShellModel: ObservableObject {
 		}
 
 		persistence.markWorkspaceSnapshotOpened(snapshotID)
+		workspaceLogger.notice("Opened a workspace from the saved-workspace library. Snapshot title: \(snapshot.title, privacy: .public). Snapshot ID: \(snapshotID.rawValue.uuidString, privacy: .public). Restored pane count: \(restoredWorkspace.workspace.paneCount)")
 		schedulePersistenceSave()
 		return restoredWorkspace.workspace.id
 	}
 
 	func deleteSavedWorkspace(_ snapshotID: WorkspaceSnapshotID) {
+		workspaceLogger.notice("Deleted a saved workspace snapshot from the library. Snapshot ID: \(snapshotID.rawValue.uuidString, privacy: .public)")
 		persistence.deleteWorkspaceSnapshot(id: snapshotID)
 	}
 
@@ -753,11 +782,13 @@ final class ShellModel: ObservableObject {
 	func relaunchPane(_ paneID: PaneID, in workspaceID: WorkspaceID) {
 		guard let workspace = workspace(for: workspaceID),
 			  let pane = workspace.root?.findPane(id: paneID) else {
+			paneLogger.error("The app was asked to relaunch a pane, but the pane could not be resolved inside the target workspace. Workspace ID: \(workspaceID.rawValue.uuidString, privacy: .public). Pane ID: \(paneID.rawValue.uuidString, privacy: .public)")
 			return
 		}
 
 		let session = sessions.ensureSession(id: pane.sessionID)
 		session.prepareForRelaunch()
+		paneLogger.notice("Requested a shell relaunch for a pane. Workspace title: \(workspace.title, privacy: .public). Workspace ID: \(workspaceID.rawValue.uuidString, privacy: .public). Pane ID: \(paneID.rawValue.uuidString, privacy: .public). Session ID: \(session.id.rawValue.uuidString, privacy: .public)")
 		focusPane(paneID, in: workspaceID)
 	}
 
@@ -1405,6 +1436,7 @@ extension ShellModel {
 			currentWorkspaceID = workspaces[nextIndex].id
 		}
 
+		workspaceLogger.notice("Closed a workspace from the live shell. Workspace title: \(workspace.title, privacy: .public). Workspace ID: \(workspace.id.rawValue.uuidString, privacy: .public). Recorded in recently closed: \(closeEffects.recordRecentlyClosed). Saved to library: \(closeEffects.saveToLibrary)")
 		schedulePersistenceSave()
 		return CloseCommandOutcome(
 			result: .closedWorkspace,

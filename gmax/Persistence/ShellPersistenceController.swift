@@ -13,7 +13,7 @@ import OSLog
 final class ShellPersistenceController {
 	static let shared = ShellPersistenceController()
 
-	private let logger = Logger(subsystem: "com.galewilliams.gmax-exploration", category: "ShellPersistence")
+	private let logger = Logger.gmax(.persistence)
 	private let container: NSPersistentContainer
 
 	private init() {
@@ -570,7 +570,7 @@ final class ShellPersistenceController {
 		do {
 			try fileManager.createDirectory(at: directoryURL, withIntermediateDirectories: true)
 		} catch {
-			Logger(subsystem: "com.galewilliams.gmax-exploration", category: "ShellPersistence")
+			Logger.gmax(.persistence)
 				.error("Failed to create the Application Support directory for shell persistence. The store may fail to load. Directory: \(directoryURL.path, privacy: .public). Error: \(String(describing: error), privacy: .public)")
 		}
 		return directoryURL.appendingPathComponent("ShellStore.sqlite")
