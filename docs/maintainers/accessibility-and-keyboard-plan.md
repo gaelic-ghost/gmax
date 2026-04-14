@@ -191,12 +191,19 @@ The pane tree is a custom SwiftUI composition:
   - what directory or title the pane represents
   - which pane-local actions are available
 - This shell-level layer should exist even if SwiftTerm itself is imperfect with VoiceOver.
+- Status:
+  - implemented for pane cards and split dividers in the SwiftUI pane tree
+  - implemented for the AppKit host container as pane-level label, value, help text, and custom actions without replacing the underlying terminal view's own semantics
 
 #### Second Phase: Evaluate The AppKit View Directly
 
 - Inspect `LocalProcessTerminalView` behavior under VoiceOver and Full Keyboard Access before making architectural promises.
 - If the view already exposes useful text and focus behavior, keep the wrapper light and only add labels or focus coordination where needed.
 - If the view exposes weak or confusing semantics, customize the AppKit side explicitly through `NSAccessibilityProtocol` overrides on the host view or through child accessibility elements.
+- Current finding:
+  - `LocalProcessTerminalView` inherits from SwiftTerm's `TerminalView`, which already posts accessibility notifications when terminal content changes
+  - the SwiftTerm checkout used by the project still appears to have limited macOS-specific accessibility service implementation depth, so `gmax` should currently treat deep live-terminal accessibility as a validation risk rather than an already-solved dependency capability
+  - for `v0.1.0`, prefer a small host-container bridge that describes the pane and exposes pane-local actions, then validate the live terminal surface manually before promising more
 
 #### Likely AppKit Considerations
 

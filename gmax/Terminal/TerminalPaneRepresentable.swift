@@ -20,8 +20,13 @@ struct TerminalPaneRepresentable: NSViewRepresentable {
 	private var terminalThemeName = TerminalAppearance.fallback.theme.rawValue
 
 	let controller: TerminalPaneController
+	let session: TerminalSession
 	let isFocused: Bool
 	let onFocus: () -> Void
+	let onRestart: () -> Void
+	let onSplitRight: () -> Void
+	let onSplitDown: () -> Void
+	let onClose: () -> Void
 
 	func makeCoordinator() -> Coordinator {
 		Coordinator(controller: controller, onFocus: onFocus)
@@ -30,12 +35,14 @@ struct TerminalPaneRepresentable: NSViewRepresentable {
 	func makeNSView(context: Context) -> TerminalHostingContainerView {
 		let hostingView = context.coordinator.makeHostingView()
 		applyCurrentAppearance(to: hostingView)
+		configureAccessibility(for: hostingView)
 		return hostingView
 	}
 
 	func updateNSView(_ nsView: TerminalHostingContainerView, context: Context) {
 		applyCurrentAppearance(to: nsView)
 		context.coordinator.update(hostingView: nsView, isFocused: isFocused)
+		configureAccessibility(for: nsView)
 	}
 
 	static func dismantleNSView(_ nsView: TerminalHostingContainerView, coordinator: Coordinator) {
@@ -59,6 +66,56 @@ struct TerminalPaneRepresentable: NSViewRepresentable {
 			}
 
 			appearance.apply(to: terminalView)
+		}
+	}
+
+	private func configureAccessibility(for hostingView: TerminalHostingContainerView) {
+		hostingView.updateAccessibility(
+			snapshot: accessibilitySnapshot,
+			onFocus: onFocus,
+			onRestart: onRestart,
+			onSplitRight: onSplitRight,
+			onSplitDown: onSplitDown,
+			onClose: onClose
+		)
+	}
+
+	private var accessibilitySnapshot: TerminalAccessibilitySnapshot {
+		let trimmedTitle = session.title.trimmingCharacters(in: .whitespacesAndNewlines)
+		let label: String
+		if trimmedTitle.isEmpty || trimmedTitle == "Shell" {
+			label = "Shell terminal"
+		} else {
+			label = "\(trimmedTitle) terminal"
+		}
+
+		var valueParts: [String] = []
+		if isFocused {
+			valueParts.append("Focused")
+		}
+		valueParts.append(stateAccessibilityValue)
+		if let currentDirectory = session.currentDirectory, !currentDirectory.isEmpty {
+			valueParts.append("Directory \(currentDirectory)")
+		}
+
+		return TerminalAccessibilitySnapshot(
+			label: label,
+			value: valueParts.joined(separator: ". "),
+			help: "This terminal lives inside a workspace pane. Use the available accessibility actions to focus the pane, restart the shell, split the pane, or close the pane."
+		)
+	}
+
+	private var stateAccessibilityValue: String {
+		switch session.state {
+			case .idle:
+				return "Shell ready to launch"
+			case .running:
+				return "Shell running"
+			case .exited(let exitCode):
+				if let exitCode {
+					return "Shell exited with status \(exitCode)"
+				}
+				return "Shell exited"
 		}
 	}
 
@@ -154,9 +211,21 @@ struct TerminalPaneRepresentable: NSViewRepresentable {
 	}
 }
 
+struct TerminalAccessibilitySnapshot {
+	let label: String
+	let value: String
+	let help: String
+}
+
 final class TerminalHostingContainerView: NSView {
 	let terminalView: LocalProcessTerminalView
 	var onEffectiveAppearanceChange: ((NSAppearance) -> Void)?
+	private var accessibilitySnapshot = TerminalAccessibilitySnapshot(label: "Shell terminal", value: "", help: "")
+	private var onAccessibilityFocus: (() -> Void)?
+	private var onAccessibilityRestart: (() -> Void)?
+	private var onAccessibilitySplitRight: (() -> Void)?
+	private var onAccessibilitySplitDown: (() -> Void)?
+	private var onAccessibilityClose: (() -> Void)?
 
 	init(terminalView: LocalProcessTerminalView) {
 		self.terminalView = terminalView
@@ -180,6 +249,75 @@ final class TerminalHostingContainerView: NSView {
 			terminalView.topAnchor.constraint(equalTo: topAnchor),
 			terminalView.bottomAnchor.constraint(equalTo: bottomAnchor)
 		])
+	}
+
+	func updateAccessibility(
+		snapshot: TerminalAccessibilitySnapshot,
+		onFocus: @escaping () -> Void,
+		onRestart: @escaping () -> Void,
+		onSplitRight: @escaping () -> Void,
+		onSplitDown: @escaping () -> Void,
+		onClose: @escaping () -> Void
+	) {
+		accessibilitySnapshot = snapshot
+		onAccessibilityFocus = onFocus
+		onAccessibilityRestart = onRestart
+		onAccessibilitySplitRight = onSplitRight
+		onAccessibilitySplitDown = onSplitDown
+		onAccessibilityClose = onClose
+
+		setAccessibilityElement(true)
+		setAccessibilityEnabled(true)
+		setAccessibilityLabel(snapshot.label)
+		setAccessibilityValue(snapshot.value)
+		setAccessibilityHelp(snapshot.help)
+
+		let customActions = makeAccessibilityCustomActions()
+		setAccessibilityCustomActions(customActions)
+		terminalView.setAccessibilityLabel(snapshot.label)
+		terminalView.setAccessibilityHelp(snapshot.help)
+		terminalView.setAccessibilityCustomActions(customActions)
+	}
+
+	private func makeAccessibilityCustomActions() -> [NSAccessibilityCustomAction] {
+		[
+			NSAccessibilityCustomAction(name: "Focus Pane", target: self, selector: #selector(accessibilityFocusPane)),
+			NSAccessibilityCustomAction(name: "Restart Shell", target: self, selector: #selector(accessibilityRestartShell)),
+			NSAccessibilityCustomAction(name: "Split Right", target: self, selector: #selector(accessibilitySplitRight)),
+			NSAccessibilityCustomAction(name: "Split Down", target: self, selector: #selector(accessibilitySplitDown)),
+			NSAccessibilityCustomAction(name: "Close Pane", target: self, selector: #selector(accessibilityClosePane))
+		]
+	}
+
+	@objc
+	private func accessibilityFocusPane() -> Bool {
+		onAccessibilityFocus?()
+		window?.makeFirstResponder(terminalView)
+		return true
+	}
+
+	@objc
+	private func accessibilityRestartShell() -> Bool {
+		onAccessibilityRestart?()
+		return true
+	}
+
+	@objc
+	private func accessibilitySplitRight() -> Bool {
+		onAccessibilitySplitRight?()
+		return true
+	}
+
+	@objc
+	private func accessibilitySplitDown() -> Bool {
+		onAccessibilitySplitDown?()
+		return true
+	}
+
+	@objc
+	private func accessibilityClosePane() -> Bool {
+		onAccessibilityClose?()
+		return true
 	}
 
 	override func viewDidChangeEffectiveAppearance() {

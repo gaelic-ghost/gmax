@@ -257,8 +257,13 @@ private struct PaneLeafCard: View {
 		ZStack(alignment: .topLeading) {
 			TerminalPaneRepresentable(
 				controller: controller,
+				session: session,
 				isFocused: isFocused,
-				onFocus: onFocus
+				onFocus: onFocus,
+				onRestart: restartShell,
+				onSplitRight: onSplitRight,
+				onSplitDown: onSplitDown,
+				onClose: onClose
 			)
 			.id(session.relaunchGeneration)
 			.background(.black)
@@ -321,10 +326,7 @@ private struct PaneLeafCard: View {
 			onClose()
 		}
 		.accessibilityAction(named: Text("Restart Shell")) {
-			guard session.state != .running else {
-				return
-			}
-			controller.session.prepareForRelaunch()
+			restartShell()
 		}
 	}
 
@@ -340,7 +342,7 @@ private struct PaneLeafCard: View {
 				.multilineTextAlignment(.center)
 
 			Button("Restart Shell") {
-				controller.session.prepareForRelaunch()
+				restartShell()
 			}
 			.buttonStyle(.borderedProminent)
 		}
@@ -385,6 +387,13 @@ private struct PaneLeafCard: View {
 
 	private var accessibilityHint: String {
 		"Activate to focus this pane. Additional actions are available for splitting, closing, and restarting the shell."
+	}
+
+	private func restartShell() {
+		guard session.state != .running else {
+			return
+		}
+		controller.session.prepareForRelaunch()
 	}
 
 	private var stateAccessibilityValue: String {
