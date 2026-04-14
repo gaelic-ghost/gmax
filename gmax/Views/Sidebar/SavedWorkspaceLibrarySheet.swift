@@ -13,33 +13,39 @@ struct SavedWorkspaceLibrarySheet: View {
 	@Binding var isPresented: Bool
 	@State private var searchText = ""
 	@State private var selectedSnapshotID: WorkspaceSnapshotID?
-	@State private var snapshots: [SavedWorkspaceSnapshotSummary] = []
 
 	var body: some View {
-		VStack(spacing: 0) {
-			if snapshots.isEmpty {
-				ContentUnavailableView {
-					Label("No Saved Workspaces", systemImage: "externaldrive.badge.timemachine")
-				} description: {
-					Text(emptyStateDescription)
-				}
-			} else {
-				List(selection: $selectedSnapshotID) {
-					ForEach(snapshots) { snapshot in
-						snapshotRow(for: snapshot)
-							.tag(snapshot.id)
-							.contextMenu {
-								Button("Open Workspace") {
-									openSnapshot(snapshot.id)
-								}
+		let snapshots = displayedSnapshots
 
-								Button("Delete Saved Workspace", role: .destructive) {
-									deleteSnapshot(snapshot.id)
-								}
-							}
+		VStack(spacing: 0) {
+			Group {
+				if snapshots.isEmpty {
+					ContentUnavailableView {
+						Label("No Saved Workspaces", systemImage: "externaldrive.badge.timemachine")
+					} description: {
+						Text(emptyStateDescription)
 					}
+					.accessibilityIdentifier("savedWorkspaceLibrary.emptyState")
+				} else {
+					List(selection: $selectedSnapshotID) {
+						ForEach(snapshots) { snapshot in
+							snapshotRow(for: snapshot)
+								.tag(snapshot.id)
+								.contextMenu {
+									Button("Open Workspace") {
+										openSnapshot(snapshot.id)
+									}
+
+									Button("Delete Saved Workspace", role: .destructive) {
+										deleteSnapshot(snapshot.id)
+									}
+								}
+						}
+					}
+					.accessibilityIdentifier("savedWorkspaceLibrary.list")
 				}
 			}
+			.frame(maxWidth: .infinity, maxHeight: .infinity)
 
 			Divider()
 
@@ -47,6 +53,7 @@ struct SavedWorkspaceLibrarySheet: View {
 				Button("Cancel") {
 					isPresented = false
 				}
+				.accessibilityIdentifier("savedWorkspaceLibrary.cancelButton")
 
 				Spacer()
 
@@ -57,6 +64,7 @@ struct SavedWorkspaceLibrarySheet: View {
 					deleteSnapshot(selectedSnapshotID)
 				}
 				.disabled(selectedSnapshotID == nil)
+				.accessibilityIdentifier("savedWorkspaceLibrary.deleteButton")
 
 				Button("Open") {
 					guard let selectedSnapshotID else {
@@ -66,16 +74,17 @@ struct SavedWorkspaceLibrarySheet: View {
 				}
 				.keyboardShortcut(.defaultAction)
 				.disabled(selectedSnapshotID == nil)
+				.accessibilityIdentifier("savedWorkspaceLibrary.openButton")
 			}
 			.padding(16)
 		}
 		.frame(minWidth: 620, minHeight: 420)
 		.searchable(text: $searchText, prompt: "Search saved workspaces")
-		.task {
-			refreshSnapshots()
+		.onAppear {
+			synchronizeSelection(with: snapshots)
 		}
-		.task(id: searchQueryKey) {
-			refreshSnapshots()
+		.onChange(of: searchQueryKey) { _, _ in
+			synchronizeSelection(with: displayedSnapshots)
 		}
 	}
 
@@ -86,6 +95,7 @@ struct SavedWorkspaceLibrarySheet: View {
 				Text(snapshot.title)
 					.font(.headline)
 					.lineLimit(1)
+					.accessibilityIdentifier("savedWorkspaceLibrary.title.\(snapshot.title)")
 
 				if snapshot.isPinned {
 					Image(systemName: "pin.fill")
@@ -109,6 +119,7 @@ struct SavedWorkspaceLibrarySheet: View {
 			}
 		}
 		.padding(.vertical, 4)
+		.accessibilityIdentifier("savedWorkspaceLibrary.row.\(snapshot.title)")
 		.simultaneousGesture(
 			TapGesture(count: 2).onEnded {
 				openSnapshot(snapshot.id)
@@ -146,7 +157,6 @@ struct SavedWorkspaceLibrarySheet: View {
 				return
 			}
 
-			refreshSnapshots()
 			selectedWorkspaceID = workspaceID
 			isPresented = false
 		}
@@ -156,7 +166,7 @@ struct SavedWorkspaceLibrarySheet: View {
 		Task { @MainActor in
 			await Task.yield()
 			model.deleteSavedWorkspace(snapshotID)
-			refreshSnapshots()
+			synchronizeSelection(with: displayedSnapshots)
 		}
 	}
 
@@ -164,9 +174,12 @@ struct SavedWorkspaceLibrarySheet: View {
 		searchText.trimmingCharacters(in: .whitespacesAndNewlines)
 	}
 
-	private func refreshSnapshots() {
+	private var displayedSnapshots: [SavedWorkspaceSnapshotSummary] {
 		let query = searchQueryKey
-		snapshots = model.listSavedWorkspaceSnapshots(matching: query.isEmpty ? nil : query)
+		return model.listSavedWorkspaceSnapshots(matching: query.isEmpty ? nil : query)
+	}
+
+	private func synchronizeSelection(with snapshots: [SavedWorkspaceSnapshotSummary]) {
 		if !snapshots.contains(where: { $0.id == selectedSnapshotID }) {
 			selectedSnapshotID = snapshots.first?.id
 		}

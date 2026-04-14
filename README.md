@@ -22,6 +22,7 @@ The product direction is a keyboard-forward shell for managing multiple terminal
 Today the app already has the core product shape in place:
 
 - a three-column `NavigationSplitView`
+- a `WindowGroup`-based main shell scene
 - a workspace sidebar
 - a center pane tree with recursive horizontal and vertical splits
 - a right-side inspector for the active pane
@@ -55,7 +56,8 @@ The shell uses a split-tree model rather than a flat grid:
 - leaf nodes host terminal sessions
 - split nodes store axis and fraction
 - the active pane drives the inspector content
-- the selected workspace and inspector visibility restore per scene
+- the selected workspace plus sidebar and inspector visibility restore per scene
+- the frontmost shell window contributes menu command context through `focusedSceneValue`
 - terminal appearance is driven by persisted app settings for font, size, and theme
 - saved workspaces are stored as durable snapshots with pane launch context and preserved transcript text
 - operator-facing diagnostics now flow through Apple's unified logging system using a stable `Logger` subsystem and category taxonomy
@@ -79,7 +81,7 @@ The maintainer-facing architecture note lives at [docs/maintainers/swiftui-termi
 - `gmax/Views/Settings/`: settings window and section views
 - `gmax/Views/Sidebar/`: workspace sidebar and saved-workspace library sheet
 - `gmaxTests/`: unit tests grouped by shared support, workspace lifecycle, and workspace persistence domains
-- `gmaxUITests/`: UI test target scaffolding
+- `gmaxUITests/`: UI tests grouped by sidebar and saved-workspace flows
 - `docs/maintainers/`: architecture and maintainer notes
 - `docs/maintainers/accessibility-and-keyboard-plan.md`: release-oriented accessibility and keyboard plan
 - `docs/maintainers/logging-validation-guide.md`: maintainer workflow for Console and `/usr/bin/log` validation
@@ -101,11 +103,12 @@ Open [gmax.xcodeproj](gmax.xcodeproj) in Xcode.
 
 Build and run the `gmax` scheme from Xcode.
 
-The app launches as a macOS window with the workspace sidebar, pane content area, and inspector rail. The active pane drives the detail inspector, and the center column renders the recursive split-pane tree for the selected workspace.
+The app launches into a standard macOS `WindowGroup`, so the shell can present multiple main windows while still sharing one workspace library and shell model. Each frontmost shell window keeps its own selected workspace plus sidebar and inspector visibility, and its menu commands act on that window's scene-local context.
 
 From there you can:
 
-- create a new workspace from the toolbar or `cmd-n`
+- open a new shell window from the File menu or `cmd-n`
+- create a new workspace from the toolbar or `cmd-shift-n`
 - open the saved-workspace library from the toolbar or `cmd-o`
 - save the selected workspace into the library with `cmd-s`
 - create a new pane from the toolbar or `cmd-t`
@@ -149,7 +152,8 @@ scripts/repo-maintenance/release.sh --version vX.Y.Z
 
 The current shell exposes a command-first keyboard model across the `File`, `Workspace`, and `Pane` menus:
 
-- `cmd-n`: create a new workspace
+- `cmd-n`: open a new shell window
+- `cmd-shift-n`: create a new workspace in the frontmost shell window
 - `cmd-o`: open the saved-workspace library
 - `cmd-s`: save the selected workspace to the library
 - `cmd-shift-o`: undo the most recent workspace close during the current app session
@@ -167,7 +171,7 @@ The current shell exposes a command-first keyboard model across the `File`, `Wor
 
 ## Status
 
-The app is already past the pure-prototype stage. The shell shape, pane model, terminal embedding, directional focus movement, saved-workspace library, transcript-backed restore path, and persistence layers are all real.
+The app is already past the pure-prototype stage. The shell shape, multi-window scene model, pane model, terminal embedding, directional focus movement, saved-workspace library, transcript-backed restore path, and persistence layers are all real.
 
 What remains is product completion work: command-surface polish, library and rename refinements, manual accessibility validation, richer terminal controls, deeper integrations, and the details that make the app feel intentional rather than merely viable.
 

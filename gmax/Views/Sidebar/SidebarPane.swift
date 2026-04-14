@@ -10,8 +10,8 @@ import SwiftUI
 struct SidebarPane: View {
 	@ObservedObject var model: ShellModel
 	@Binding var selection: WorkspaceID?
+	let requestDeleteWorkspace: (WorkspaceID) -> Void
 	@State private var workspacePendingRename: Workspace?
-	@State private var workspacePendingDeletion: Workspace?
 	@State private var workspaceTitleDraft = ""
 
 	var body: some View {
@@ -19,11 +19,14 @@ struct SidebarPane: View {
 			ForEach(model.workspaces) { workspace in
 				workspaceRow(for: workspace)
 					.tag(workspace.id)
+					.accessibilityElement(children: .combine)
+					.accessibilityIdentifier("sidebar.workspaceRow.\(workspace.title)")
 					.contextMenu {
 						workspaceActions(for: workspace)
 					}
 			}
 		}
+		.accessibilityIdentifier("sidebar.workspaceList")
 		.navigationTitle("Workspaces")
 		.toolbar {
 			ToolbarItem(placement: .automatic) {
@@ -34,6 +37,7 @@ struct SidebarPane: View {
 						Label("Workspace Actions", systemImage: "ellipsis.circle")
 					}
 					.help("Show contextual workspace actions")
+					.accessibilityIdentifier("sidebar.workspaceActionsButton")
 				}
 			}
 		}
@@ -49,21 +53,6 @@ struct SidebarPane: View {
 						workspacePendingRename = nil
 					}
 			)
-		}
-		.alert(
-			"Delete Workspace?",
-			isPresented: deleteWorkspaceAlertBinding,
-			presenting: workspacePendingDeletion
-		) { workspace in
-			Button("Delete", role: .destructive) {
-				model.deleteWorkspace(workspace.id)
-				workspacePendingDeletion = nil
-			}
-			Button("Cancel", role: .cancel) {
-				workspacePendingDeletion = nil
-			}
-		} message: { workspace in
-			Text("Delete “\(workspace.title)” and close all panes inside it? This action keeps the remaining workspaces intact.")
 		}
 		.onReceive(NotificationCenter.default.publisher(for: .presentWorkspaceRenameSheet)) { notification in
 			guard
@@ -84,21 +73,11 @@ struct SidebarPane: View {
 			?? model.workspaces.first
 	}
 
-	private var deleteWorkspaceAlertBinding: Binding<Bool> {
-		Binding(
-			get: { workspacePendingDeletion != nil },
-			set: { isPresented in
-				if !isPresented {
-					workspacePendingDeletion = nil
-				}
-			}
-		)
-	}
-
 	@ViewBuilder
 	private func workspaceRow(for workspace: Workspace) -> some View {
 		VStack(alignment: .leading, spacing: 4) {
 			Text(workspace.title)
+				.accessibilityIdentifier("sidebar.workspaceTitle.\(workspace.title)")
 			Text(paneCountText(for: workspace))
 				.font(.caption)
 				.foregroundStyle(.secondary)
@@ -147,7 +126,7 @@ struct SidebarPane: View {
 		.disabled(model.workspaces.count == 1)
 
 		Button("Delete Workspace", role: .destructive) {
-			workspacePendingDeletion = workspace
+			requestDeleteWorkspace(workspace.id)
 		}
 		.disabled(!model.canDeleteWorkspace(workspace.id))
 	}
@@ -179,7 +158,7 @@ struct SidebarPane: View {
 		Divider()
 
 		Button("Delete Workspace", role: .destructive) {
-			workspacePendingDeletion = workspace
+			requestDeleteWorkspace(workspace.id)
 		}
 		.disabled(!model.canDeleteWorkspace(workspace.id))
 	}
@@ -207,6 +186,7 @@ private struct WorkspaceRenameSheet: View {
 
 			TextField("Workspace Name", text: $title)
 				.textFieldStyle(.roundedBorder)
+				.accessibilityIdentifier("sidebar.renameWorkspaceField")
 				.onSubmit {
 					guard canSave else {
 						return
@@ -217,13 +197,16 @@ private struct WorkspaceRenameSheet: View {
 			HStack {
 				Spacer()
 				Button("Cancel", action: onCancel)
+					.accessibilityIdentifier("sidebar.renameWorkspaceCancelButton")
 				Button("Save", action: onSave)
 					.keyboardShortcut(.defaultAction)
 					.disabled(!canSave)
+					.accessibilityIdentifier("sidebar.renameWorkspaceSaveButton")
 			}
 		}
 		.padding(20)
 		.frame(width: 360)
+		.accessibilityIdentifier("sidebar.renameWorkspaceSheet")
 	}
 
 	private var canSave: Bool {
@@ -232,5 +215,5 @@ private struct WorkspaceRenameSheet: View {
 }
 
 #Preview {
-	SidebarPane(model: ShellModel(), selection: .constant(nil))
+	SidebarPane(model: ShellModel(), selection: .constant(nil), requestDeleteWorkspace: { _ in })
 }

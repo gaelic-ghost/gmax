@@ -27,6 +27,48 @@ The source tree is now organized to match the current ownership boundaries in th
 
 This is a durable building-block cleanup, not a stopgap. The source layout should continue to reflect ownership boundaries rather than collapsing unrelated shell, persistence, or AppKit code back into oversized single files.
 
+## Scene Model
+
+The main shell now uses a `WindowGroup`, not a single unique `Window`.
+
+That choice is intentional and grounded in SwiftUI's documented scene model:
+
+- `Window` is the right fit for a unique singleton-style scene
+- `WindowGroup` is the standard macOS main-scene surface when users may open multiple primary windows
+- `WindowGroup` contributes the standard window-management command surface, including the normal File-menu new-window behavior
+
+This is a durable building-block change, not a testing stopgap.
+
+Why this shape is preferred now:
+
+- it matches the product direction better than a single forced main window
+- it gives users native macOS flexibility for arranging multiple shell windows
+- it makes scene-local state restoration a better fit for the real UX
+- it keeps the app aligned with SwiftUI's expected routing for frontmost-window commands
+
+The shared `ShellModel` remains app-global, but selection and presentation state that should vary by window is scene-local.
+
+## Frontmost-Window Command Routing
+
+Menu commands now route through the frontmost shell window's scene context instead of a single app-global workspace-selection binding.
+
+The current preferred model is:
+
+- keep shared shell data in one `ShellModel`
+- keep per-window selection and presentation state in a scene-local context object
+- expose that context through `focusedSceneValue`
+- have `Commands` read it through `@FocusedValue`
+- keep destructive confirmations owned by the scene context instead of burying them inside one sidebar or content subview
+
+This keeps command behavior aligned with native macOS expectations:
+
+- `New Window` should be window-system behavior, not custom shell behavior
+- shell actions like save, split, rename, close-to-library, and pane focus should act on the frontmost shell window
+- destructive menu actions like workspace deletion should present a confirmation in the frontmost shell window before mutating shared model state
+- different shell windows can select different workspaces without fighting over one app-global binding
+
+This boundary should remain explicit as the app grows. If future work adds more cross-window behavior, start by asking whether it is truly app-global or whether it belongs to the frontmost scene.
+
 ## High-Level Shell Structure
 
 The root shell should use a three-column `NavigationSplitView`:

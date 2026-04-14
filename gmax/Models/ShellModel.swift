@@ -13,8 +13,6 @@ import SwiftUI
 @MainActor
 final class ShellModel: ObservableObject {
 	@Published var workspaces: [Workspace]
-	@Published var columnVisibility: NavigationSplitViewVisibility
-	@Published var isInspectorVisible: Bool
 	@Published var recentlyClosedWorkspaceCount = 0
 
 	let persistence: ShellPersistenceController
@@ -49,8 +47,6 @@ final class ShellModel: ObservableObject {
 		self.paneControllers = TerminalPaneControllerStore()
 		self.workspaces = workspaces
 		self.currentWorkspaceID = workspaces.first?.id
-		self.columnVisibility = .all
-		self.isInspectorVisible = true
 		self.paneFramesByWorkspace = [:]
 		self.paneFocusHistoryByWorkspace = Self.initialFocusHistory(for: workspaces)
 		if shouldRestorePersistedWorkspaces, !persistedWorkspaces.isEmpty {
@@ -64,17 +60,13 @@ final class ShellModel: ObservableObject {
 
 	convenience init(
 		workspaces: [Workspace],
-		selectedWorkspaceID: WorkspaceID?,
-		columnVisibility: NavigationSplitViewVisibility = .all,
-		isInspectorVisible: Bool = true
+		selectedWorkspaceID: WorkspaceID?
 	) {
 		self.init(
 			workspaces: workspaces,
 			selectedWorkspaceID: selectedWorkspaceID,
 			persistence: .shared,
-			launchContextBuilder: .live(),
-			columnVisibility: columnVisibility,
-			isInspectorVisible: isInspectorVisible
+			launchContextBuilder: .live()
 		)
 	}
 
@@ -82,9 +74,7 @@ final class ShellModel: ObservableObject {
 		workspaces: [Workspace],
 		selectedWorkspaceID: WorkspaceID?,
 		persistence: ShellPersistenceController,
-		launchContextBuilder: TerminalLaunchContextBuilder,
-		columnVisibility: NavigationSplitViewVisibility = .all,
-		isInspectorVisible: Bool = true
+		launchContextBuilder: TerminalLaunchContextBuilder
 	) {
 		self.persistence = persistence
 		self.launchContextBuilder = launchContextBuilder
@@ -95,8 +85,6 @@ final class ShellModel: ObservableObject {
 		self.paneControllers = TerminalPaneControllerStore()
 		self.workspaces = workspaces
 		self.currentWorkspaceID = selectedWorkspaceID
-		self.columnVisibility = columnVisibility
-		self.isInspectorVisible = isInspectorVisible
 		self.paneFramesByWorkspace = [:]
 		self.paneFocusHistoryByWorkspace = Self.initialFocusHistory(for: workspaces)
 	}
@@ -158,23 +146,6 @@ final class ShellModel: ObservableObject {
 		}
 
 		return root.findPane(id: focusedPaneID)
-	}
-
-	func toggleSidebar() {
-		columnVisibility = columnVisibility == .all ? .doubleColumn : .all
-		let resolvedColumnVisibility = String(describing: columnVisibility)
-		diagnosticsLogger.notice("Toggled sidebar visibility. New split-view column visibility: \(resolvedColumnVisibility, privacy: .public)")
-	}
-
-	func toggleInspector() {
-		isInspectorVisible.toggle()
-		let inspectorVisibilityDescription = isInspectorVisible ? "visible" : "hidden"
-		diagnosticsLogger.notice("Toggled inspector visibility. Inspector is now \(inspectorVisibilityDescription, privacy: .public).")
-	}
-
-	func setInspectorVisible(_ isVisible: Bool) {
-		isInspectorVisible = isVisible
-		diagnosticsLogger.notice("Set inspector visibility from scene or command state restoration. Inspector is now \(isVisible ? "visible" : "hidden", privacy: .public).")
 	}
 
 	func controller(for pane: PaneLeaf) -> TerminalPaneController {

@@ -10,13 +10,11 @@ import SwiftUI
 
 struct MainShellSceneView: View {
 	@ObservedObject var shellModel: ShellModel
-	@Binding var selectedWorkspaceID: WorkspaceID?
-	@Binding var isBypassingLastPaneCloseConfirmation: Bool
-	@Binding var isSavedWorkspaceLibraryPresented: Bool
+	@State private var sceneContext: MainShellSceneContext
 	@SceneStorage("mainShell.selectedWorkspaceID") private var restoredSelectedWorkspaceID: String?
 	@SceneStorage("mainShell.isInspectorVisible") private var restoredInspectorVisible = true
+	@SceneStorage("mainShell.isSidebarVisible") private var restoredSidebarVisible = true
 	@State private var hasAppliedSceneState = false
-	private let appLogger = Logger.gmax(.app)
 
 	private let sidebarColumnWidth: CGFloat = 220
 	private let contentColumnIdealWidth: CGFloat = 920
@@ -24,16 +22,34 @@ struct MainShellSceneView: View {
 	private let detailColumnIdealWidth: CGFloat = 260
 	private let detailColumnMaximumWidth: CGFloat = 340
 
+	init(shellModel: ShellModel) {
+		self.shellModel = shellModel
+		_sceneContext = State(
+			initialValue: MainShellSceneContext(
+				shellModel: shellModel,
+				selectedWorkspaceID: shellModel.normalizedWorkspaceSelection(nil)
+			)
+		)
+	}
+
 	var body: some View {
-		NavigationSplitView(columnVisibility: $shellModel.columnVisibility) {
-			SidebarPane(model: shellModel, selection: $selectedWorkspaceID)
+		@Bindable var bindableSceneContext = sceneContext
+
+		NavigationSplitView(columnVisibility: $bindableSceneContext.columnVisibility) {
+			SidebarPane(
+				model: shellModel,
+				selection: selectedWorkspaceID,
+				requestDeleteWorkspace: { workspaceID in
+					sceneContext.requestDeleteWorkspaceConfirmation(workspaceID)
+				}
+			)
 				.navigationSplitViewColumnWidth(sidebarColumnWidth)
 		} content: {
-			ContentPane(model: shellModel, selectedWorkspaceID: $selectedWorkspaceID)
+			ContentPane(model: shellModel, selectedWorkspaceID: selectedWorkspaceID)
 				.navigationSplitViewColumnWidth(min: 640, ideal: contentColumnIdealWidth)
 		} detail: {
-			if shellModel.isInspectorVisible {
-				DetailPane(model: shellModel, selectedWorkspaceID: $selectedWorkspaceID)
+			if sceneContext.isInspectorVisible {
+				DetailPane(model: shellModel, selectedWorkspaceID: selectedWorkspaceID)
 					.navigationSplitViewColumnWidth(
 						min: detailColumnMinimumWidth,
 						ideal: detailColumnIdealWidth,
@@ -47,73 +63,101 @@ struct MainShellSceneView: View {
 		.windowRole(.mainShell)
 		.windowCloseConfirmation(
 			requiresConfirmation: shellModel.requiresLastPaneCloseConfirmation,
-			isBypassingConfirmation: $isBypassingLastPaneCloseConfirmation
+			isBypassingConfirmation: $bindableSceneContext.isBypassingLastPaneCloseConfirmation
 		)
-		.sheet(isPresented: $isSavedWorkspaceLibraryPresented) {
+		.sheet(isPresented: $bindableSceneContext.isSavedWorkspaceLibraryPresented) {
 			SavedWorkspaceLibrarySheet(
 				model: shellModel,
-				selectedWorkspaceID: $selectedWorkspaceID,
-				isPresented: $isSavedWorkspaceLibraryPresented
+				selectedWorkspaceID: selectedWorkspaceID,
+				isPresented: $bindableSceneContext.isSavedWorkspaceLibraryPresented
 			)
 		}
+		.alert(
+			"Delete Workspace?",
+			isPresented: deleteWorkspaceAlertBinding,
+			presenting: sceneContext.workspacePendingDeletion
+		) { _ in
+			Button("Delete", role: .destructive) {
+				sceneContext.confirmWorkspaceDeletion()
+			}
+			.accessibilityIdentifier("sidebar.deleteWorkspaceConfirmButton")
+
+			Button("Cancel", role: .cancel) {
+				sceneContext.cancelWorkspaceDeletion()
+			}
+			.accessibilityIdentifier("sidebar.deleteWorkspaceCancelButton")
+		} message: { workspace in
+			Text("Delete “\(workspace.title)” and close all panes inside it? This action keeps the remaining workspaces intact.")
+		}
+		.focusedSceneValue(\.mainShellSceneContext, sceneContext)
+		.focusedSceneValue(\.mainShellSceneCommandState, sceneContext.commandState)
 		.toolbar {
 			ToolbarItem(placement: .navigation) {
 				Button {
-					selectedWorkspaceID = shellModel.createWorkspace()
+					sceneContext.createWorkspace()
 				} label: {
 					Label("New Workspace", systemImage: "plus.rectangle.on.rectangle")
 				}
+				.accessibilityIdentifier("mainShell.newWorkspaceButton")
 			}
 
 			ToolbarItem(placement: .automatic) {
 				Button {
-					isSavedWorkspaceLibraryPresented = true
+					sceneContext.openSavedWorkspaceLibrary()
 				} label: {
 					Label("Open Saved Workspaces", systemImage: "folder")
 				}
 				.help("Open saved workspaces (\u{2318}O)")
+				.accessibilityIdentifier("mainShell.openSavedWorkspacesButton")
 			}
 
 			ToolbarItem(placement: .automatic) {
 				Button {
-					if let workspaceID = selectedWorkspaceID {
-						selectedWorkspaceID = shellModel.createPane(in: workspaceID)
-					} else {
-						selectedWorkspaceID = shellModel.createWorkspace()
-					}
+					sceneContext.createPane()
 				} label: {
 					Label("New Pane", systemImage: "uiwindow.split.2x1")
 				}
+				.accessibilityIdentifier("mainShell.newPaneButton")
 			}
 
 			ToolbarItem(placement: .automatic) {
 				Button {
-					shellModel.toggleInspector()
+					sceneContext.toggleInspector()
 				} label: {
 					Label(
-						shellModel.isInspectorVisible ? "Hide Inspector" : "Show Inspector",
+						sceneContext.isInspectorVisible ? "Hide Inspector" : "Show Inspector",
 						systemImage: "sidebar.right"
 					)
 				}
+				.accessibilityIdentifier("mainShell.toggleInspectorButton")
 			}
 		}
 		.task {
 			applySceneStateIfNeeded()
 		}
-		.onChange(of: selectedWorkspaceID?.rawValue.uuidString) { _, newValue in
+		.onChange(of: sceneContext.selectedWorkspaceID?.rawValue.uuidString) { _, newValue in
 			restoredSelectedWorkspaceID = newValue
-			shellModel.setCurrentWorkspaceID(selectedWorkspaceID)
+			shellModel.setCurrentWorkspaceID(sceneContext.selectedWorkspaceID)
 		}
 		.onChange(of: shellModel.workspaces.map(\.id.rawValue)) { _, _ in
-			let normalizedSelection = shellModel.normalizedWorkspaceSelection(selectedWorkspaceID)
-			if normalizedSelection != selectedWorkspaceID {
-				selectedWorkspaceID = normalizedSelection
-			}
-			shellModel.setCurrentWorkspaceID(normalizedSelection)
+			sceneContext.normalizeSelectionAfterWorkspaceMutation()
 		}
-		.onChange(of: shellModel.isInspectorVisible) { _, newValue in
+		.onChange(of: sceneContext.isInspectorVisible) { _, newValue in
 			restoredInspectorVisible = newValue
 		}
+		.onChange(of: sceneContext.isSidebarVisible) { _, newValue in
+			restoredSidebarVisible = newValue
+		}
+	}
+
+	private var selectedWorkspaceID: Binding<WorkspaceID?> {
+		Binding(
+			get: { sceneContext.selectedWorkspaceID },
+			set: { newValue in
+				sceneContext.selectedWorkspaceID = shellModel.normalizedWorkspaceSelection(newValue)
+				shellModel.setCurrentWorkspaceID(sceneContext.selectedWorkspaceID)
+			}
+		)
 	}
 
 	private func applySceneStateIfNeeded() {
@@ -122,14 +166,24 @@ struct MainShellSceneView: View {
 		}
 
 		hasAppliedSceneState = true
-		shellModel.setInspectorVisible(restoredInspectorVisible)
-
 		let restoredSelection = restoredSelectedWorkspaceID
 			.flatMap(UUID.init(uuidString:))
 			.map { WorkspaceID(rawValue: $0) }
-		let normalizedSelection = shellModel.normalizedWorkspaceSelection(restoredSelection ?? selectedWorkspaceID)
-		appLogger.notice("Applied per-scene shell state restoration. Restored workspace selection: \(restoredSelection?.rawValue.uuidString ?? "(none)", privacy: .public). Normalized workspace selection: \(normalizedSelection?.rawValue.uuidString ?? "(none)", privacy: .public). Restored inspector visibility: \(restoredInspectorVisible ? "visible" : "hidden", privacy: .public)")
-		selectedWorkspaceID = normalizedSelection
-		shellModel.setCurrentWorkspaceID(normalizedSelection)
+		sceneContext.applyRestoredSceneState(
+			restoredSelectedWorkspaceID: restoredSelection,
+			isSidebarVisible: restoredSidebarVisible,
+			isInspectorVisible: restoredInspectorVisible
+		)
+	}
+
+	private var deleteWorkspaceAlertBinding: Binding<Bool> {
+		Binding(
+			get: { sceneContext.workspacePendingDeletion != nil },
+			set: { isPresented in
+				if !isPresented {
+					sceneContext.cancelWorkspaceDeletion()
+				}
+			}
+		)
 	}
 }

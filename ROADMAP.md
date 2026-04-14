@@ -21,7 +21,8 @@ Build `gmax` into a finished macOS terminal workspace app:
 - [x] Close semantics for panes, empty workspaces, and window fallback
 - [x] Core Data persistence for workspaces and pane graph
 - [x] Saved-workspace library with transcript-backed reopen
-- [x] Per-scene restoration for selected workspace and inspector visibility
+- [x] `WindowGroup`-based main shell with frontmost-window command routing
+- [x] Per-scene restoration for selected workspace plus sidebar and inspector visibility
 - [x] App settings window for terminal appearance
 - [x] Unified logging baseline plus maintainer logging-validation guide
 - [x] Domain-grouped unit-test surface for workspace lifecycle and persistence
@@ -45,7 +46,7 @@ Build `gmax` into a finished macOS terminal workspace app:
 - [x] Surface session title, cwd, process state, and exit state more clearly
 - [ ] Improve close, focus, and split animations so the shell feels calmer
 - [ ] Add configurable startup behavior for new panes and new workspaces
-- [ ] Add support for opening multiple windows cleanly
+- [x] Add support for opening multiple windows cleanly
 - [x] Add better handling for dead or exited shell sessions
 
 ## Milestone 3: Accessibility

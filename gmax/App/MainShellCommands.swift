@@ -8,43 +8,35 @@
 import SwiftUI
 
 struct MainShellCommands: Commands {
-	let shellModel: ShellModel
-	let selectedWorkspaceID: Binding<WorkspaceID?>
-	let isSavedWorkspaceLibraryPresented: Binding<Bool>
-	let selectedWorkspace: Workspace?
-	let canDeleteSelectedWorkspace: Bool
-	let canCloseWorkspace: Bool
-	let canCloseWorkspaceToLibrary: Bool
-	let saveSelectedWorkspace: () -> Void
-	let performContextualClose: () -> Void
-	let performWorkspaceClose: () -> Void
-	let performWindowClose: () -> Void
-	let presentWorkspaceRename: (Workspace) -> Void
+	@FocusedValue(\.mainShellSceneContext) private var sceneContext
+	@FocusedValue(\.mainShellSceneCommandState) private var commandState
 
 	var body: some Commands {
-		CommandGroup(replacing: .newItem) {
+		CommandGroup(after: .newItem) {
 			Button("New Workspace") {
-				selectedWorkspaceID.wrappedValue = shellModel.createWorkspace()
+				sceneContext?.createWorkspace()
 			}
-			.keyboardShortcut("n", modifiers: [.command])
+			.keyboardShortcut("n", modifiers: [.command, .shift])
+			.disabled(sceneContext == nil)
 		}
 
 		CommandGroup(after: .newItem) {
 			Button("Open Workspace…") {
-				isSavedWorkspaceLibraryPresented.wrappedValue = true
+				sceneContext?.openSavedWorkspaceLibrary()
 			}
 			.keyboardShortcut("o", modifiers: [.command])
+			.disabled(sceneContext == nil)
 		}
 
 		CommandGroup(replacing: .saveItem) {
 			Button("Save Workspace") {
-				saveSelectedWorkspace()
+				sceneContext?.saveSelectedWorkspace()
 			}
 			.keyboardShortcut("s", modifiers: [.command])
-			.disabled(selectedWorkspaceID.wrappedValue == nil)
+			.disabled(!(commandState?.hasSelectedWorkspace ?? false))
 
 			Button("Close") {
-				performContextualClose()
+				sceneContext?.performContextualClose()
 			}
 			.keyboardShortcut("w", modifiers: [.command])
 		}
@@ -52,139 +44,119 @@ struct MainShellCommands: Commands {
 		SidebarCommands()
 
 		CommandGroup(after: .sidebar) {
-			Button(shellModel.isInspectorVisible ? "Hide Inspector" : "Show Inspector") {
-				shellModel.toggleInspector()
+			Button(commandState?.isInspectorVisible == false ? "Show Inspector" : "Hide Inspector") {
+				sceneContext?.toggleInspector()
 			}
 			.keyboardShortcut("b", modifiers: [.command, .shift])
+			.disabled(sceneContext == nil)
 		}
 
 		CommandMenu("Workspace") {
 			Button("Undo Close Workspace") {
-				selectedWorkspaceID.wrappedValue = shellModel.undoCloseWorkspace()
+				sceneContext?.undoCloseWorkspace()
 			}
 			.keyboardShortcut("o", modifiers: [.command, .shift])
-			.disabled(!shellModel.canUndoCloseWorkspace())
+			.disabled(!(commandState?.canUndoCloseWorkspace ?? false))
 
 			Divider()
 
 			Button("Rename Workspace") {
-				guard let selectedWorkspace else {
-					return
-				}
-				presentWorkspaceRename(selectedWorkspace)
+				sceneContext?.presentWorkspaceRename()
 			}
-			.disabled(selectedWorkspace == nil)
+			.disabled(!(commandState?.hasSelectedWorkspace ?? false))
 
 			Button("Duplicate Workspace Layout") {
-				guard let workspaceID = selectedWorkspaceID.wrappedValue else {
-					return
-				}
-				selectedWorkspaceID.wrappedValue = shellModel.duplicateWorkspace(workspaceID)
+				sceneContext?.duplicateSelectedWorkspaceLayout()
 			}
-			.disabled(selectedWorkspaceID.wrappedValue == nil)
+			.disabled(!(commandState?.hasSelectedWorkspace ?? false))
 
 			Button("Close Workspace to Library") {
-				guard let workspaceID = selectedWorkspaceID.wrappedValue else {
-					return
-				}
-				selectedWorkspaceID.wrappedValue = shellModel.closeWorkspaceToLibrary(workspaceID).nextSelectedWorkspaceID
+				sceneContext?.closeSelectedWorkspaceToLibrary()
 			}
-			.disabled(!canCloseWorkspaceToLibrary)
+			.disabled(!(commandState?.canCloseWorkspaceToLibrary ?? false))
 
 			Button("Close Workspace") {
-				performWorkspaceClose()
+				sceneContext?.performWorkspaceClose()
 			}
 			.keyboardShortcut("w", modifiers: [.command, .option])
-			.disabled(!canCloseWorkspace)
+			.disabled(!(commandState?.canCloseWorkspace ?? false))
 
 			Button("Delete Workspace", role: .destructive) {
-				guard let workspaceID = selectedWorkspaceID.wrappedValue else {
-					return
-				}
-				shellModel.deleteWorkspace(workspaceID)
-				selectedWorkspaceID.wrappedValue = shellModel.normalizedWorkspaceSelection(selectedWorkspaceID.wrappedValue)
+				sceneContext?.deleteSelectedWorkspace()
 			}
-			.disabled(!canDeleteSelectedWorkspace)
+			.disabled(!(commandState?.canDeleteSelectedWorkspace ?? false))
 
 			Divider()
 
 			Button("Previous Workspace") {
-				selectedWorkspaceID.wrappedValue = shellModel.selectPreviousWorkspace()
+				sceneContext?.selectPreviousWorkspace()
 			}
 			.keyboardShortcut("[", modifiers: [.command, .shift])
-			.disabled(shellModel.workspaces.count < 2)
+			.disabled((commandState?.workspaceCount ?? 0) < 2)
 
 			Button("Next Workspace") {
-				selectedWorkspaceID.wrappedValue = shellModel.selectNextWorkspace()
+				sceneContext?.selectNextWorkspace()
 			}
 			.keyboardShortcut("]", modifiers: [.command, .shift])
-			.disabled(shellModel.workspaces.count < 2)
+			.disabled((commandState?.workspaceCount ?? 0) < 2)
 		}
 
 		CommandGroup(after: .windowSize) {
 			Button("Close Window") {
-				performWindowClose()
+				sceneContext?.performWindowClose()
 			}
 			.keyboardShortcut("w", modifiers: [.command, .shift])
 		}
 
 		CommandMenu("Pane") {
 			Button("New Pane") {
-				if let workspaceID = selectedWorkspaceID.wrappedValue {
-					selectedWorkspaceID.wrappedValue = shellModel.createPane(in: workspaceID)
-				} else {
-					selectedWorkspaceID.wrappedValue = shellModel.createWorkspace()
-				}
+				sceneContext?.createPane()
 			}
 			.keyboardShortcut("t", modifiers: [.command])
 
 			Divider()
 
 			Button("Move Focus Left") {
-				shellModel.movePaneFocus(.left)
+				sceneContext?.movePaneFocus(.left)
 			}
 			.keyboardShortcut(.leftArrow, modifiers: [.command, .option])
 
 			Button("Move Focus Right") {
-				shellModel.movePaneFocus(.right)
+				sceneContext?.movePaneFocus(.right)
 			}
 			.keyboardShortcut(.rightArrow, modifiers: [.command, .option])
 
 			Button("Move Focus Up") {
-				shellModel.movePaneFocus(.up)
+				sceneContext?.movePaneFocus(.up)
 			}
 			.keyboardShortcut(.upArrow, modifiers: [.command, .option])
 
 			Button("Move Focus Down") {
-				shellModel.movePaneFocus(.down)
+				sceneContext?.movePaneFocus(.down)
 			}
 			.keyboardShortcut(.downArrow, modifiers: [.command, .option])
 
 			Divider()
 
 			Button("Focus Next Pane") {
-				shellModel.movePaneFocus(.next)
+				sceneContext?.movePaneFocus(.next)
 			}
 			.keyboardShortcut("]", modifiers: [.command, .option])
 
 			Button("Focus Previous Pane") {
-				shellModel.movePaneFocus(.previous)
+				sceneContext?.movePaneFocus(.previous)
 			}
 			.keyboardShortcut("[", modifiers: [.command, .option])
 
 			Divider()
 
 			Button("Split Right") {
-				if let workspaceID = selectedWorkspaceID.wrappedValue {
-					shellModel.splitFocusedPane(in: workspaceID, .right)
-				}
+				sceneContext?.splitFocusedPane(.right)
 			}
 			.keyboardShortcut("d", modifiers: [.command])
 
 			Button("Split Down") {
-				if let workspaceID = selectedWorkspaceID.wrappedValue {
-					shellModel.splitFocusedPane(in: workspaceID, .down)
-				}
+				sceneContext?.splitFocusedPane(.down)
 			}
 			.keyboardShortcut("d", modifiers: [.command, .shift])
 		}
