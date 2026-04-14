@@ -80,8 +80,8 @@ The maintainer-facing architecture note lives at [docs/maintainers/swiftui-termi
 - `gmax/Views/Scenes/`: top-level shell scene composition
 - `gmax/Views/Settings/`: settings window and section views
 - `gmax/Views/Sidebar/`: workspace sidebar and saved-workspace library sheet
-- `gmaxTests/`: unit tests grouped by shared support, workspace lifecycle, and workspace persistence domains
-- `gmaxUITests/`: UI tests grouped by sidebar and saved-workspace flows
+- `gmaxTests/`: unit tests grouped by shared support, pane-tree mutation, workspace lifecycle, and workspace persistence domains
+- `gmaxUITests/`: UI tests grouped by launch scaffolding, sidebar flows, and saved-workspace flows
 - `docs/maintainers/`: architecture and maintainer notes
 - `docs/maintainers/accessibility-and-keyboard-plan.md`: release-oriented accessibility and keyboard plan
 - `docs/maintainers/logging-validation-guide.md`: maintainer workflow for Console and `/usr/bin/log` validation

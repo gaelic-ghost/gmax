@@ -18,12 +18,15 @@ This document is intentionally maintainer-facing. It describes the durable primi
 The source tree is now organized to match the current ownership boundaries in the app:
 
 - `gmaxApp.swift` keeps app bootstrap and scene declarations
-- `App/` holds scene actions, menu commands, and AppKit window interop
+- `App/` holds scene actions, menu commands, AppKit window interop, and UI-test launch behavior
 - `Models/` keeps shell state plus pane and workspace management split by concern
 - `Persistence/` keeps Core Data setup, snapshot helpers, and workspace storage split by concern
 - `Terminal/` keeps the SwiftUI representable boundary, coordinator, AppKit host, and terminal-session plumbing
 - `Views/Content/` keeps the recursive pane tree, split container, leaf card, and geometry preferences
+- `Views/Detail/` keeps the active-pane inspector
+- `Views/Scenes/` keeps top-level shell scene composition and scene-bound presentation surfaces
 - `Views/Settings/` keeps the settings entry view plus the terminal appearance and workspace sections
+- `Views/Sidebar/` keeps the workspace list and saved-workspace library sheet
 
 This is a durable building-block cleanup, not a stopgap. The source layout should continue to reflect ownership boundaries rather than collapsing unrelated shell, persistence, or AppKit code back into oversized single files.
 

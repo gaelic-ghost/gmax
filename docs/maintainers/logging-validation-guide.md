@@ -124,6 +124,7 @@ During manual product validation, expect `workspace` logs for:
 - renaming a workspace
 - duplicating a workspace
 - closing a workspace
+- presenting and confirming workspace deletion
 - reopening a recently closed workspace
 - saving a workspace to the library
 - opening a saved workspace
@@ -141,8 +142,9 @@ During terminal-host validation, expect `pane` logs for:
 
 During command-surface and settings validation, expect `diagnostics` logs for:
 
-- contextual close and workspace close command outcomes
+- contextual close, workspace close, and frontmost-window command-routing outcomes
 - save-workspace command requests
+- saved-workspace library presentation requests
 - rename-sheet presentation requests
 - sidebar and inspector visibility changes
 - workspace-related settings toggles in the Settings window

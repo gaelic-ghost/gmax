@@ -302,8 +302,8 @@ The saved-workspace library is a SwiftUI sheet with:
 Automated tests can confirm only part of the story:
 
 - shell commands continue to work
-- pane and workspace lifecycle flows stay intact
-- the saved-workspace library still opens and selects rows
+- the sidebar delete-confirmation flow still presents, cancels, and confirms correctly
+- the saved-workspace library still opens, reopens, and deletes snapshots predictably
 
 They will not prove VoiceOver or Full Keyboard Access quality by themselves.
 
