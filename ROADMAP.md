@@ -91,7 +91,7 @@ Build `gmax` into a finished macOS terminal workspace app:
 - [x] Preserve transcript-backed pane scrollback in saved workspace snapshots
 - [ ] Add configurable transcript retention limits for saved workspace history
 - [ ] Add crash-safe and operator-friendly persistence diagnostics
-- [ ] Add explicit failure-mode coverage for corrupted, partial, or stale workspace snapshots so restore degrades safely instead of unpredictably
+- [x] Add initial failure-mode coverage for corrupted and partial workspace snapshots so restore degrades safely instead of unpredictably
 - [ ] Decide which settings and metadata are sync-worthy
 - [ ] Evaluate `NSPersistentCloudKitContainer` for future sync support
 - [ ] Keep sync design scoped to durable product value, not novelty
@@ -103,7 +103,8 @@ Build `gmax` into a finished macOS terminal workspace app:
 - [x] Add meaningful unit coverage for pane-tree mutations
 - [x] Add persistence-layer tests for load and save behavior
 - [ ] Add persistence-layer tests for corruption, partial snapshots, and graceful restore failure handling
-- [ ] Add UI coverage for workspace and pane lifecycle flows
+- [x] Add UI coverage for saved-workspace library and workspace-sidebar lifecycle flows
+- [ ] Add broader UI coverage for pane lifecycle flows and multi-window command interactions
 - [ ] Tighten operator-facing logs and error messages throughout the app
 - [ ] Choose a lightweight logging and diagnostics baseline that supports support-bundle export and future crash or hang reporting
 - [ ] Write onboarding and maintainer docs for release-oriented development

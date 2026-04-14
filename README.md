@@ -175,7 +175,7 @@ The app is already past the pure-prototype stage. The shell shape, multi-window 
 
 What remains is product completion work: command-surface polish, library and rename refinements, manual accessibility validation, richer terminal controls, deeper integrations, and the details that make the app feel intentional rather than merely viable.
 
-The source tree and test surface are now grouped more intentionally by domain. Unit coverage now has a real foothold across both workspace lifecycle and workspace persistence behavior, while broader pane-tree mutation coverage, UI-flow coverage, and release-readiness coverage are still ahead of the project.
+The source tree and test surface are now grouped more intentionally by domain. Unit coverage now spans workspace lifecycle, pane-tree mutation behavior, and persistence success and failure paths. UI coverage now exercises the saved-workspace library and workspace-sidebar delete flow, while broader pane lifecycle, multi-window interaction, and release-readiness coverage are still ahead of the project.
 
 ## Verification
 
