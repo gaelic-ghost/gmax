@@ -262,6 +262,7 @@ final class ShellPersistenceController {
 
 		do {
 			guard let entity = try context.fetch(request).first else {
+				logger.error("The saved-workspace library could not find the requested snapshot during reopen. The snapshot may have been deleted or the library index may be stale. Snapshot ID: \(id.rawValue.uuidString, privacy: .public)")
 				return nil
 			}
 
@@ -272,7 +273,7 @@ final class ShellPersistenceController {
 			)
 
 			guard let normalizedWorkspace = Self.normalizedWorkspace(workspace, logger: logger) else {
-				logger.error("A saved workspace snapshot could not be normalized into a restorable workspace. Snapshot ID: \(id.rawValue.uuidString, privacy: .public)")
+				logger.error("A saved workspace snapshot decoded into an unusable pane layout during reopen. The snapshot remains on disk, but the app could not rebuild a restorable workspace from it. Snapshot ID: \(id.rawValue.uuidString, privacy: .public)")
 				return nil
 			}
 
@@ -299,30 +300,35 @@ final class ShellPersistenceController {
 				paneSnapshotsBySessionID: paneSnapshotsBySessionID
 			)
 		} catch {
-			logger.error("Core Data failed to load a saved workspace snapshot. The live session remains available, but the snapshot could not be read. Snapshot ID: \(id.rawValue.uuidString, privacy: .public). Error: \(String(describing: error), privacy: .public)")
+			logger.error("Core Data failed while reading a saved-workspace snapshot for reopen. The live session remains available, but the requested snapshot could not be loaded from the library store. Snapshot ID: \(id.rawValue.uuidString, privacy: .public). Error: \(String(describing: error), privacy: .public)")
 			return nil
 		}
 	}
 
-	func deleteWorkspaceSnapshot(id: WorkspaceSnapshotID) {
+	@discardableResult
+	func deleteWorkspaceSnapshot(id: WorkspaceSnapshotID) -> Bool {
 		let context = container.viewContext
+		var didDeleteSnapshot = false
 		context.performAndWait {
 			do {
 				let request = WorkspaceSnapshotEntity.fetchRequest()
 				request.fetchLimit = 1
 				request.predicate = NSPredicate(format: "id == %@", id.rawValue as CVarArg)
 				guard let entity = try context.fetch(request).first else {
+					logger.error("The saved-workspace library could not find the snapshot requested for deletion. The library may already be up to date, or the selection may have gone stale. Snapshot ID: \(id.rawValue.uuidString, privacy: .public)")
 					return
 				}
 				context.delete(entity)
 				if context.hasChanges {
 					try context.save()
 				}
+				didDeleteSnapshot = true
 			} catch {
 				logger.error("Core Data failed to delete a saved workspace snapshot. The snapshot remains in the library. Snapshot ID: \(id.rawValue.uuidString, privacy: .public). Error: \(String(describing: error), privacy: .public)")
 				context.rollback()
 			}
 		}
+		return didDeleteSnapshot
 	}
 
 	func markWorkspaceSnapshotOpened(_ id: WorkspaceSnapshotID) {

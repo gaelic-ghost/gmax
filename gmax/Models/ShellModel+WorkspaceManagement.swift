@@ -186,7 +186,7 @@ extension ShellModel {
 	@discardableResult
 	func openSavedWorkspace(_ snapshotID: WorkspaceSnapshotID) -> WorkspaceID? {
 		guard let snapshot = persistence.loadWorkspaceSnapshot(id: snapshotID) else {
-			workspaceLogger.error("The app could not reopen a saved workspace because the requested snapshot could not be loaded from persistence. Snapshot ID: \(snapshotID.rawValue.uuidString, privacy: .public)")
+			workspaceLogger.error("The app could not reopen a saved workspace because the requested library snapshot was missing or unreadable. Check the persistence logs for the exact load failure. Snapshot ID: \(snapshotID.rawValue.uuidString, privacy: .public)")
 			return nil
 		}
 
@@ -209,8 +209,12 @@ extension ShellModel {
 	}
 
 	func deleteSavedWorkspace(_ snapshotID: WorkspaceSnapshotID) {
+		guard persistence.deleteWorkspaceSnapshot(id: snapshotID) else {
+			workspaceLogger.error("The app could not delete a saved workspace snapshot from the library because persistence did not confirm the deletion. Check the persistence logs for the exact failure. Snapshot ID: \(snapshotID.rawValue.uuidString, privacy: .public)")
+			return
+		}
+
 		workspaceLogger.notice("Deleted a saved workspace snapshot from the library. Snapshot ID: \(snapshotID.rawValue.uuidString, privacy: .public)")
-		persistence.deleteWorkspaceSnapshot(id: snapshotID)
 	}
 
 	func closeSelectedWorkspace() -> CloseCommandOutcome {

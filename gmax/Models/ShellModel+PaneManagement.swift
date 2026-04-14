@@ -40,13 +40,13 @@ extension ShellModel {
 	func relaunchPane(_ paneID: PaneID, in workspaceID: WorkspaceID) {
 		guard let workspace = workspace(for: workspaceID),
 			  let pane = workspace.root?.findPane(id: paneID) else {
-			paneLogger.error("The app was asked to relaunch a pane, but the pane could not be resolved inside the target workspace. Workspace ID: \(workspaceID.rawValue.uuidString, privacy: .public). Pane ID: \(paneID.rawValue.uuidString, privacy: .public)")
+			paneLogger.error("The app was asked to relaunch a pane, but the target pane could not be resolved inside the selected workspace. The relaunch request was dropped before any shell state changed. Workspace ID: \(workspaceID.rawValue.uuidString, privacy: .public). Pane ID: \(paneID.rawValue.uuidString, privacy: .public)")
 			return
 		}
 
 		let session = sessions.ensureSession(id: pane.sessionID)
 		session.prepareForRelaunch()
-		paneLogger.notice("Requested a shell relaunch for a pane. Workspace title: \(workspace.title, privacy: .public). Workspace ID: \(workspaceID.rawValue.uuidString, privacy: .public). Pane ID: \(paneID.rawValue.uuidString, privacy: .public). Session ID: \(session.id.rawValue.uuidString, privacy: .public)")
+		paneLogger.notice("Requested a shell relaunch for the focused pane in a live workspace. Workspace title: \(workspace.title, privacy: .public). Workspace ID: \(workspaceID.rawValue.uuidString, privacy: .public). Pane ID: \(paneID.rawValue.uuidString, privacy: .public). Session ID: \(session.id.rawValue.uuidString, privacy: .public)")
 		focusPane(paneID, in: workspaceID)
 	}
 
