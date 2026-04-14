@@ -6,6 +6,7 @@
 //
 
 import AppKit
+import OSLog
 import SwiftUI
 
 enum AppWindowRole: String {
@@ -23,6 +24,7 @@ struct gmaxApp: App {
 	@State private var selectedWorkspaceID: WorkspaceID?
 	@State private var isBypassingLastPaneCloseConfirmation = false
 	@State private var isSavedWorkspaceLibraryPresented = false
+	private let diagnosticsLogger = Logger.gmax(.diagnostics)
 
 	init() {
 		WorkspacePersistenceDefaults.registerDefaults()
@@ -217,15 +219,18 @@ struct gmaxApp: App {
 
 	private func performContextualClose() {
 		if NSApp.keyWindow?.identifier == AppWindowRole.settings.identifier {
+			diagnosticsLogger.notice("The contextual close command targeted the Settings window, so the app is closing that window directly.")
 			NSApp.keyWindow?.performClose(nil)
 			return
 		}
 
 		shellModel.setCurrentWorkspaceID(selectedWorkspaceID)
 		let outcome = shellModel.performCloseCommand()
+		diagnosticsLogger.notice("Ran the contextual close command from the main shell window. Result: \(String(describing: outcome.result), privacy: .public). Next selected workspace ID: \(outcome.nextSelectedWorkspaceID?.rawValue.uuidString ?? "(none)", privacy: .public)")
 		selectedWorkspaceID = outcome.nextSelectedWorkspaceID
 		switch outcome.result {
 			case .closeWindow:
+				diagnosticsLogger.notice("The contextual close command resolved to closing the active window.")
 				NSApp.keyWindow?.performClose(nil)
 			case .closedPane, .closedWorkspace, .noAction:
 				break
@@ -234,15 +239,18 @@ struct gmaxApp: App {
 
 	private func performWorkspaceClose() {
 		if NSApp.keyWindow?.identifier == AppWindowRole.settings.identifier {
+			diagnosticsLogger.notice("The close-workspace command was invoked while the Settings window was active, so the app is closing that window instead.")
 			NSApp.keyWindow?.performClose(nil)
 			return
 		}
 
 		shellModel.setCurrentWorkspaceID(selectedWorkspaceID)
 		let outcome = shellModel.closeSelectedWorkspace()
+		diagnosticsLogger.notice("Ran the close-workspace command from the main shell window. Result: \(String(describing: outcome.result), privacy: .public). Next selected workspace ID: \(outcome.nextSelectedWorkspaceID?.rawValue.uuidString ?? "(none)", privacy: .public)")
 		selectedWorkspaceID = outcome.nextSelectedWorkspaceID
 		switch outcome.result {
 			case .closeWindow:
+				diagnosticsLogger.notice("The close-workspace command resolved to closing the active window.")
 				NSApp.keyWindow?.performClose(nil)
 			case .closedWorkspace, .closedPane, .noAction:
 				break
@@ -250,6 +258,7 @@ struct gmaxApp: App {
 	}
 
 	private func performWindowClose() {
+		diagnosticsLogger.notice("Requested that the active app window close immediately.")
 		NSApp.keyWindow?.performClose(nil)
 	}
 
@@ -277,12 +286,15 @@ struct gmaxApp: App {
 
 	private func saveSelectedWorkspace() {
 		guard let workspaceID = selectedWorkspaceID else {
+			diagnosticsLogger.error("The app received a save-workspace command, but there is no selected workspace to save.")
 			return
 		}
+		diagnosticsLogger.notice("Requested that the selected workspace be saved to the workspace library. Workspace ID: \(workspaceID.rawValue.uuidString, privacy: .public)")
 		_ = shellModel.saveWorkspaceToLibrary(workspaceID)
 	}
 
 	private func presentWorkspaceRename(for workspace: Workspace) {
+		diagnosticsLogger.notice("Requested that the workspace rename sheet open for the selected workspace. Workspace title: \(workspace.title, privacy: .public). Workspace ID: \(workspace.id.rawValue.uuidString, privacy: .public)")
 		NotificationCenter.default.post(
 			name: .presentWorkspaceRenameSheet,
 			object: workspace.id
@@ -302,6 +314,7 @@ private struct MainShellSceneView: View {
 	@SceneStorage("mainShell.selectedWorkspaceID") private var restoredSelectedWorkspaceID: String?
 	@SceneStorage("mainShell.isInspectorVisible") private var restoredInspectorVisible = true
 	@State private var hasAppliedSceneState = false
+	private let appLogger = Logger.gmax(.app)
 
 	private let sidebarColumnWidth: CGFloat = 220
 	private let contentColumnIdealWidth: CGFloat = 920
@@ -413,6 +426,7 @@ private struct MainShellSceneView: View {
 			.flatMap(UUID.init(uuidString:))
 			.map { WorkspaceID(rawValue: $0) }
 		let normalizedSelection = shellModel.normalizedWorkspaceSelection(restoredSelection ?? selectedWorkspaceID)
+		appLogger.notice("Applied per-scene shell state restoration. Restored workspace selection: \(restoredSelection?.rawValue.uuidString ?? "(none)", privacy: .public). Normalized workspace selection: \(normalizedSelection?.rawValue.uuidString ?? "(none)", privacy: .public). Restored inspector visibility: \(restoredInspectorVisible ? "visible" : "hidden", privacy: .public)")
 		selectedWorkspaceID = normalizedSelection
 		shellModel.setCurrentWorkspaceID(normalizedSelection)
 	}

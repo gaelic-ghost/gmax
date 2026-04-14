@@ -440,15 +440,18 @@ final class ShellModel: ObservableObject {
 	private var paneFocusHistoryByWorkspace: [WorkspaceID: [PaneID]]
 	private var pendingPersistenceTask: Task<Void, Never>?
 	private var recentlyClosedWorkspaces: [RecentlyClosedWorkspace] = []
+	private let appLogger = Logger.gmax(.app)
+	private let diagnosticsLogger = Logger.gmax(.diagnostics)
 	private let workspaceLogger = Logger.gmax(.workspace)
 	private let paneLogger = Logger.gmax(.pane)
 
 	init() {
 		WorkspacePersistenceDefaults.registerDefaults()
 		let persistence = ShellPersistenceController.shared
-		let persistedWorkspaces = UserDefaults.standard.bool(
+		let shouldRestorePersistedWorkspaces = UserDefaults.standard.bool(
 			forKey: WorkspacePersistenceDefaults.restoreWorkspacesOnLaunchKey
-		) ? persistence.loadWorkspaces() : []
+		)
+		let persistedWorkspaces = shouldRestorePersistedWorkspaces ? persistence.loadWorkspaces() : []
 		let workspaces = persistedWorkspaces.isEmpty ? [Self.makeDefaultWorkspace()] : persistedWorkspaces
 		let launchContextBuilder = TerminalLaunchContextBuilder.live()
 		self.persistence = persistence
@@ -457,14 +460,21 @@ final class ShellModel: ObservableObject {
 			workspaces: workspaces,
 			defaultLaunchConfiguration: launchContextBuilder.makeLaunchConfiguration()
 		)
-			self.paneControllers = TerminalPaneControllerStore()
-			self.workspaces = workspaces
-			self.currentWorkspaceID = workspaces.first?.id
-			self.columnVisibility = .all
-			self.isInspectorVisible = true
-			self.paneFramesByWorkspace = [:]
-			self.paneFocusHistoryByWorkspace = Self.initialFocusHistory(for: workspaces)
+		self.paneControllers = TerminalPaneControllerStore()
+		self.workspaces = workspaces
+		self.currentWorkspaceID = workspaces.first?.id
+		self.columnVisibility = .all
+		self.isInspectorVisible = true
+		self.paneFramesByWorkspace = [:]
+		self.paneFocusHistoryByWorkspace = Self.initialFocusHistory(for: workspaces)
+		if shouldRestorePersistedWorkspaces, !persistedWorkspaces.isEmpty {
+			appLogger.notice("Restored persisted workspaces during app launch. Restored workspace count: \(persistedWorkspaces.count)")
+		} else if shouldRestorePersistedWorkspaces {
+			appLogger.notice("Workspace restoration is enabled for launch, but there were no persisted workspaces to restore. The app started with the default workspace instead.")
+		} else {
+			appLogger.notice("Workspace restoration on launch is disabled, so the app started with the default workspace state for this session.")
 		}
+	}
 
 	convenience init(
 		workspaces: [Workspace],
@@ -655,6 +665,7 @@ final class ShellModel: ObservableObject {
 	func clearRecentlyClosedWorkspaces() {
 		recentlyClosedWorkspaces.removeAll()
 		updateRecentlyClosedWorkspaceCount()
+		workspaceLogger.notice("Cleared the in-memory recently closed workspace stack for the current app session.")
 	}
 
 	func listSavedWorkspaceSnapshots(matching query: String? = nil) -> [SavedWorkspaceSnapshotSummary] {
@@ -1017,14 +1028,19 @@ final class ShellModel: ObservableObject {
 
 	func toggleSidebar() {
 		columnVisibility = columnVisibility == .all ? .doubleColumn : .all
+		let resolvedColumnVisibility = String(describing: columnVisibility)
+		diagnosticsLogger.notice("Toggled sidebar visibility. New split-view column visibility: \(resolvedColumnVisibility, privacy: .public)")
 	}
 
 	func toggleInspector() {
 		isInspectorVisible.toggle()
+		let inspectorVisibilityDescription = isInspectorVisible ? "visible" : "hidden"
+		diagnosticsLogger.notice("Toggled inspector visibility. Inspector is now \(inspectorVisibilityDescription, privacy: .public).")
 	}
 
 	func setInspectorVisible(_ isVisible: Bool) {
 		isInspectorVisible = isVisible
+		diagnosticsLogger.notice("Set inspector visibility from scene or command state restoration. Inspector is now \(isVisible ? "visible" : "hidden", privacy: .public).")
 	}
 
 	func controller(for pane: PaneLeaf) -> TerminalPaneController {

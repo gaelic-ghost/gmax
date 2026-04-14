@@ -6,10 +6,12 @@
 //
 
 import AppKit
+import OSLog
 import SwiftUI
 
 struct SettingsUtilityWindow: View {
 	@ObservedObject var model: ShellModel
+	private let diagnosticsLogger = Logger.gmax(.diagnostics)
 
 	@AppStorage(TerminalAppearanceDefaults.fontNameKey)
 	private var terminalFontName = TerminalAppearance.fallback.fontName
@@ -64,9 +66,13 @@ struct SettingsUtilityWindow: View {
 
 			Section("Workspaces") {
 				Toggle("Restore workspaces on launch", isOn: $restoreWorkspacesOnLaunch)
+					.onChange(of: restoreWorkspacesOnLaunch) { _, isEnabled in
+						diagnosticsLogger.notice("Updated the launch-restoration preference from Settings. Restore workspaces on launch is now \(isEnabled ? "enabled" : "disabled", privacy: .public).")
+					}
 
 				Toggle("Keep recently closed workspaces", isOn: $keepRecentlyClosedWorkspaces)
 					.onChange(of: keepRecentlyClosedWorkspaces) { _, isEnabled in
+						diagnosticsLogger.notice("Updated the recently-closed workspace retention preference from Settings. Keep recently closed workspaces is now \(isEnabled ? "enabled" : "disabled", privacy: .public).")
 						if !isEnabled {
 							Task { @MainActor in
 								await Task.yield()
@@ -76,6 +82,9 @@ struct SettingsUtilityWindow: View {
 					}
 
 				Toggle("Auto-save closed workspaces", isOn: $autoSaveClosedWorkspaces)
+					.onChange(of: autoSaveClosedWorkspaces) { _, isEnabled in
+						diagnosticsLogger.notice("Updated the closed-workspace auto-save preference from Settings. Auto-save closed workspaces is now \(isEnabled ? "enabled" : "disabled", privacy: .public).")
+					}
 
 				Text("Restore applies the next time you launch gmax. Recently closed workspaces stay in-memory only for this running session. Auto-save closed workspaces sends anything you close into the saved workspace library automatically.")
 					.font(.caption)
