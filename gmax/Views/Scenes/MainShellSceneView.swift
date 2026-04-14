@@ -139,7 +139,6 @@ struct MainShellSceneView: View {
 		}
 		.onChange(of: sceneContext.selectedWorkspaceID?.rawValue.uuidString) { _, newValue in
 			restoredSelectedWorkspaceID = newValue
-			shellModel.setCurrentWorkspaceID(sceneContext.selectedWorkspaceID)
 		}
 		.onChange(of: shellModel.workspaces.map(\.id.rawValue)) { _, _ in
 			sceneContext.normalizeSelectionAfterWorkspaceMutation()
@@ -157,7 +156,6 @@ struct MainShellSceneView: View {
 			get: { sceneContext.selectedWorkspaceID },
 			set: { newValue in
 				sceneContext.selectedWorkspaceID = shellModel.normalizedWorkspaceSelection(newValue)
-				shellModel.setCurrentWorkspaceID(sceneContext.selectedWorkspaceID)
 			}
 		)
 	}

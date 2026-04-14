@@ -463,16 +463,25 @@ extension ShellModel {
 		paneFocusHistoryByWorkspace.removeValue(forKey: workspaceID)
 		removeUnreferencedSessions()
 
-		if wasSelectedWorkspace {
+		let nextSelectedWorkspaceID: WorkspaceID?
+		if workspaces.isEmpty {
+			nextSelectedWorkspaceID = nil
+		} else {
 			let nextIndex = min(workspaceIndex, workspaces.count - 1)
-			currentWorkspaceID = workspaces[nextIndex].id
+			nextSelectedWorkspaceID = workspaces[nextIndex].id
+		}
+
+		if wasSelectedWorkspace {
+			currentWorkspaceID = nextSelectedWorkspaceID
+		} else {
+			currentWorkspaceID = normalizedWorkspaceSelection(currentWorkspaceID)
 		}
 
 		workspaceLogger.notice("Closed a workspace from the live shell. Workspace title: \(workspace.title, privacy: .public). Workspace ID: \(workspace.id.rawValue.uuidString, privacy: .public). Recorded in recently closed: \(closeEffects.recordRecentlyClosed). Saved to library: \(closeEffects.saveToLibrary)")
 		schedulePersistenceSave()
 		return CloseCommandOutcome(
 			result: .closedWorkspace,
-			nextSelectedWorkspaceID: normalizedWorkspaceSelection(currentWorkspaceID)
+			nextSelectedWorkspaceID: nextSelectedWorkspaceID
 		)
 	}
 

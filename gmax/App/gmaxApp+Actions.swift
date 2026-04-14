@@ -45,7 +45,6 @@ final class MainShellSceneContext {
 		self.selectedWorkspaceID = shellModel.normalizedWorkspaceSelection(selectedWorkspaceID)
 		self.columnVisibility = isSidebarVisible ? .all : .doubleColumn
 		self.isInspectorVisible = isInspectorVisible
-		shellModel.setCurrentWorkspaceID(self.selectedWorkspaceID)
 	}
 
 	var selectedWorkspace: Workspace? {
@@ -111,7 +110,6 @@ final class MainShellSceneContext {
 		)
 		self.columnVisibility = isSidebarVisible ? .all : .doubleColumn
 		self.isInspectorVisible = isInspectorVisible
-		shellModel.setCurrentWorkspaceID(self.selectedWorkspaceID)
 		diagnosticsLogger.notice(
 			"""
 			Applied per-window shell scene restoration. Restored workspace selection: \(restoredSelectedWorkspaceID?.rawValue.uuidString ?? "(none)", privacy: .public). \
@@ -124,7 +122,6 @@ final class MainShellSceneContext {
 
 	func normalizeSelectionAfterWorkspaceMutation() {
 		selectedWorkspaceID = shellModel.normalizedWorkspaceSelection(selectedWorkspaceID)
-		shellModel.setCurrentWorkspaceID(selectedWorkspaceID)
 	}
 
 	func requestDeleteWorkspaceConfirmation(_ workspaceID: WorkspaceID) {
@@ -181,7 +178,6 @@ final class MainShellSceneContext {
 
 	func createWorkspace() {
 		selectedWorkspaceID = shellModel.createWorkspace()
-		shellModel.setCurrentWorkspaceID(selectedWorkspaceID)
 	}
 
 	func openSavedWorkspaceLibrary() {
@@ -206,7 +202,6 @@ final class MainShellSceneContext {
 
 	func undoCloseWorkspace() {
 		selectedWorkspaceID = shellModel.undoCloseWorkspace()
-		shellModel.setCurrentWorkspaceID(selectedWorkspaceID)
 	}
 
 	func duplicateSelectedWorkspaceLayout() {
@@ -215,7 +210,6 @@ final class MainShellSceneContext {
 		}
 
 		self.selectedWorkspaceID = shellModel.duplicateWorkspace(selectedWorkspaceID)
-		shellModel.setCurrentWorkspaceID(self.selectedWorkspaceID)
 	}
 
 	func closeSelectedWorkspaceToLibrary() {
@@ -224,7 +218,6 @@ final class MainShellSceneContext {
 		}
 
 		self.selectedWorkspaceID = shellModel.closeWorkspaceToLibrary(selectedWorkspaceID).nextSelectedWorkspaceID
-		shellModel.setCurrentWorkspaceID(self.selectedWorkspaceID)
 	}
 
 	func deleteSelectedWorkspace() {
@@ -234,7 +227,6 @@ final class MainShellSceneContext {
 	func selectNextWorkspace() {
 		guard !shellModel.workspaces.isEmpty else {
 			selectedWorkspaceID = nil
-			shellModel.setCurrentWorkspaceID(nil)
 			return
 		}
 
@@ -242,19 +234,16 @@ final class MainShellSceneContext {
 			  let currentIndex = shellModel.workspaces.firstIndex(where: { $0.id == selectedWorkspaceID })
 		else {
 			self.selectedWorkspaceID = shellModel.workspaces.first?.id
-			shellModel.setCurrentWorkspaceID(self.selectedWorkspaceID)
 			return
 		}
 
 		let nextIndex = (currentIndex + 1) % shellModel.workspaces.count
 		self.selectedWorkspaceID = shellModel.workspaces[nextIndex].id
-		shellModel.setCurrentWorkspaceID(self.selectedWorkspaceID)
 	}
 
 	func selectPreviousWorkspace() {
 		guard !shellModel.workspaces.isEmpty else {
 			selectedWorkspaceID = nil
-			shellModel.setCurrentWorkspaceID(nil)
 			return
 		}
 
@@ -262,18 +251,19 @@ final class MainShellSceneContext {
 			  let currentIndex = shellModel.workspaces.firstIndex(where: { $0.id == selectedWorkspaceID })
 		else {
 			self.selectedWorkspaceID = shellModel.workspaces.last?.id
-			shellModel.setCurrentWorkspaceID(self.selectedWorkspaceID)
 			return
 		}
 
 		let previousIndex = (currentIndex - 1 + shellModel.workspaces.count) % shellModel.workspaces.count
 		self.selectedWorkspaceID = shellModel.workspaces[previousIndex].id
-		shellModel.setCurrentWorkspaceID(self.selectedWorkspaceID)
 	}
 
 	func movePaneFocus(_ direction: PaneFocusDirection) {
-		shellModel.setCurrentWorkspaceID(selectedWorkspaceID)
-		shellModel.movePaneFocus(direction)
+		guard let selectedWorkspaceID else {
+			return
+		}
+
+		shellModel.movePaneFocus(direction, in: selectedWorkspaceID)
 	}
 
 	func splitFocusedPane(_ direction: SplitDirection) {
@@ -320,7 +310,6 @@ final class MainShellSceneContext {
 			"Ran the contextual close command from the active shell window. Result: \(String(describing: outcome.result), privacy: .public). Next selected workspace ID: \(outcome.nextSelectedWorkspaceID?.rawValue.uuidString ?? "(none)", privacy: .public)"
 		)
 		self.selectedWorkspaceID = outcome.nextSelectedWorkspaceID
-		shellModel.setCurrentWorkspaceID(self.selectedWorkspaceID)
 		if outcome.result == .closeWindow {
 			diagnosticsLogger.notice("The contextual close command resolved to closing the active window.")
 			NSApp.keyWindow?.performClose(nil)
@@ -349,7 +338,6 @@ final class MainShellSceneContext {
 			"Ran the close-workspace command from the active shell window. Result: \(String(describing: outcome.result), privacy: .public). Next selected workspace ID: \(outcome.nextSelectedWorkspaceID?.rawValue.uuidString ?? "(none)", privacy: .public)"
 		)
 		self.selectedWorkspaceID = outcome.nextSelectedWorkspaceID
-		shellModel.setCurrentWorkspaceID(self.selectedWorkspaceID)
 		if outcome.result == .closeWindow {
 			diagnosticsLogger.notice("The close-workspace command resolved to closing the active window.")
 			NSApp.keyWindow?.performClose(nil)

@@ -15,8 +15,17 @@ import SwiftUI
 extension ShellModel {
 	@discardableResult
 	func createPane() -> WorkspaceID? {
-		guard let workspace = selectedWorkspace else {
+		guard let workspaceID = selectedWorkspace?.id else {
 			return createWorkspace()
+		}
+
+		return createPane(in: workspaceID)
+	}
+
+	@discardableResult
+	func createPane(in workspaceID: WorkspaceID) -> WorkspaceID? {
+		guard let workspace = workspace(for: workspaceID) else {
+			return nil
 		}
 
 		if workspace.root == nil {
@@ -27,14 +36,9 @@ extension ShellModel {
 		guard let paneID = workspace.focusedPaneID ?? workspace.root?.firstLeaf()?.id else {
 			return workspace.id
 		}
+
 		splitPane(paneID, in: workspace.id, direction: .right)
 		return workspace.id
-	}
-
-	@discardableResult
-	func createPane(in workspaceID: WorkspaceID) -> WorkspaceID? {
-		setCurrentWorkspaceID(workspaceID)
-		return createPane()
 	}
 
 	func relaunchPane(_ paneID: PaneID, in workspaceID: WorkspaceID) {
@@ -51,8 +55,16 @@ extension ShellModel {
 	}
 
 	func relaunchFocusedPane() {
+		guard let workspaceID = selectedWorkspace?.id else {
+			return
+		}
+
+		relaunchFocusedPane(in: workspaceID)
+	}
+
+	func relaunchFocusedPane(in workspaceID: WorkspaceID) {
 		guard
-			let workspace = selectedWorkspace,
+			let workspace = workspace(for: workspaceID),
 			let paneID = workspace.focusedPaneID
 		else {
 			return
@@ -175,11 +187,11 @@ extension ShellModel {
 	@discardableResult
 	func closeFocusedPane(in workspaceID: WorkspaceID) -> CloseCommandOutcome {
 		guard let workspace = workspace(for: workspaceID) else {
-			return CloseCommandOutcome(result: .noAction, nextSelectedWorkspaceID: normalizedWorkspaceSelection(currentWorkspaceID))
+			return CloseCommandOutcome(result: .noAction, nextSelectedWorkspaceID: normalizedWorkspaceSelection(workspaceID))
 		}
 
 		guard let focusedPaneID = workspace.focusedPaneID else {
-			return CloseCommandOutcome(result: .noAction, nextSelectedWorkspaceID: normalizedWorkspaceSelection(currentWorkspaceID))
+			return CloseCommandOutcome(result: .noAction, nextSelectedWorkspaceID: normalizedWorkspaceSelection(workspaceID))
 		}
 
 		if workspace.paneCount == 1 {
@@ -187,11 +199,19 @@ extension ShellModel {
 		}
 
 		closePane(focusedPaneID, in: workspace.id)
-		return CloseCommandOutcome(result: .closedPane, nextSelectedWorkspaceID: normalizedWorkspaceSelection(currentWorkspaceID))
+		return CloseCommandOutcome(result: .closedPane, nextSelectedWorkspaceID: normalizedWorkspaceSelection(workspaceID))
 	}
 
 	func movePaneFocus(_ direction: PaneFocusDirection) {
-		guard let workspaceIndex = selectedWorkspaceIndex else {
+		guard let workspaceID = selectedWorkspace?.id else {
+			return
+		}
+
+		movePaneFocus(direction, in: workspaceID)
+	}
+
+	func movePaneFocus(_ direction: PaneFocusDirection, in workspaceID: WorkspaceID) {
+		guard let workspaceIndex = workspaces.firstIndex(where: { $0.id == workspaceID }) else {
 			return
 		}
 
