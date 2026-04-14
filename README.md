@@ -15,7 +15,6 @@ The product direction is a keyboard-forward shell for managing multiple terminal
 - [Keyboard Commands](#keyboard-commands)
 - [Verification](#verification)
 - [Status](#status)
-- [Roadmap](#roadmap)
 - [License](#license)
 
 ## Overview
@@ -120,13 +119,16 @@ scripts/repo-maintenance/sync-shared.sh
 
 ## Keyboard Commands
 
-The current shell already exposes a few important command-driven interactions:
+The current shell exposes a command-first keyboard model across the `File`, `Workspace`, and `Pane` menus:
 
 - `cmd-n`: create a new workspace
-- `cmd-t`: create a new pane in the selected workspace
+- `cmd-o`: open the saved-workspace library
+- `cmd-s`: save the selected workspace to the library
+- `cmd-shift-o`: undo the most recent workspace close during the current app session
 - `cmd-b`: hide or show the workspace sidebar
 - `cmd-shift-b`: hide or show the inspector
 - `cmd-shift-[` and `cmd-shift-]`: move between workspaces
+- `cmd-t`: create a new pane in the selected workspace
 - `cmd-d`: split the focused pane to the right
 - `cmd-shift-d`: split the focused pane downward
 - `cmd-option-left/right/up/down`: move focus directionally
@@ -134,17 +136,12 @@ The current shell already exposes a few important command-driven interactions:
 - `cmd-w`: close the focused pane, then close the workspace if it was the last pane, then close the window if it was the last workspace
 - `cmd-option-w`: close the selected workspace directly
 - `cmd-shift-w`: close the current window directly
-- `cmd-shift-o`: undo the most recent workspace close during the current app session
 
 ## Status
 
 The app is already past the pure-prototype stage. The shell shape, pane model, terminal embedding, directional focus movement, and persistence layer are all real.
 
 What remains is product completion work: fuller workspace lifecycle tooling, terminal-native polish, accessibility, richer settings, deeper terminal integrations, and the details that make the app feel intentional rather than merely viable.
-
-## Roadmap
-
-See [ROADMAP.md](ROADMAP.md) for the current product roadmap.
 
 ## Verification
 

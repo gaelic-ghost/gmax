@@ -9,9 +9,10 @@ import SwiftUI
 
 struct ContentPane: View {
 	@ObservedObject var model: ShellModel
+	@Binding var selectedWorkspaceID: WorkspaceID?
 
 	var body: some View {
-		if let workspace = model.selectedWorkspace {
+		if let workspace = selectedWorkspaceID.flatMap(model.workspace(for:)) {
 			Group {
 				if workspace.root != nil {
 					WorkspacePaneTreeView(
@@ -26,7 +27,10 @@ struct ContentPane: View {
 							model.updatePaneFrames(paneFrames, in: workspace.id)
 						},
 						onFocusPane: { paneID in
-							model.focusPane(paneID, in: workspace.id)
+							Task { @MainActor in
+								await Task.yield()
+								model.focusPane(paneID, in: workspace.id)
+							}
 						}
 					)
 				} else {
@@ -34,11 +38,11 @@ struct ContentPane: View {
 						Label("This Workspace Has No Panes", systemImage: "rectangle.dashed")
 					} description: {
 						Text("Start a fresh shell here to get this workspace back into a usable state.")
-					} actions: {
-						Button("Start Shell") {
-							model.createPane()
-						}
-						.buttonStyle(.borderedProminent)
+						} actions: {
+							Button("Start Shell") {
+								selectedWorkspaceID = model.createPane(in: workspace.id)
+							}
+							.buttonStyle(.borderedProminent)
 					}
 				}
 			}
@@ -50,5 +54,5 @@ struct ContentPane: View {
 }
 
 #Preview {
-	ContentPane(model: ShellModel())
+	ContentPane(model: ShellModel(), selectedWorkspaceID: .constant(nil))
 }

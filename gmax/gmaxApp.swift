@@ -20,81 +20,141 @@ enum AppWindowRole: String {
 @main
 struct gmaxApp: App {
 	@StateObject private var shellModel: ShellModel
+	@State private var selectedWorkspaceID: WorkspaceID?
 	@State private var isBypassingLastPaneCloseConfirmation = false
+	@State private var isSavedWorkspaceLibraryPresented = false
 
 	init() {
 		WorkspacePersistenceDefaults.registerDefaults()
-		_shellModel = StateObject(wrappedValue: ShellModel())
+		let shellModel = ShellModel()
+		_shellModel = StateObject(wrappedValue: shellModel)
+		_selectedWorkspaceID = State(initialValue: shellModel.normalizedWorkspaceSelection(nil))
 	}
 
 	var body: some Scene {
-		Window("gmax exploration", id: "main-window") {
-			MainShellSceneView(
-				shellModel: shellModel,
-				isBypassingLastPaneCloseConfirmation: $isBypassingLastPaneCloseConfirmation
-			)
+			Window("gmax exploration", id: "main-window") {
+				MainShellSceneView(
+					shellModel: shellModel,
+					selectedWorkspaceID: $selectedWorkspaceID,
+					isBypassingLastPaneCloseConfirmation: $isBypassingLastPaneCloseConfirmation,
+					isSavedWorkspaceLibraryPresented: $isSavedWorkspaceLibraryPresented
+				)
 		}
 		.defaultSize(width: 1_440, height: 900)
 		.commands {
 			CommandGroup(replacing: .newItem) {
 				Button("New Workspace") {
-					shellModel.createWorkspace()
+					selectedWorkspaceID = shellModel.createWorkspace()
 				}
 				.keyboardShortcut("n", modifiers: [.command])
 			}
 
 			CommandGroup(after: .newItem) {
-				Button("Undo Close Workspace") {
-					shellModel.undoCloseWorkspace()
+				Button("Open Workspace…") {
+					isSavedWorkspaceLibraryPresented = true
 				}
-				.keyboardShortcut("o", modifiers: [.command, .shift])
-				.disabled(!shellModel.canUndoCloseWorkspace())
+				.keyboardShortcut("o", modifiers: [.command])
 			}
 
 			CommandGroup(replacing: .saveItem) {
+				Button("Save Workspace") {
+					saveSelectedWorkspace()
+				}
+				.keyboardShortcut("s", modifiers: [.command])
+				.disabled(selectedWorkspaceID == nil)
+
 				Button("Close") {
 					performContextualClose()
 				}
 				.keyboardShortcut("w", modifiers: [.command])
+			}
+
+			SidebarCommands()
+
+			CommandGroup(after: .sidebar) {
+				Button(shellModel.isInspectorVisible ? "Hide Inspector" : "Show Inspector") {
+					shellModel.toggleInspector()
+				}
+				.keyboardShortcut("b", modifiers: [.command, .shift])
+			}
+
+			CommandMenu("Workspace") {
+				Button("Undo Close Workspace") {
+					selectedWorkspaceID = shellModel.undoCloseWorkspace()
+				}
+				.keyboardShortcut("o", modifiers: [.command, .shift])
+				.disabled(!shellModel.canUndoCloseWorkspace())
+
+				Divider()
+
+				Button("Rename Workspace") {
+					guard let workspace = selectedWorkspace else {
+						return
+					}
+					presentWorkspaceRename(for: workspace)
+				}
+				.disabled(selectedWorkspace == nil)
+
+				Button("Duplicate Workspace Layout") {
+					guard let workspaceID = selectedWorkspaceID else {
+						return
+					}
+					selectedWorkspaceID = shellModel.duplicateWorkspace(workspaceID)
+				}
+				.disabled(selectedWorkspaceID == nil)
+
+				Button("Close Workspace to Library") {
+					guard let workspaceID = selectedWorkspaceID else {
+						return
+					}
+					selectedWorkspaceID = shellModel.closeWorkspaceToLibrary(workspaceID).nextSelectedWorkspaceID
+				}
+				.disabled(!canCloseWorkspaceToLibrary)
 
 				Button("Close Workspace") {
 					performWorkspaceClose()
 				}
 				.keyboardShortcut("w", modifiers: [.command, .option])
+				.disabled(!canCloseWorkspace)
 
+				Button("Delete Workspace", role: .destructive) {
+					guard let workspaceID = selectedWorkspaceID else {
+						return
+					}
+					shellModel.deleteWorkspace(workspaceID)
+					selectedWorkspaceID = shellModel.normalizedWorkspaceSelection(selectedWorkspaceID)
+				}
+				.disabled(!canDeleteSelectedWorkspace)
+
+				Divider()
+
+				Button("Previous Workspace") {
+					selectedWorkspaceID = shellModel.selectPreviousWorkspace()
+				}
+				.keyboardShortcut("[", modifiers: [.command, .shift])
+				.disabled(shellModel.workspaces.count < 2)
+
+				Button("Next Workspace") {
+					selectedWorkspaceID = shellModel.selectNextWorkspace()
+				}
+				.keyboardShortcut("]", modifiers: [.command, .shift])
+				.disabled(shellModel.workspaces.count < 2)
+			}
+
+			CommandGroup(after: .windowSize) {
 				Button("Close Window") {
 					performWindowClose()
 				}
 				.keyboardShortcut("w", modifiers: [.command, .shift])
 			}
 
-			CommandGroup(after: .windowSize) {
-				Button(shellModel.columnVisibility == .all ? "Hide Sidebar" : "Show Sidebar") {
-					shellModel.toggleSidebar()
-				}
-				.keyboardShortcut("b", modifiers: [.command])
-
-				Button(shellModel.isInspectorVisible ? "Hide Inspector" : "Show Inspector") {
-					shellModel.toggleInspector()
-				}
-				.keyboardShortcut("b", modifiers: [.command, .shift])
-
-				Divider()
-
-				Button("Previous Workspace") {
-					shellModel.selectPreviousWorkspace()
-				}
-				.keyboardShortcut("[", modifiers: [.command, .shift])
-
-				Button("Next Workspace") {
-					shellModel.selectNextWorkspace()
-				}
-				.keyboardShortcut("]", modifiers: [.command, .shift])
-			}
-
 			CommandMenu("Pane") {
 				Button("New Pane") {
-					shellModel.createPane()
+					if let workspaceID = selectedWorkspaceID {
+						selectedWorkspaceID = shellModel.createPane(in: workspaceID)
+					} else {
+						selectedWorkspaceID = shellModel.createWorkspace()
+					}
 				}
 				.keyboardShortcut("t", modifiers: [.command])
 
@@ -135,20 +195,18 @@ struct gmaxApp: App {
 				Divider()
 
 				Button("Split Right") {
-					shellModel.splitFocusedPane(.right)
+					if let workspaceID = selectedWorkspaceID {
+						shellModel.splitFocusedPane(in: workspaceID, .right)
+					}
 				}
 				.keyboardShortcut("d", modifiers: [.command])
 
 				Button("Split Down") {
-					shellModel.splitFocusedPane(.down)
+					if let workspaceID = selectedWorkspaceID {
+						shellModel.splitFocusedPane(in: workspaceID, .down)
+					}
 				}
 				.keyboardShortcut("d", modifiers: [.command, .shift])
-
-				Divider()
-
-				Button("Close") {
-					_ = shellModel.performCloseCommand()
-				}
 			}
 		}
 		Settings {
@@ -163,7 +221,10 @@ struct gmaxApp: App {
 			return
 		}
 
-		switch shellModel.performCloseCommand() {
+		shellModel.setCurrentWorkspaceID(selectedWorkspaceID)
+		let outcome = shellModel.performCloseCommand()
+		selectedWorkspaceID = outcome.nextSelectedWorkspaceID
+		switch outcome.result {
 			case .closeWindow:
 				NSApp.keyWindow?.performClose(nil)
 			case .closedPane, .closedWorkspace, .noAction:
@@ -177,7 +238,10 @@ struct gmaxApp: App {
 			return
 		}
 
-		switch shellModel.closeSelectedWorkspace() {
+		shellModel.setCurrentWorkspaceID(selectedWorkspaceID)
+		let outcome = shellModel.closeSelectedWorkspace()
+		selectedWorkspaceID = outcome.nextSelectedWorkspaceID
+		switch outcome.result {
 			case .closeWindow:
 				NSApp.keyWindow?.performClose(nil)
 			case .closedWorkspace, .closedPane, .noAction:
@@ -188,11 +252,53 @@ struct gmaxApp: App {
 	private func performWindowClose() {
 		NSApp.keyWindow?.performClose(nil)
 	}
+
+	private var selectedWorkspace: Workspace? {
+		guard let selectedWorkspaceID else {
+			return nil
+		}
+		return shellModel.workspace(for: selectedWorkspaceID)
+	}
+
+	private var canDeleteSelectedWorkspace: Bool {
+		guard let selectedWorkspaceID else {
+			return false
+		}
+		return shellModel.canDeleteWorkspace(selectedWorkspaceID)
+	}
+
+	private var canCloseWorkspace: Bool {
+		selectedWorkspaceID != nil && shellModel.workspaces.count > 1
+	}
+
+	private var canCloseWorkspaceToLibrary: Bool {
+		canCloseWorkspace
+	}
+
+	private func saveSelectedWorkspace() {
+		guard let workspaceID = selectedWorkspaceID else {
+			return
+		}
+		_ = shellModel.saveWorkspaceToLibrary(workspaceID)
+	}
+
+	private func presentWorkspaceRename(for workspace: Workspace) {
+		NotificationCenter.default.post(
+			name: .presentWorkspaceRenameSheet,
+			object: workspace.id
+		)
+	}
+}
+
+extension Notification.Name {
+	static let presentWorkspaceRenameSheet = Notification.Name("gmax.presentWorkspaceRenameSheet")
 }
 
 private struct MainShellSceneView: View {
 	@ObservedObject var shellModel: ShellModel
+	@Binding var selectedWorkspaceID: WorkspaceID?
 	@Binding var isBypassingLastPaneCloseConfirmation: Bool
+	@Binding var isSavedWorkspaceLibraryPresented: Bool
 	@SceneStorage("mainShell.selectedWorkspaceID") private var restoredSelectedWorkspaceID: String?
 	@SceneStorage("mainShell.isInspectorVisible") private var restoredInspectorVisible = true
 	@State private var hasAppliedSceneState = false
@@ -205,15 +311,15 @@ private struct MainShellSceneView: View {
 
 	var body: some View {
 		NavigationSplitView(columnVisibility: $shellModel.columnVisibility) {
-			SidebarPane(model: shellModel)
+			SidebarPane(model: shellModel, selection: $selectedWorkspaceID)
 				.navigationSplitViewColumnWidth(sidebarColumnWidth)
 		} content: {
-			ContentPane(model: shellModel)
+			ContentPane(model: shellModel, selectedWorkspaceID: $selectedWorkspaceID)
 				.navigationSplitViewColumnWidth(min: 640, ideal: contentColumnIdealWidth)
 		} detail: {
 			if shellModel.isInspectorVisible {
-				DetailPane(model: shellModel)
-					.navigationSplitViewColumnWidth(
+				DetailPane(model: shellModel, selectedWorkspaceID: $selectedWorkspaceID)
+						.navigationSplitViewColumnWidth(
 						min: detailColumnMinimumWidth,
 						ideal: detailColumnIdealWidth,
 						max: detailColumnMaximumWidth
@@ -225,21 +331,41 @@ private struct MainShellSceneView: View {
 		}
 		.windowRole(.mainShell)
 		.windowCloseConfirmation(
-			model: shellModel,
+			requiresConfirmation: shellModel.requiresLastPaneCloseConfirmation,
 			isBypassingConfirmation: $isBypassingLastPaneCloseConfirmation
 		)
+			.sheet(isPresented: $isSavedWorkspaceLibraryPresented) {
+				SavedWorkspaceLibrarySheet(
+					model: shellModel,
+					selectedWorkspaceID: $selectedWorkspaceID,
+					isPresented: $isSavedWorkspaceLibraryPresented
+				)
+			}
 		.toolbar {
-			ToolbarItem(placement: .navigation) {
-				Button {
-					shellModel.createWorkspace()
-				} label: {
+				ToolbarItem(placement: .navigation) {
+					Button {
+						selectedWorkspaceID = shellModel.createWorkspace()
+					} label: {
 					Label("New Workspace", systemImage: "plus.rectangle.on.rectangle")
 				}
 			}
 
 			ToolbarItem(placement: .automatic) {
 				Button {
-					shellModel.createPane()
+					isSavedWorkspaceLibraryPresented = true
+				} label: {
+					Label("Open Saved Workspaces", systemImage: "folder")
+				}
+				.help("Open saved workspaces (\u{2318}O)")
+			}
+
+			ToolbarItem(placement: .automatic) {
+				Button {
+					if let workspaceID = selectedWorkspaceID {
+						selectedWorkspaceID = shellModel.createPane(in: workspaceID)
+					} else {
+						selectedWorkspaceID = shellModel.createWorkspace()
+					}
 				} label: {
 					Label("New Pane", systemImage: "uiwindow.split.2x1")
 				}
@@ -256,13 +382,23 @@ private struct MainShellSceneView: View {
 				}
 			}
 		}
-		.onAppear(perform: applySceneStateIfNeeded)
-		.onChange(of: shellModel.selectedWorkspaceID?.rawValue.uuidString) { _, newValue in
-			restoredSelectedWorkspaceID = newValue
+		.task {
+			applySceneStateIfNeeded()
 		}
-		.onChange(of: shellModel.isInspectorVisible) { _, newValue in
-			restoredInspectorVisible = newValue
-		}
+			.onChange(of: selectedWorkspaceID?.rawValue.uuidString) { _, newValue in
+				restoredSelectedWorkspaceID = newValue
+				shellModel.setCurrentWorkspaceID(selectedWorkspaceID)
+			}
+			.onChange(of: shellModel.workspaces.map(\.id.rawValue)) { _, _ in
+				let normalizedSelection = shellModel.normalizedWorkspaceSelection(selectedWorkspaceID)
+				if normalizedSelection != selectedWorkspaceID {
+					selectedWorkspaceID = normalizedSelection
+				}
+				shellModel.setCurrentWorkspaceID(normalizedSelection)
+			}
+			.onChange(of: shellModel.isInspectorVisible) { _, newValue in
+				restoredInspectorVisible = newValue
+			}
 	}
 
 	private func applySceneStateIfNeeded() {
@@ -273,19 +409,12 @@ private struct MainShellSceneView: View {
 		hasAppliedSceneState = true
 		shellModel.setInspectorVisible(restoredInspectorVisible)
 
-		guard
-			let restoredSelectedWorkspaceID,
-			let workspaceUUID = UUID(uuidString: restoredSelectedWorkspaceID)
-		else {
-			return
-		}
-
-		let workspaceID = WorkspaceID(rawValue: workspaceUUID)
-		guard shellModel.workspace(for: workspaceID) != nil else {
-			return
-		}
-
-		shellModel.selectWorkspace(workspaceID)
+		let restoredSelection = restoredSelectedWorkspaceID
+			.flatMap(UUID.init(uuidString:))
+			.map { WorkspaceID(rawValue: $0) }
+		let normalizedSelection = shellModel.normalizedWorkspaceSelection(restoredSelection ?? selectedWorkspaceID)
+		selectedWorkspaceID = normalizedSelection
+		shellModel.setCurrentWorkspaceID(normalizedSelection)
 	}
 }
 
@@ -306,7 +435,7 @@ struct WindowRoleAccessor: NSViewRepresentable {
 }
 
 struct WindowCloseConfirmationAccessor: NSViewRepresentable {
-	@ObservedObject var model: ShellModel
+	let requiresConfirmation: Bool
 	@Binding var isBypassingConfirmation: Bool
 
 	func makeCoordinator() -> Coordinator {
@@ -347,7 +476,7 @@ struct WindowCloseConfirmationAccessor: NSViewRepresentable {
 				return true
 			}
 
-			guard parent.model.requiresLastPaneCloseConfirmation else {
+			guard parent.requiresConfirmation else {
 				return true
 			}
 
@@ -385,12 +514,12 @@ extension View {
 	}
 
 	func windowCloseConfirmation(
-		model: ShellModel,
+		requiresConfirmation: Bool,
 		isBypassingConfirmation: Binding<Bool>
 	) -> some View {
 		background(
 			WindowCloseConfirmationAccessor(
-				model: model,
+				requiresConfirmation: requiresConfirmation,
 				isBypassingConfirmation: isBypassingConfirmation
 			)
 		)

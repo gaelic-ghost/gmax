@@ -76,6 +76,7 @@ struct TerminalPaneRepresentable: NSViewRepresentable {
 		func makeHostingView() -> TerminalHostingContainerView {
 			let terminalView = LocalProcessTerminalView(frame: .zero)
 			terminalView.processDelegate = self
+			controller.attach(terminalView: terminalView)
 			let clickRecognizer = NSClickGestureRecognizer(target: self, action: #selector(handleTerminalClick(_:)))
 			clickRecognizer.delaysPrimaryMouseButtonEvents = false
 			terminalView.addGestureRecognizer(clickRecognizer)
@@ -92,6 +93,7 @@ struct TerminalPaneRepresentable: NSViewRepresentable {
 		}
 
 		func dismantle(hostingView: TerminalHostingContainerView) {
+			controller.detach(terminalView: hostingView.terminalView)
 			hostingView.terminalView.terminate()
 		}
 
@@ -99,6 +101,8 @@ struct TerminalPaneRepresentable: NSViewRepresentable {
 			guard !didStartProcess else {
 				return
 			}
+
+			controller.restoreTranscriptIfNeeded(into: terminalView)
 
 			let launch = controller.session.launchConfiguration
 			terminalView.startProcess(
@@ -109,6 +113,7 @@ struct TerminalPaneRepresentable: NSViewRepresentable {
 			)
 			didStartProcess = true
 			Task { @MainActor in
+				await Task.yield()
 				controller.session.state = .running
 			}
 		}
@@ -118,18 +123,21 @@ struct TerminalPaneRepresentable: NSViewRepresentable {
 		func setTerminalTitle(source: LocalProcessTerminalView, title: String) {
 			let resolvedTitle = title.isEmpty ? "Shell" : title
 			Task { @MainActor in
+				await Task.yield()
 				controller.session.title = resolvedTitle
 			}
 		}
 
 		func hostCurrentDirectoryUpdate(source: TerminalView, directory: String?) {
 			Task { @MainActor in
+				await Task.yield()
 				controller.session.currentDirectory = directory
 			}
 		}
 
 		func processTerminated(source: TerminalView, exitCode: Int32?) {
 			Task { @MainActor in
+				await Task.yield()
 				controller.session.state = .exited(exitCode)
 			}
 		}

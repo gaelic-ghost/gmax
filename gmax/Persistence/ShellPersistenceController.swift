@@ -93,12 +93,11 @@ final class ShellPersistenceController {
 		sessions: TerminalSessionRegistry,
 		transcriptsBySessionID: [TerminalSessionID: String] = [:],
 		notes: String? = nil,
-		isPinned: Bool = false
+		isPinned: Bool? = nil
 	) -> SavedWorkspaceSnapshotSummary? {
 		let context = container.viewContext
 		var createdSummary: SavedWorkspaceSnapshotSummary?
 		let now = Date()
-		let snapshotID = WorkspaceSnapshotID()
 		let pendingPaneSnapshots: [PendingPaneSessionSnapshot] = workspace.paneLeaves.map { leaf in
 			let session = sessions.ensureSession(id: leaf.sessionID)
 			let launchConfiguration = launchConfigurationForSnapshot(from: session)
@@ -135,14 +134,31 @@ final class ShellPersistenceController {
 
 		context.performAndWait {
 			do {
-				let snapshotEntity = WorkspaceSnapshotEntity(context: context)
-				snapshotEntity.id = snapshotID.rawValue
+					let snapshotEntity = try Self.existingSnapshotEntity(
+						forSourceWorkspaceID: workspace.id,
+						in: context
+					) ?? WorkspaceSnapshotEntity(context: context)
+				let snapshotID = snapshotEntity.sourceWorkspaceID == workspace.id.rawValue
+					? WorkspaceSnapshotID(rawValue: snapshotEntity.id)
+					: WorkspaceSnapshotID()
+					if snapshotEntity.sourceWorkspaceID != workspace.id.rawValue {
+						snapshotEntity.id = snapshotID.rawValue
+						snapshotEntity.createdAt = now
+						snapshotEntity.lastOpenedAt = nil
+						snapshotEntity.isPinned = false
+					} else {
+						Self.deleteExistingSnapshotContents(from: snapshotEntity, in: context)
+					}
+
+				snapshotEntity.sourceWorkspaceID = workspace.id.rawValue
 				snapshotEntity.title = workspace.title
-				snapshotEntity.createdAt = now
 				snapshotEntity.updatedAt = now
-				snapshotEntity.lastOpenedAt = nil
-				snapshotEntity.isPinned = isPinned
-				snapshotEntity.notes = notes
+				if let isPinned {
+					snapshotEntity.isPinned = isPinned
+				}
+				if let notes {
+					snapshotEntity.notes = notes
+				}
 				snapshotEntity.focusedPaneID = workspace.focusedPaneID?.rawValue
 
 				var sessionSnapshotsByID: [UUID: PaneSessionSnapshotEntity] = [:]
@@ -174,10 +190,10 @@ final class ShellPersistenceController {
 				createdSummary = SavedWorkspaceSnapshotSummary(
 					id: snapshotID,
 					title: workspace.title,
-					createdAt: now,
+					createdAt: snapshotEntity.createdAt,
 					updatedAt: now,
-					lastOpenedAt: nil,
-					isPinned: isPinned,
+					lastOpenedAt: snapshotEntity.lastOpenedAt,
+					isPinned: snapshotEntity.isPinned,
 					previewText: previewText,
 					paneCount: workspace.paneCount
 				)
@@ -188,6 +204,33 @@ final class ShellPersistenceController {
 		}
 
 		return createdSummary
+	}
+
+	private nonisolated static func existingSnapshotEntity(
+		forSourceWorkspaceID workspaceID: WorkspaceID,
+		in context: NSManagedObjectContext
+	) throws -> WorkspaceSnapshotEntity? {
+		let request = NSFetchRequest<WorkspaceSnapshotEntity>(entityName: "WorkspaceSnapshotEntity")
+		request.fetchLimit = 1
+		request.predicate = NSPredicate(format: "sourceWorkspaceID == %@", workspaceID.rawValue as CVarArg)
+		return try context.fetch(request).first
+	}
+
+	private nonisolated static func deleteExistingSnapshotContents(
+		from snapshotEntity: WorkspaceSnapshotEntity,
+		in context: NSManagedObjectContext
+	) {
+		if let existingRootNode = snapshotEntity.rootNode {
+			context.delete(existingRootNode)
+		}
+
+		let existingSessionSnapshots = snapshotEntity.sessionSnapshots as? Set<PaneSessionSnapshotEntity> ?? []
+		for existingSessionSnapshot in existingSessionSnapshots {
+			context.delete(existingSessionSnapshot)
+		}
+
+		snapshotEntity.rootNode = nil
+		snapshotEntity.sessionSnapshots = nil
 	}
 
 	func listWorkspaceSnapshots(matching query: String? = nil) -> [SavedWorkspaceSnapshotSummary] {
@@ -641,6 +684,7 @@ final class ShellPersistenceController {
 		let nodeFraction = attribute(name: "fraction", type: .doubleAttributeType)
 
 		let workspaceSnapshotID = attribute(name: "id", type: .UUIDAttributeType)
+		let workspaceSnapshotSourceWorkspaceID = attribute(name: "sourceWorkspaceID", type: .UUIDAttributeType, isOptional: true)
 		let workspaceSnapshotTitle = attribute(name: "title", type: .stringAttributeType)
 		let workspaceSnapshotCreatedAt = attribute(name: "createdAt", type: .dateAttributeType)
 		let workspaceSnapshotUpdatedAt = attribute(name: "updatedAt", type: .dateAttributeType)
@@ -805,6 +849,7 @@ final class ShellPersistenceController {
 
 		workspaceSnapshotEntity.properties = [
 			workspaceSnapshotID,
+			workspaceSnapshotSourceWorkspaceID,
 			workspaceSnapshotTitle,
 			workspaceSnapshotCreatedAt,
 			workspaceSnapshotUpdatedAt,
@@ -1034,6 +1079,7 @@ extension PaneNodeEntity {
 @objc(WorkspaceSnapshotEntity)
 final class WorkspaceSnapshotEntity: NSManagedObject {
 	@NSManaged var id: UUID
+	@NSManaged var sourceWorkspaceID: UUID?
 	@NSManaged var title: String
 	@NSManaged var createdAt: Date
 	@NSManaged var updatedAt: Date

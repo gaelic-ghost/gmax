@@ -100,9 +100,15 @@ enum CloseCommandResult {
 	case noAction
 }
 
+struct CloseCommandOutcome {
+	let result: CloseCommandResult
+	let nextSelectedWorkspaceID: WorkspaceID?
+}
+
 enum WorkspacePersistenceDefaults {
 	static let restoreWorkspacesOnLaunchKey = "workspacePersistence.restoreOnLaunch"
 	static let keepRecentlyClosedWorkspacesKey = "workspacePersistence.keepRecentlyClosed"
+	static let autoSaveClosedWorkspacesKey = "workspacePersistence.autoSaveClosedWorkspaces"
 	static let maxRecentlyClosedWorkspaceCount = 20
 
 	static func registerDefaults(
@@ -112,7 +118,8 @@ enum WorkspacePersistenceDefaults {
 		defaults.register(
 			defaults: [
 				restoreWorkspacesOnLaunchKey: systemRestoresWindowsByDefault(globalDefaults: globalDefaults),
-				keepRecentlyClosedWorkspacesKey: true
+				keepRecentlyClosedWorkspacesKey: true,
+				autoSaveClosedWorkspacesKey: false
 			]
 		)
 	}
@@ -405,16 +412,15 @@ extension PaneNode {
 @MainActor
 final class ShellModel: ObservableObject {
 	@Published var workspaces: [Workspace]
-	@Published var selectedWorkspaceID: WorkspaceID?
 	@Published var columnVisibility: NavigationSplitViewVisibility
 	@Published var isInspectorVisible: Bool
 	@Published private(set) var recentlyClosedWorkspaceCount = 0
-	@Published private(set) var savedWorkspaceSnapshots: [SavedWorkspaceSnapshotSummary]
 
 	let persistence: ShellPersistenceController
 	let launchContextBuilder: TerminalLaunchContextBuilder
 	let sessions: TerminalSessionRegistry
 	let paneControllers: TerminalPaneControllerStore
+	private var currentWorkspaceID: WorkspaceID?
 	private var paneFramesByWorkspace: [WorkspaceID: [PaneID: CGRect]]
 	private var paneFocusHistoryByWorkspace: [WorkspaceID: [PaneID]]
 	private var pendingPersistenceTask: Task<Void, Never>?
@@ -436,10 +442,9 @@ final class ShellModel: ObservableObject {
 		)
 			self.paneControllers = TerminalPaneControllerStore()
 			self.workspaces = workspaces
-			self.selectedWorkspaceID = workspaces.first?.id
+			self.currentWorkspaceID = workspaces.first?.id
 			self.columnVisibility = .all
 			self.isInspectorVisible = true
-			self.savedWorkspaceSnapshots = persistence.listWorkspaceSnapshots()
 			self.paneFramesByWorkspace = [:]
 			self.paneFocusHistoryByWorkspace = Self.initialFocusHistory(for: workspaces)
 		}
@@ -476,19 +481,18 @@ final class ShellModel: ObservableObject {
 		)
 		self.paneControllers = TerminalPaneControllerStore()
 		self.workspaces = workspaces
-		self.selectedWorkspaceID = selectedWorkspaceID
+		self.currentWorkspaceID = selectedWorkspaceID
 		self.columnVisibility = columnVisibility
 		self.isInspectorVisible = isInspectorVisible
-		self.savedWorkspaceSnapshots = persistence.listWorkspaceSnapshots()
 		self.paneFramesByWorkspace = [:]
 		self.paneFocusHistoryByWorkspace = Self.initialFocusHistory(for: workspaces)
 	}
 
 	var selectedWorkspaceIndex: Int? {
-		guard let selectedWorkspaceID else {
+		guard let currentWorkspaceID else {
 			return nil
 		}
-		return workspaces.firstIndex { $0.id == selectedWorkspaceID }
+		return workspaces.firstIndex { $0.id == currentWorkspaceID }
 	}
 
 	var selectedWorkspace: Workspace? {
@@ -516,16 +520,27 @@ final class ShellModel: ObservableObject {
 		return workspace.paneCount == 1
 	}
 
-	func selectWorkspace(_ workspaceID: WorkspaceID) {
-		selectedWorkspaceID = workspaceID
+	func setCurrentWorkspaceID(_ workspaceID: WorkspaceID?) {
+		currentWorkspaceID = normalizedWorkspaceSelection(workspaceID)
 	}
 
-	func createWorkspace() {
+	func normalizedWorkspaceSelection(_ workspaceID: WorkspaceID?) -> WorkspaceID? {
+		if let workspaceID, workspaces.contains(where: { $0.id == workspaceID }) {
+			return workspaceID
+		}
+		return workspaces.first?.id
+	}
+
+	@discardableResult
+	func createWorkspace() -> WorkspaceID {
 		let workspace = Self.makeDefaultWorkspace(
 			title: uniqueWorkspaceTitle(startingWith: "Workspace \(workspaces.count + 1)")
 		)
 		guard let pane = workspace.root?.firstLeaf() else {
-			return
+			workspaces.append(workspace)
+			currentWorkspaceID = workspace.id
+			schedulePersistenceSave()
+			return workspace.id
 		}
 
 		workspaces.append(workspace)
@@ -533,9 +548,10 @@ final class ShellModel: ObservableObject {
 			id: pane.sessionID,
 			launchConfiguration: launchContextBuilder.makeLaunchConfiguration()
 		)
-		selectedWorkspaceID = workspace.id
+		currentWorkspaceID = workspace.id
 		paneFocusHistoryByWorkspace[workspace.id] = [pane.id]
 		schedulePersistenceSave()
+		return workspace.id
 	}
 
 	func renameWorkspace(_ workspaceID: WorkspaceID, to proposedTitle: String) {
@@ -552,24 +568,26 @@ final class ShellModel: ObservableObject {
 		schedulePersistenceSave()
 	}
 
-	func duplicateWorkspace(_ workspaceID: WorkspaceID) {
+	@discardableResult
+	func duplicateWorkspace(_ workspaceID: WorkspaceID) -> WorkspaceID? {
 		guard let workspaceIndex = workspaces.firstIndex(where: { $0.id == workspaceID }) else {
-			return
+			return nil
 		}
 
 		let duplicatedWorkspace = duplicatedWorkspace(from: workspaces[workspaceIndex])
 		workspaces.insert(duplicatedWorkspace, at: workspaceIndex + 1)
-		selectedWorkspaceID = duplicatedWorkspace.id
+		currentWorkspaceID = duplicatedWorkspace.id
 		paneFocusHistoryByWorkspace[duplicatedWorkspace.id] = [duplicatedWorkspace.focusedPaneID].compactMap { $0 }
 		schedulePersistenceSave()
+		return duplicatedWorkspace.id
 	}
 
 	func canDeleteWorkspace(_ workspaceID: WorkspaceID) -> Bool {
 		workspaces.count > 1 && workspaces.contains(where: { $0.id == workspaceID })
 	}
 
-	func closeWorkspace(_ workspaceID: WorkspaceID) -> CloseCommandResult {
-		return removeWorkspace(workspaceID, trackingRecentlyClosedWorkspace: true)
+	func closeWorkspace(_ workspaceID: WorkspaceID) -> CloseCommandOutcome {
+		return removeWorkspace(workspaceID, closeEffects: defaultCloseEffects())
 	}
 
 	func deleteWorkspace(_ workspaceID: WorkspaceID) {
@@ -577,21 +595,28 @@ final class ShellModel: ObservableObject {
 			return
 		}
 
-		_ = removeWorkspace(workspaceID, trackingRecentlyClosedWorkspace: false)
+		_ = removeWorkspace(
+			workspaceID,
+			closeEffects: WorkspaceCloseEffects(
+				recordRecentlyClosed: false,
+				saveToLibrary: false
+			)
+		)
 	}
 
 	func canUndoCloseWorkspace() -> Bool {
 		recentlyClosedWorkspaceCount > 0
 	}
 
-	func undoCloseWorkspace() {
+	@discardableResult
+	func undoCloseWorkspace() -> WorkspaceID? {
 		guard let closedWorkspace = recentlyClosedWorkspaces.popLast() else {
-			return
+			return nil
 		}
 
 		let insertionIndex = min(closedWorkspace.formerIndex, workspaces.count)
 		workspaces.insert(closedWorkspace.workspace, at: insertionIndex)
-		selectedWorkspaceID = closedWorkspace.workspace.id
+		currentWorkspaceID = closedWorkspace.workspace.id
 		paneFocusHistoryByWorkspace[closedWorkspace.workspace.id] = [closedWorkspace.workspace.focusedPaneID].compactMap { $0 }
 
 		for leaf in closedWorkspace.workspace.paneLeaves {
@@ -602,6 +627,7 @@ final class ShellModel: ObservableObject {
 
 		updateRecentlyClosedWorkspaceCount()
 		schedulePersistenceSave()
+		return closedWorkspace.workspace.id
 	}
 
 	func clearRecentlyClosedWorkspaces() {
@@ -609,8 +635,8 @@ final class ShellModel: ObservableObject {
 		updateRecentlyClosedWorkspaceCount()
 	}
 
-	func refreshSavedWorkspaceSnapshots(matching query: String? = nil) {
-		savedWorkspaceSnapshots = persistence.listWorkspaceSnapshots(matching: query)
+	func listSavedWorkspaceSnapshots(matching query: String? = nil) -> [SavedWorkspaceSnapshotSummary] {
+		persistence.listWorkspaceSnapshots(matching: query)
 	}
 
 	@discardableResult
@@ -622,12 +648,16 @@ final class ShellModel: ObservableObject {
 			return nil
 		}
 
+		let resolvedTranscripts = snapshotTranscripts(
+			for: workspace,
+			explicitTranscriptsBySessionID: transcriptsBySessionID
+		)
+
 		let summary = persistence.createWorkspaceSnapshot(
 			from: workspace,
 			sessions: sessions,
-			transcriptsBySessionID: transcriptsBySessionID
+			transcriptsBySessionID: resolvedTranscripts
 		)
-		refreshSavedWorkspaceSnapshots()
 		return summary
 	}
 
@@ -635,12 +665,12 @@ final class ShellModel: ObservableObject {
 	func saveSelectedWorkspaceToLibrary(
 		transcriptsBySessionID: [TerminalSessionID: String] = [:]
 	) -> SavedWorkspaceSnapshotSummary? {
-		guard let selectedWorkspaceID else {
+		guard let currentWorkspaceID else {
 			return nil
 		}
 
 		return saveWorkspaceToLibrary(
-			selectedWorkspaceID,
+			currentWorkspaceID,
 			transcriptsBySessionID: transcriptsBySessionID
 		)
 	}
@@ -649,12 +679,16 @@ final class ShellModel: ObservableObject {
 	func closeWorkspaceToLibrary(
 		_ workspaceID: WorkspaceID,
 		transcriptsBySessionID: [TerminalSessionID: String] = [:]
-	) -> CloseCommandResult {
-		guard saveWorkspaceToLibrary(workspaceID, transcriptsBySessionID: transcriptsBySessionID) != nil else {
-			return .noAction
-		}
-
-		return closeWorkspace(workspaceID)
+	) -> CloseCommandOutcome {
+		let defaultEffects = defaultCloseEffects()
+		return removeWorkspace(
+			workspaceID,
+			closeEffects: WorkspaceCloseEffects(
+				recordRecentlyClosed: defaultEffects.recordRecentlyClosed,
+				saveToLibrary: true
+			),
+			explicitTranscriptsBySessionID: transcriptsBySessionID
+		)
 	}
 
 	@discardableResult
@@ -665,47 +699,55 @@ final class ShellModel: ObservableObject {
 
 		let restoredWorkspace = restoredWorkspace(from: snapshot)
 		workspaces.append(restoredWorkspace.workspace)
-		selectedWorkspaceID = restoredWorkspace.workspace.id
+		currentWorkspaceID = restoredWorkspace.workspace.id
 		paneFocusHistoryByWorkspace[restoredWorkspace.workspace.id] = [restoredWorkspace.workspace.focusedPaneID].compactMap { $0 }
 
 		for (sessionID, launchConfiguration) in restoredWorkspace.launchConfigurationsBySessionID {
-			_ = sessions.ensureSession(id: sessionID, launchConfiguration: launchConfiguration)
+			let session = sessions.ensureSession(id: sessionID, launchConfiguration: launchConfiguration)
+			session.title = restoredWorkspace.titlesBySessionID[sessionID] ?? "Shell"
+			session.currentDirectory = launchConfiguration.currentDirectory
+			session.setRestoredTranscript(restoredWorkspace.transcriptsBySessionID[sessionID])
 		}
 
 		persistence.markWorkspaceSnapshotOpened(snapshotID)
-		refreshSavedWorkspaceSnapshots()
 		schedulePersistenceSave()
 		return restoredWorkspace.workspace.id
 	}
 
 	func deleteSavedWorkspace(_ snapshotID: WorkspaceSnapshotID) {
 		persistence.deleteWorkspaceSnapshot(id: snapshotID)
-		refreshSavedWorkspaceSnapshots()
 	}
 
-	func closeSelectedWorkspace() -> CloseCommandResult {
-		guard let selectedWorkspaceID else {
-			return .closeWindow
+	func closeSelectedWorkspace() -> CloseCommandOutcome {
+		guard let currentWorkspaceID else {
+			return CloseCommandOutcome(result: .closeWindow, nextSelectedWorkspaceID: nil)
 		}
 
-		return closeWorkspace(selectedWorkspaceID)
+		return closeWorkspace(currentWorkspaceID)
 	}
 
-	func createPane() {
+	@discardableResult
+	func createPane() -> WorkspaceID? {
 		guard let workspace = selectedWorkspace else {
-			createWorkspace()
-			return
+			return createWorkspace()
 		}
 
 		if workspace.root == nil {
 			createInitialPane(in: workspace.id)
-			return
+			return workspace.id
 		}
 
 		guard let paneID = workspace.focusedPaneID ?? workspace.root?.firstLeaf()?.id else {
-			return
+			return workspace.id
 		}
 		splitPane(paneID, in: workspace.id, direction: .right)
+		return workspace.id
+	}
+
+	@discardableResult
+	func createPane(in workspaceID: WorkspaceID) -> WorkspaceID? {
+		setCurrentWorkspaceID(workspaceID)
+		return createPane()
 	}
 
 	func relaunchPane(_ paneID: PaneID, in workspaceID: WorkspaceID) {
@@ -730,30 +772,32 @@ final class ShellModel: ObservableObject {
 		relaunchPane(paneID, in: workspace.id)
 	}
 
-	func selectNextWorkspace() {
+	func selectNextWorkspace() -> WorkspaceID? {
 		guard !workspaces.isEmpty else {
-			return
+			return nil
 		}
 		guard let selectedWorkspaceIndex else {
-			selectedWorkspaceID = workspaces.first?.id
-			return
+			currentWorkspaceID = workspaces.first?.id
+			return currentWorkspaceID
 		}
 
 		let nextIndex = (selectedWorkspaceIndex + 1) % workspaces.count
-		selectedWorkspaceID = workspaces[nextIndex].id
+		currentWorkspaceID = workspaces[nextIndex].id
+		return currentWorkspaceID
 	}
 
-	func selectPreviousWorkspace() {
+	func selectPreviousWorkspace() -> WorkspaceID? {
 		guard !workspaces.isEmpty else {
-			return
+			return nil
 		}
 		guard let selectedWorkspaceIndex else {
-			selectedWorkspaceID = workspaces.last?.id
-			return
+			currentWorkspaceID = workspaces.last?.id
+			return currentWorkspaceID
 		}
 
 		let previousIndex = (selectedWorkspaceIndex - 1 + workspaces.count) % workspaces.count
-		selectedWorkspaceID = workspaces[previousIndex].id
+		currentWorkspaceID = workspaces[previousIndex].id
+		return currentWorkspaceID
 	}
 
 	func focusPane(_ paneID: PaneID, in workspaceID: WorkspaceID) {
@@ -817,6 +861,17 @@ final class ShellModel: ObservableObject {
 		splitPane(paneID, in: workspace.id, direction: direction)
 	}
 
+	func splitFocusedPane(in workspaceID: WorkspaceID, _ direction: SplitDirection) {
+		guard
+			let workspace = workspace(for: workspaceID),
+			let paneID = workspace.focusedPaneID
+		else {
+			return
+		}
+
+		splitPane(paneID, in: workspace.id, direction: direction)
+	}
+
 	func closePane(_ paneID: PaneID, in workspaceID: WorkspaceID) {
 		guard let workspaceIndex = workspaces.firstIndex(where: { $0.id == workspaceID }) else {
 			return
@@ -852,8 +907,26 @@ final class ShellModel: ObservableObject {
 	}
 
 	@discardableResult
-	func closeFocusedPane() -> CloseCommandResult {
-		performCloseCommand()
+	func closeFocusedPane() -> CloseCommandOutcome {
+		return performCloseCommand()
+	}
+
+	@discardableResult
+	func closeFocusedPane(in workspaceID: WorkspaceID) -> CloseCommandOutcome {
+		guard let workspace = workspace(for: workspaceID) else {
+			return CloseCommandOutcome(result: .noAction, nextSelectedWorkspaceID: normalizedWorkspaceSelection(currentWorkspaceID))
+		}
+
+		guard let focusedPaneID = workspace.focusedPaneID else {
+			return CloseCommandOutcome(result: .noAction, nextSelectedWorkspaceID: normalizedWorkspaceSelection(currentWorkspaceID))
+		}
+
+		if workspace.paneCount == 1 {
+			return removeWorkspace(workspace.id, closeEffects: defaultCloseEffects())
+		}
+
+		closePane(focusedPaneID, in: workspace.id)
+		return CloseCommandOutcome(result: .closedPane, nextSelectedWorkspaceID: normalizedWorkspaceSelection(currentWorkspaceID))
 	}
 
 	func movePaneFocus(_ direction: PaneFocusDirection) {
@@ -897,6 +970,18 @@ final class ShellModel: ObservableObject {
 
 	func workspace(for workspaceID: WorkspaceID) -> Workspace? {
 		workspaces.first { $0.id == workspaceID }
+	}
+
+	func focusedPane(in workspaceID: WorkspaceID) -> PaneLeaf? {
+		guard
+			let workspace = workspace(for: workspaceID),
+			let root = workspace.root,
+			let focusedPaneID = workspace.focusedPaneID
+		else {
+			return nil
+		}
+
+		return root.findPane(id: focusedPaneID)
 	}
 
 	func toggleSidebar() {
@@ -1092,6 +1177,18 @@ final class ShellModel: ObservableObject {
 }
 
 extension ShellModel {
+	private func restoredWorkspaceTitle(startingWith baseTitle: String) -> String {
+		let normalizedBaseTitle = baseTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+		let resolvedBaseTitle = normalizedBaseTitle.isEmpty ? "Workspace" : normalizedBaseTitle
+		let existingTitles = Set(workspaces.map(\.title))
+		guard existingTitles.contains(resolvedBaseTitle) else {
+			return resolvedBaseTitle
+		}
+
+		let openedTimestamp = Date.now.formatted(date: .omitted, time: .shortened)
+		return uniqueWorkspaceTitle(startingWith: "\(resolvedBaseTitle) (Opened \(openedTimestamp))")
+	}
+
 	private func uniqueWorkspaceTitle(startingWith baseTitle: String) -> String {
 		let normalizedBaseTitle = baseTitle.trimmingCharacters(in: .whitespacesAndNewlines)
 		let resolvedBaseTitle = normalizedBaseTitle.isEmpty ? "Workspace" : normalizedBaseTitle
@@ -1224,27 +1321,34 @@ extension ShellModel {
 		let launchConfigurationsBySessionID: [TerminalSessionID: TerminalLaunchConfiguration]
 	}
 
+	private struct WorkspaceCloseEffects {
+		let recordRecentlyClosed: Bool
+		let saveToLibrary: Bool
+	}
+
 	private struct RestoredWorkspace {
 		let workspace: Workspace
 		let launchConfigurationsBySessionID: [TerminalSessionID: TerminalLaunchConfiguration]
+		let transcriptsBySessionID: [TerminalSessionID: String]
+		let titlesBySessionID: [TerminalSessionID: String]
 	}
 
-	func performCloseCommand() -> CloseCommandResult {
+	func performCloseCommand() -> CloseCommandOutcome {
 		guard let workspaceIndex = selectedWorkspaceIndex else {
-			return .closeWindow
+			return CloseCommandOutcome(result: .closeWindow, nextSelectedWorkspaceID: nil)
 		}
 
 		let workspace = workspaces[workspaceIndex]
 		guard let focusedPaneID = workspace.focusedPaneID else {
-			return .noAction
+			return CloseCommandOutcome(result: .noAction, nextSelectedWorkspaceID: currentWorkspaceID)
 		}
 
 		if workspace.paneCount == 1 {
-			return removeWorkspace(workspace.id, trackingRecentlyClosedWorkspace: true)
+			return removeWorkspace(workspace.id, closeEffects: defaultCloseEffects())
 		}
 
 		closePane(focusedPaneID, in: workspace.id)
-		return .closedPane
+		return CloseCommandOutcome(result: .closedPane, nextSelectedWorkspaceID: currentWorkspaceID)
 	}
 
 	private func schedulePersistenceSave() {
@@ -1262,22 +1366,35 @@ extension ShellModel {
 	@discardableResult
 	private func removeWorkspace(
 		_ workspaceID: WorkspaceID,
-		trackingRecentlyClosedWorkspace: Bool
-	) -> CloseCommandResult {
+		closeEffects: WorkspaceCloseEffects,
+		explicitTranscriptsBySessionID: [TerminalSessionID: String] = [:]
+	) -> CloseCommandOutcome {
 		guard let workspaceIndex = workspaces.firstIndex(where: { $0.id == workspaceID }) else {
-			return .noAction
+			return CloseCommandOutcome(result: .noAction, nextSelectedWorkspaceID: currentWorkspaceID)
 		}
 
 		if workspaces.count == 1 {
-			return .closeWindow
+			return CloseCommandOutcome(result: .closeWindow, nextSelectedWorkspaceID: nil)
 		}
 
 		let workspace = workspaces[workspaceIndex]
-		if trackingRecentlyClosedWorkspace {
+		if closeEffects.saveToLibrary {
+			let resolvedTranscripts = snapshotTranscripts(
+				for: workspace,
+				explicitTranscriptsBySessionID: explicitTranscriptsBySessionID
+			)
+			_ = persistence.createWorkspaceSnapshot(
+				from: workspace,
+				sessions: sessions,
+				transcriptsBySessionID: resolvedTranscripts
+			)
+		}
+
+		if closeEffects.recordRecentlyClosed {
 			recordRecentlyClosedWorkspace(workspace, formerIndex: workspaceIndex)
 		}
 
-		let wasSelectedWorkspace = selectedWorkspaceID == workspaceID
+		let wasSelectedWorkspace = currentWorkspaceID == workspaceID
 		workspaces.remove(at: workspaceIndex)
 		paneFramesByWorkspace.removeValue(forKey: workspaceID)
 		paneFocusHistoryByWorkspace.removeValue(forKey: workspaceID)
@@ -1285,11 +1402,25 @@ extension ShellModel {
 
 		if wasSelectedWorkspace {
 			let nextIndex = min(workspaceIndex, workspaces.count - 1)
-			selectedWorkspaceID = workspaces[nextIndex].id
+			currentWorkspaceID = workspaces[nextIndex].id
 		}
 
 		schedulePersistenceSave()
-		return .closedWorkspace
+		return CloseCommandOutcome(
+			result: .closedWorkspace,
+			nextSelectedWorkspaceID: normalizedWorkspaceSelection(currentWorkspaceID)
+		)
+	}
+
+	private func defaultCloseEffects(defaults: UserDefaults = .standard) -> WorkspaceCloseEffects {
+		WorkspaceCloseEffects(
+			recordRecentlyClosed: defaults.bool(
+				forKey: WorkspacePersistenceDefaults.keepRecentlyClosedWorkspacesKey
+			),
+			saveToLibrary: defaults.bool(
+				forKey: WorkspacePersistenceDefaults.autoSaveClosedWorkspacesKey
+			)
+		)
 	}
 
 	private func recordRecentlyClosedWorkspace(_ workspace: Workspace, formerIndex: Int) {
@@ -1326,8 +1457,30 @@ extension ShellModel {
 		recentlyClosedWorkspaceCount = recentlyClosedWorkspaces.count
 	}
 
+	private func snapshotTranscripts(
+		for workspace: Workspace,
+		explicitTranscriptsBySessionID: [TerminalSessionID: String]
+	) -> [TerminalSessionID: String] {
+		var resolvedTranscripts = explicitTranscriptsBySessionID
+
+		for leaf in workspace.paneLeaves where resolvedTranscripts[leaf.sessionID] == nil {
+			guard
+				let controller = paneControllers.existingController(for: leaf.id),
+				let transcript = controller.captureTranscript()
+			else {
+				continue
+			}
+
+			resolvedTranscripts[leaf.sessionID] = transcript
+		}
+
+		return resolvedTranscripts
+	}
+
 	private func restoredWorkspace(from snapshot: SavedWorkspaceSnapshot) -> RestoredWorkspace {
 		var launchConfigurationsBySessionID: [TerminalSessionID: TerminalLaunchConfiguration] = [:]
+		var transcriptsBySessionID: [TerminalSessionID: String] = [:]
+		var titlesBySessionID: [TerminalSessionID: String] = [:]
 		var restoredFocusedPaneID: PaneID?
 		let restoredRoot = snapshot.workspace.root.map {
 			restoreNode(
@@ -1335,19 +1488,23 @@ extension ShellModel {
 				focusedPaneID: snapshot.workspace.focusedPaneID,
 				paneSnapshotsBySessionID: snapshot.paneSnapshotsBySessionID,
 				launchConfigurationsBySessionID: &launchConfigurationsBySessionID,
+				transcriptsBySessionID: &transcriptsBySessionID,
+				titlesBySessionID: &titlesBySessionID,
 				restoredFocusedPaneID: &restoredFocusedPaneID
 			)
 		}
 
 		let workspace = Workspace(
-			title: uniqueWorkspaceTitle(startingWith: snapshot.title),
+			title: restoredWorkspaceTitle(startingWith: snapshot.title),
 			root: restoredRoot,
 			focusedPaneID: restoredFocusedPaneID
 		)
 
 		return RestoredWorkspace(
 			workspace: workspace,
-			launchConfigurationsBySessionID: launchConfigurationsBySessionID
+			launchConfigurationsBySessionID: launchConfigurationsBySessionID,
+			transcriptsBySessionID: transcriptsBySessionID,
+			titlesBySessionID: titlesBySessionID
 		)
 	}
 
@@ -1356,14 +1513,23 @@ extension ShellModel {
 		focusedPaneID: PaneID?,
 		paneSnapshotsBySessionID: [TerminalSessionID: SavedPaneSessionSnapshot],
 		launchConfigurationsBySessionID: inout [TerminalSessionID: TerminalLaunchConfiguration],
+		transcriptsBySessionID: inout [TerminalSessionID: String],
+		titlesBySessionID: inout [TerminalSessionID: String],
 		restoredFocusedPaneID: inout PaneID?
 	) -> PaneNode {
 		switch node {
 			case .leaf(let leaf):
 				let restoredLeaf = PaneLeaf()
-				let launchConfiguration = paneSnapshotsBySessionID[leaf.sessionID]?.launchConfiguration
+				let paneSnapshot = paneSnapshotsBySessionID[leaf.sessionID]
+				let launchConfiguration = paneSnapshot?.launchConfiguration
 					?? launchContextBuilder.makeLaunchConfiguration()
 				launchConfigurationsBySessionID[restoredLeaf.sessionID] = launchConfiguration
+				if let transcript = paneSnapshot?.transcript {
+					transcriptsBySessionID[restoredLeaf.sessionID] = transcript
+				}
+				if let title = paneSnapshot?.title {
+					titlesBySessionID[restoredLeaf.sessionID] = title
+				}
 				if leaf.id == focusedPaneID {
 					restoredFocusedPaneID = restoredLeaf.id
 				}
@@ -1379,6 +1545,8 @@ extension ShellModel {
 							focusedPaneID: focusedPaneID,
 							paneSnapshotsBySessionID: paneSnapshotsBySessionID,
 							launchConfigurationsBySessionID: &launchConfigurationsBySessionID,
+							transcriptsBySessionID: &transcriptsBySessionID,
+							titlesBySessionID: &titlesBySessionID,
 							restoredFocusedPaneID: &restoredFocusedPaneID
 						),
 						second: restoreNode(
@@ -1386,6 +1554,8 @@ extension ShellModel {
 							focusedPaneID: focusedPaneID,
 							paneSnapshotsBySessionID: paneSnapshotsBySessionID,
 							launchConfigurationsBySessionID: &launchConfigurationsBySessionID,
+							transcriptsBySessionID: &transcriptsBySessionID,
+							titlesBySessionID: &titlesBySessionID,
 							restoredFocusedPaneID: &restoredFocusedPaneID
 						)
 					)

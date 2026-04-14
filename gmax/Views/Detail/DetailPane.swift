@@ -10,32 +10,35 @@ import SwiftUI
 
 struct DetailPane: View {
 	@ObservedObject var model: ShellModel
+	@Binding var selectedWorkspaceID: WorkspaceID?
 
 	var body: some View {
-		if let workspace = model.selectedWorkspace,
-		   let pane = model.focusedPane,
+		if let workspace = selectedWorkspaceID.flatMap(model.workspace(for:)),
+		   let pane = model.focusedPane(in: workspace.id),
 		   let session = model.sessions.session(for: pane.sessionID) {
-				ActivePaneDetails(
-					workspaceTitle: workspace.title,
+					ActivePaneDetails(
+						workspaceTitle: workspace.title,
 					pane: pane,
-					session: session,
-					onRelaunch: { model.relaunchPane(pane.id, in: workspace.id) },
-					onSplitRight: { model.splitFocusedPane(.right) },
-					onSplitDown: { model.splitFocusedPane(.down) },
-					onClose: {
-						if model.closeFocusedPane() == .closeWindow {
-							NSApp.keyWindow?.performClose(nil)
+						session: session,
+						onRelaunch: { model.relaunchPane(pane.id, in: workspace.id) },
+						onSplitRight: { model.splitFocusedPane(in: workspace.id, .right) },
+						onSplitDown: { model.splitFocusedPane(in: workspace.id, .down) },
+						onClose: {
+							let outcome = model.closeFocusedPane(in: workspace.id)
+							selectedWorkspaceID = outcome.nextSelectedWorkspaceID
+							if outcome.result == .closeWindow {
+								NSApp.keyWindow?.performClose(nil)
+							}
 						}
+					)
+			} else if let workspace = selectedWorkspaceID.flatMap(model.workspace(for:)) {
+				WorkspaceDetails(
+					workspaceTitle: workspace.title,
+					paneCount: workspace.paneCount,
+					onStartShell: {
+						selectedWorkspaceID = model.createPane(in: workspace.id)
 					}
 				)
-		} else if let workspace = model.selectedWorkspace {
-			WorkspaceDetails(
-				workspaceTitle: workspace.title,
-				paneCount: workspace.paneCount,
-				onStartShell: {
-					model.createPane()
-				}
-			)
 		} else {
 			ContentUnavailableView("No Active Pane", systemImage: "rectangle.on.rectangle")
 		}
@@ -161,5 +164,5 @@ private struct WorkspaceDetails: View {
 }
 
 #Preview {
-	DetailPane(model: ShellModel())
+	DetailPane(model: ShellModel(), selectedWorkspaceID: .constant(nil))
 }

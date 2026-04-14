@@ -26,6 +26,9 @@ struct SettingsUtilityWindow: View {
 	@AppStorage(WorkspacePersistenceDefaults.keepRecentlyClosedWorkspacesKey)
 	private var keepRecentlyClosedWorkspaces = true
 
+	@AppStorage(WorkspacePersistenceDefaults.autoSaveClosedWorkspacesKey)
+	private var autoSaveClosedWorkspaces = false
+
 	private let availableFonts = TerminalAppearance.availableFontOptions()
 
 	var body: some View {
@@ -65,11 +68,16 @@ struct SettingsUtilityWindow: View {
 				Toggle("Keep recently closed workspaces", isOn: $keepRecentlyClosedWorkspaces)
 					.onChange(of: keepRecentlyClosedWorkspaces) { _, isEnabled in
 						if !isEnabled {
-							model.clearRecentlyClosedWorkspaces()
+							Task { @MainActor in
+								await Task.yield()
+								model.clearRecentlyClosedWorkspaces()
+							}
 						}
 					}
 
-				Text("Restore applies the next time you launch gmax. Recently closed workspaces stay in-memory only for this running session.")
+				Toggle("Auto-save closed workspaces", isOn: $autoSaveClosedWorkspaces)
+
+				Text("Restore applies the next time you launch gmax. Recently closed workspaces stay in-memory only for this running session. Auto-save closed workspaces sends anything you close into the saved workspace library automatically.")
 					.font(.caption)
 					.foregroundStyle(.secondary)
 			}

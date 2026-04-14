@@ -9,12 +9,13 @@ import SwiftUI
 
 struct SidebarPane: View {
 	@ObservedObject var model: ShellModel
+	@Binding var selection: WorkspaceID?
 	@State private var workspacePendingRename: Workspace?
 	@State private var workspacePendingDeletion: Workspace?
 	@State private var workspaceTitleDraft = ""
 
 	var body: some View {
-		List(selection: selectedWorkspaceBinding) {
+		List(selection: $selection) {
 			ForEach(model.workspaces) { workspace in
 				workspaceRow(for: workspace)
 					.tag(workspace.id)
@@ -26,25 +27,27 @@ struct SidebarPane: View {
 		.navigationTitle("Workspaces")
 		.toolbar {
 			ToolbarItem(placement: .automatic) {
-				if let workspace = model.selectedWorkspace {
+				if let workspace = selectedWorkspace {
 					Menu {
-						workspaceActions(for: workspace)
+						sidebarWorkspaceActions(for: workspace)
 					} label: {
 						Label("Workspace Actions", systemImage: "ellipsis.circle")
 					}
+					.help("Show contextual workspace actions")
 				}
 			}
 		}
-		.sheet(item: $workspacePendingRename) { workspace in
-			WorkspaceRenameSheet(
-				title: $workspaceTitleDraft,
+			.sheet(item: $workspacePendingRename) { workspace in
+				WorkspaceRenameSheet(
+					title: $workspaceTitleDraft,
 				onCancel: {
 					workspacePendingRename = nil
-				},
-				onSave: {
-					model.renameWorkspace(workspace.id, to: workspaceTitleDraft)
-					workspacePendingRename = nil
-				}
+					},
+					onSave: {
+						model.renameWorkspace(workspace.id, to: workspaceTitleDraft)
+						selection = workspace.id
+						workspacePendingRename = nil
+					}
 			)
 		}
 		.alert(
@@ -62,18 +65,23 @@ struct SidebarPane: View {
 		} message: { workspace in
 			Text("Delete “\(workspace.title)” and close all panes inside it? This action keeps the remaining workspaces intact.")
 		}
+		.onReceive(NotificationCenter.default.publisher(for: .presentWorkspaceRenameSheet)) { notification in
+			guard
+				let workspaceID = notification.object as? WorkspaceID,
+				let workspace = model.workspace(for: workspaceID)
+			else {
+				return
+			}
+
+			workspaceTitleDraft = workspace.title
+			workspacePendingRename = workspace
+			selection = workspace.id
+		}
 	}
 
-	private var selectedWorkspaceBinding: Binding<WorkspaceID?> {
-		Binding(
-			get: { model.selectedWorkspaceID },
-			set: { newValue in
-				guard let newValue else {
-					return
-				}
-				model.selectWorkspace(newValue)
-			}
-			)
+	private var selectedWorkspace: Workspace? {
+		selection.flatMap(model.workspace(for:))
+			?? model.workspaces.first
 	}
 
 	private var deleteWorkspaceAlertBinding: Binding<Bool> {
@@ -104,16 +112,71 @@ struct SidebarPane: View {
 			workspacePendingRename = workspace
 		}
 
+			Button("Duplicate Workspace Layout") {
+				Task { @MainActor in
+					await Task.yield()
+					selection = model.duplicateWorkspace(workspace.id)
+				}
+			}
+
+		Divider()
+
+			Button("Save Workspace") {
+				Task { @MainActor in
+					await Task.yield()
+					_ = model.saveWorkspaceToLibrary(workspace.id)
+				}
+			}
+
+			Button("Close Workspace to Library") {
+				Task { @MainActor in
+					await Task.yield()
+					selection = model.closeWorkspaceToLibrary(workspace.id).nextSelectedWorkspaceID
+				}
+			}
+		.disabled(model.workspaces.count == 1)
+
+		Divider()
+
+			Button("Close Workspace") {
+				Task { @MainActor in
+					await Task.yield()
+					selection = model.closeWorkspace(workspace.id).nextSelectedWorkspaceID
+				}
+			}
+		.disabled(model.workspaces.count == 1)
+
+		Button("Delete Workspace", role: .destructive) {
+			workspacePendingDeletion = workspace
+		}
+		.disabled(!model.canDeleteWorkspace(workspace.id))
+	}
+
+	@ViewBuilder
+	private func sidebarWorkspaceActions(for workspace: Workspace) -> some View {
+		Button("Rename Workspace") {
+			workspaceTitleDraft = workspace.title
+			workspacePendingRename = workspace
+		}
+
 		Button("Duplicate Workspace Layout") {
-			model.duplicateWorkspace(workspace.id)
+			Task { @MainActor in
+				await Task.yield()
+				selection = model.duplicateWorkspace(workspace.id)
+			}
 		}
 
 		Divider()
 
-		Button("Close Workspace") {
-			_ = model.closeWorkspace(workspace.id)
+		Button("Close Workspace to Library") {
+			Task { @MainActor in
+				await Task.yield()
+				selection = model.closeWorkspaceToLibrary(workspace.id).nextSelectedWorkspaceID
+			}
 		}
 		.disabled(model.workspaces.count == 1)
+
+		Divider()
 
 		Button("Delete Workspace", role: .destructive) {
 			workspacePendingDeletion = workspace
@@ -129,6 +192,7 @@ struct SidebarPane: View {
 				return "\(workspace.paneCount) panes"
 		}
 	}
+
 }
 
 private struct WorkspaceRenameSheet: View {
@@ -168,5 +232,5 @@ private struct WorkspaceRenameSheet: View {
 }
 
 #Preview {
-	SidebarPane(model: ShellModel())
+	SidebarPane(model: ShellModel(), selection: .constant(nil))
 }

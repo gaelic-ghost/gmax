@@ -7,6 +7,7 @@
 
 import Foundation
 import Combine
+import SwiftTerm
 
 struct TerminalLaunchConfiguration: Hashable, Codable {
 	var executable: String
@@ -39,6 +40,7 @@ final class TerminalSession: ObservableObject, Identifiable {
 	@Published var currentDirectory: String?
 	@Published var state: TerminalSessionState
 	@Published private(set) var relaunchGeneration: Int
+	private var pendingRestoredTranscript: String?
 
 	init(
 		id: TerminalSessionID,
@@ -58,8 +60,22 @@ final class TerminalSession: ObservableObject, Identifiable {
 
 	func prepareForRelaunch() {
 		title = "Shell"
+		currentDirectory = launchConfiguration.currentDirectory
 		state = .idle
+		pendingRestoredTranscript = nil
 		relaunchGeneration += 1
+	}
+
+	func setRestoredTranscript(_ transcript: String?) {
+		let normalizedTranscript = transcript?
+			.trimmingCharacters(in: .whitespacesAndNewlines)
+		pendingRestoredTranscript = normalizedTranscript?.isEmpty == false ? transcript : nil
+	}
+
+	func consumeRestoredTranscript() -> String? {
+		let transcript = pendingRestoredTranscript
+		pendingRestoredTranscript = nil
+		return transcript
 	}
 }
 
@@ -129,15 +145,64 @@ final class TerminalPaneControllerStore {
 	func removeControllers(notIn retainedPaneIDs: Set<PaneID>) {
 		controllersByPaneID = controllersByPaneID.filter { retainedPaneIDs.contains($0.key) }
 	}
+
+	func existingController(for paneID: PaneID) -> TerminalPaneController? {
+		controllersByPaneID[paneID]
+	}
 }
 
 @MainActor
 final class TerminalPaneController: ObservableObject {
 	let paneID: PaneID
 	let session: TerminalSession
+	private weak var terminalView: LocalProcessTerminalView?
 
 	init(paneID: PaneID, session: TerminalSession) {
 		self.paneID = paneID
 		self.session = session
+	}
+
+	func attach(terminalView: LocalProcessTerminalView) {
+		self.terminalView = terminalView
+	}
+
+	func detach(terminalView: LocalProcessTerminalView) {
+		guard self.terminalView === terminalView else {
+			return
+		}
+		self.terminalView = nil
+	}
+
+	func restoreTranscriptIfNeeded(into terminalView: LocalProcessTerminalView) {
+		guard let transcript = session.consumeRestoredTranscript() else {
+			return
+		}
+
+		let bytes = ArraySlice(Array(transcript.utf8))
+		guard !bytes.isEmpty else {
+			return
+		}
+
+		terminalView.feed(byteArray: bytes)
+	}
+
+	func captureTranscript() -> String? {
+		guard let terminalView else {
+			return nil
+		}
+
+		let transcriptData = terminalView
+			.getTerminal()
+			.getBufferAsData(kind: .normal, encoding: .utf8)
+
+		guard
+			!transcriptData.isEmpty,
+			let transcript = String(data: transcriptData, encoding: .utf8)
+		else {
+			return nil
+		}
+
+		let normalizedTranscript = transcript.trimmingCharacters(in: .newlines)
+		return normalizedTranscript.isEmpty ? nil : transcript
 	}
 }
