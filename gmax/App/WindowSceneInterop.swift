@@ -85,7 +85,7 @@ struct WindowCloseConfirmationAccessor: NSViewRepresentable {
 			let alert = NSAlert()
 			alert.alertStyle = .warning
 			alert.messageText = "Quit gmax?"
-			alert.informativeText = "Closing the last pane will also close gmax. Are you sure you want to continue?"
+			alert.informativeText = "Closing the last open pane will quit gmax for this session window. Quit now, or cancel and keep the pane open."
 			alert.addButton(withTitle: "Quit")
 			alert.addButton(withTitle: "Cancel")
 			alert.beginSheetModal(for: sender) { [weak self] response in

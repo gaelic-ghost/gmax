@@ -26,7 +26,11 @@ struct DetailPane: View {
 				paneCount: workspace.paneCount
 			)
 		} else {
-			ContentUnavailableView("No Active Pane", systemImage: "rectangle.on.rectangle")
+			ContentUnavailableView {
+				Label("No Workspace Selected", systemImage: "rectangle.on.rectangle")
+			} description: {
+				Text("Choose a workspace and focus a pane to inspect its live shell session here.")
+			}
 		}
 	}
 }

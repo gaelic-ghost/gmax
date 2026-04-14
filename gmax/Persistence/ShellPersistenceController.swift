@@ -60,7 +60,7 @@ final class ShellPersistenceController {
 				return Self.normalizedWorkspace(workspace, logger: logger)
 			}
 		} catch {
-			logger.error("Core Data failed to load saved workspaces. The app will continue with default workspace state. Error: \(String(describing: error), privacy: .public)")
+			logger.error("Core Data could not read the saved-workspace list from the shell store. The app will continue with default workspace state for this launch. Error: \(String(describing: error), privacy: .public)")
 			return []
 		}
 	}
@@ -105,7 +105,7 @@ final class ShellPersistenceController {
 					try context.save()
 				}
 			} catch {
-				logger.error("Core Data failed to save shell workspace state. The current session remains live, but the last change was not persisted. Error: \(String(describing: error), privacy: .public)")
+				logger.error("Core Data could not save the latest shell workspace state. The current session remains live, but the last workspace change was not persisted to disk. Error: \(String(describing: error), privacy: .public)")
 				context.rollback()
 			}
 		}

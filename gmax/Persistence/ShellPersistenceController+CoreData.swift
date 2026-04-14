@@ -18,7 +18,7 @@ extension ShellPersistenceController {
 			try fileManager.createDirectory(at: directoryURL, withIntermediateDirectories: true)
 		} catch {
 			Logger.gmax(.persistence)
-				.error("Failed to create the Application Support directory for shell persistence. The store may fail to load. Directory: \(directoryURL.path, privacy: .public). Error: \(String(describing: error), privacy: .public)")
+				.error("The app could not create the Application Support directory for shell persistence. The SQLite store may fail to open on this launch. Directory: \(directoryURL.path, privacy: .public). Error: \(String(describing: error), privacy: .public)")
 		}
 		return directoryURL.appendingPathComponent("ShellStore.sqlite")
 	}
@@ -89,7 +89,7 @@ extension ShellPersistenceController {
 		semaphore.wait()
 
 		if let loadError {
-			logger.error("Core Data failed to load a shell persistent store description. Error: \(String(describing: loadError), privacy: .public)")
+			logger.error("Core Data could not load a shell persistent store description. The store described by this container will remain unavailable for this launch. Error: \(String(describing: loadError), privacy: .public)")
 			return false
 		}
 

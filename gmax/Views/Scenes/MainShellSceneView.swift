@@ -82,7 +82,7 @@ struct MainShellSceneView: View {
 			}
 			.accessibilityIdentifier("sidebar.deleteWorkspaceCancelButton")
 		} message: { workspace in
-			Text("Delete “\(workspace.title)” and close all panes inside it? This action keeps the remaining workspaces intact.")
+			Text("Delete “\(workspace.title)” and close every pane in it? Your other workspaces stay open.")
 		}
 		.focusedSceneValue(\.mainShellSceneContext, sceneContext)
 		.focusedSceneValue(\.mainShellSceneCommandState, sceneContext.commandState)
