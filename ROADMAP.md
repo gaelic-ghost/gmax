@@ -57,6 +57,15 @@ Build `gmax` into a finished macOS terminal workspace app:
 - [ ] Integrate SpeakSwiftly for in-process custom TTS and STT
 - [ ] Evaluate small fine-tunes of FunctionGemma and STT for Voice Commands
 
+## Milestone 3A: SwiftTerm Accessibility Upstream Work
+
+- [ ] Validate current SwiftTerm accessibility behavior under VoiceOver and Full Keyboard Access outside `gmax`-specific pane chrome
+- [ ] Identify the smallest macOS accessibility gaps in SwiftTerm's `TerminalView` and `LocalProcessTerminalView`
+- [ ] Prototype upstream-safe AppKit accessibility improvements that do not depend on `gmax` pane metadata or app-specific actions
+- [ ] Replace or deepen the currently limited macOS accessibility-service implementation in SwiftTerm where the gap is real and reproducible
+- [ ] Split app-local accessibility affordances from package-level terminal accessibility fixes so upstream scope stays clean
+- [ ] Prepare an isolated patch series and reproduction notes suitable for a SwiftTerm upstream contribution
+
 ## Milestone 4: Preferences and Customization
 
 - [x] Add app settings window
