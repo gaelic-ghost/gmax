@@ -103,7 +103,7 @@ struct gmaxTests {
 		let firstSession = model.sessions.ensureSession(id: firstPane.sessionID)
 		firstSession.currentDirectory = "/tmp/restored-workspace"
 
-		model.closeWorkspace(firstWorkspace.id)
+		_ = model.closeWorkspace(firstWorkspace.id)
 		let reopenedWorkspaceID = model.undoCloseWorkspace()
 
 		#expect(model.workspaces.count == 2)
