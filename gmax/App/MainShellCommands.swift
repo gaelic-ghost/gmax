@@ -109,13 +109,6 @@ struct MainShellCommands: Commands {
 		}
 
 		CommandMenu("Pane") {
-			Button("New Pane") {
-				sceneContext?.createPane()
-			}
-			.keyboardShortcut("t", modifiers: [.command])
-
-			Divider()
-
 			Button("Move Focus Left") {
 				sceneContext?.movePaneFocus(.left)
 			}
@@ -148,17 +141,19 @@ struct MainShellCommands: Commands {
 			}
 			.keyboardShortcut("[", modifiers: [.command, .option])
 
-			Divider()
+			Section("New Pane") {
+				Button("Split Right") {
+					sceneContext?.splitFocusedPane(.right)
+				}
+				.keyboardShortcut("d", modifiers: [.command])
+				.disabled(!(commandState?.canSplitFocusedPane ?? false))
 
-			Button("Split Right") {
-				sceneContext?.splitFocusedPane(.right)
+				Button("Split Down") {
+					sceneContext?.splitFocusedPane(.down)
+				}
+				.keyboardShortcut("d", modifiers: [.command, .shift])
+				.disabled(!(commandState?.canSplitFocusedPane ?? false))
 			}
-			.keyboardShortcut("d", modifiers: [.command])
-
-			Button("Split Down") {
-				sceneContext?.splitFocusedPane(.down)
-			}
-			.keyboardShortcut("d", modifiers: [.command, .shift])
 		}
 	}
 }

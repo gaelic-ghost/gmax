@@ -5,7 +5,6 @@
 //  Created by Codex on 4/14/26.
 //
 
-import OSLog
 import SwiftUI
 
 struct MainShellSceneView: View {
@@ -18,9 +17,9 @@ struct MainShellSceneView: View {
 
 	private let sidebarColumnWidth: CGFloat = 220
 	private let contentColumnIdealWidth: CGFloat = 920
-	private let detailColumnMinimumWidth: CGFloat = 220
-	private let detailColumnIdealWidth: CGFloat = 260
-	private let detailColumnMaximumWidth: CGFloat = 340
+	private let inspectorColumnMinimumWidth: CGFloat = 220
+	private let inspectorColumnIdealWidth: CGFloat = 260
+	private let inspectorColumnMaximumWidth: CGFloat = 340
 
 	init(shellModel: ShellModel) {
 		self.shellModel = shellModel
@@ -44,21 +43,17 @@ struct MainShellSceneView: View {
 				}
 			)
 				.navigationSplitViewColumnWidth(sidebarColumnWidth)
-		} content: {
+		} detail: {
 			ContentPane(model: shellModel, selectedWorkspaceID: selectedWorkspaceID)
 				.navigationSplitViewColumnWidth(min: 640, ideal: contentColumnIdealWidth)
-		} detail: {
-			if sceneContext.isInspectorVisible {
-				DetailPane(model: shellModel, selectedWorkspaceID: selectedWorkspaceID)
-					.navigationSplitViewColumnWidth(
-						min: detailColumnMinimumWidth,
-						ideal: detailColumnIdealWidth,
-						max: detailColumnMaximumWidth
-					)
-			} else {
-				Color.clear
-					.navigationSplitViewColumnWidth(0)
-			}
+		}
+		.inspector(isPresented: $bindableSceneContext.isInspectorVisible) {
+			DetailPane(model: shellModel, selectedWorkspaceID: selectedWorkspaceID)
+				.inspectorColumnWidth(
+					min: inspectorColumnMinimumWidth,
+					ideal: inspectorColumnIdealWidth,
+					max: inspectorColumnMaximumWidth
+				)
 		}
 		.windowRole(.mainShell)
 		.windowCloseConfirmation(
@@ -94,15 +89,6 @@ struct MainShellSceneView: View {
 		.toolbar {
 			ToolbarItem(placement: .navigation) {
 				Button {
-					sceneContext.createWorkspace()
-				} label: {
-					Label("New Workspace", systemImage: "plus.rectangle.on.rectangle")
-				}
-				.accessibilityIdentifier("mainShell.newWorkspaceButton")
-			}
-
-			ToolbarItem(placement: .automatic) {
-				Button {
 					sceneContext.openSavedWorkspaceLibrary()
 				} label: {
 					Label("Open Saved Workspaces", systemImage: "folder")
@@ -111,16 +97,32 @@ struct MainShellSceneView: View {
 				.accessibilityIdentifier("mainShell.openSavedWorkspacesButton")
 			}
 
-			ToolbarItem(placement: .automatic) {
+			ToolbarItem(placement: .navigation) {
 				Button {
-					sceneContext.createPane()
+					sceneContext.createWorkspace()
 				} label: {
-					Label("New Pane", systemImage: "uiwindow.split.2x1")
+					Label("New Workspace", systemImage: "plus.rectangle.on.rectangle")
 				}
-				.accessibilityIdentifier("mainShell.newPaneButton")
+				.accessibilityIdentifier("mainShell.newWorkspaceButton")
 			}
 
-			ToolbarItem(placement: .automatic) {
+			ToolbarItemGroup(placement: .primaryAction) {
+				Button {
+					sceneContext.splitFocusedPane(.right)
+				} label: {
+					Label("Split Right", systemImage: "uiwindow.split.2x1")
+				}
+				.disabled(!sceneContext.canSplitFocusedPane)
+				.accessibilityIdentifier("mainShell.splitRightButton")
+
+				Button {
+					sceneContext.splitFocusedPane(.down)
+				} label: {
+					Label("Split Down", systemImage: "uiwindow.split.2x1.rotate.90")
+				}
+				.disabled(!sceneContext.canSplitFocusedPane)
+				.accessibilityIdentifier("mainShell.splitDownButton")
+
 				Button {
 					sceneContext.toggleInspector()
 				} label: {

@@ -42,10 +42,11 @@ Build `gmax` into a finished macOS terminal workspace app:
 ## Milestone 2: Terminal Product UX
 
 - [ ] Replace scaffold-style pane controls with intentional terminal-native chrome
-- [x] Add contextual pane actions in the inspector
+- [x] Keep the inspector focused on pane and workspace metadata instead of duplicating primary pane actions
 - [x] Surface session title, cwd, process state, and exit state more clearly
 - [ ] Improve close, focus, and split animations so the shell feels calmer
 - [ ] Add configurable startup behavior for new panes and new workspaces
+- [ ] Add pane-local tabs and reserve `cmd-t` for `New Tab` once the tab model exists
 - [x] Add support for opening multiple windows cleanly
 - [x] Add better handling for dead or exited shell sessions
 

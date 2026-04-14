@@ -5,7 +5,6 @@
 //  Created by Gale Williams on 4/6/26.
 //
 
-import AppKit
 import SwiftUI
 
 struct DetailPane: View {
@@ -16,29 +15,16 @@ struct DetailPane: View {
 		if let workspace = selectedWorkspaceID.flatMap(model.workspace(for:)),
 		   let pane = model.focusedPane(in: workspace.id),
 		   let session = model.sessions.session(for: pane.sessionID) {
-					ActivePaneDetails(
-						workspaceTitle: workspace.title,
-					pane: pane,
-						session: session,
-						onRelaunch: { model.relaunchPane(pane.id, in: workspace.id) },
-						onSplitRight: { model.splitFocusedPane(in: workspace.id, .right) },
-						onSplitDown: { model.splitFocusedPane(in: workspace.id, .down) },
-						onClose: {
-							let outcome = model.closeFocusedPane(in: workspace.id)
-							selectedWorkspaceID = outcome.nextSelectedWorkspaceID
-							if outcome.result == .closeWindow {
-								NSApp.keyWindow?.performClose(nil)
-							}
-						}
-					)
-			} else if let workspace = selectedWorkspaceID.flatMap(model.workspace(for:)) {
-				WorkspaceDetails(
-					workspaceTitle: workspace.title,
-					paneCount: workspace.paneCount,
-					onStartShell: {
-						selectedWorkspaceID = model.createPane(in: workspace.id)
-					}
-				)
+			ActivePaneDetails(
+				workspaceTitle: workspace.title,
+				pane: pane,
+				session: session
+			)
+		} else if let workspace = selectedWorkspaceID.flatMap(model.workspace(for:)) {
+			WorkspaceDetails(
+				workspaceTitle: workspace.title,
+				paneCount: workspace.paneCount
+			)
 		} else {
 			ContentUnavailableView("No Active Pane", systemImage: "rectangle.on.rectangle")
 		}
@@ -49,30 +35,11 @@ private struct ActivePaneDetails: View {
 	let workspaceTitle: String
 	let pane: PaneLeaf
 	@ObservedObject var session: TerminalSession
-	let onRelaunch: () -> Void
-	let onSplitRight: () -> Void
-	let onSplitDown: () -> Void
-	let onClose: () -> Void
 
 	var body: some View {
 		VStack(alignment: .leading, spacing: 16) {
 			Text("Active Pane")
 				.font(.title2.weight(.semibold))
-
-			VStack(alignment: .leading, spacing: 10) {
-				Text("Actions")
-					.font(.caption.weight(.semibold))
-					.foregroundStyle(.secondary)
-
-				HStack {
-					Button("Restart Shell", action: onRelaunch)
-						.disabled(session.state == .running)
-					Button("Split Right", action: onSplitRight)
-					Button("Split Down", action: onSplitDown)
-					Button("Close Pane", action: onClose)
-				}
-				.buttonStyle(.bordered)
-			}
 
 			Group {
 				labelValue("Workspace", workspaceTitle)
@@ -118,21 +85,11 @@ private struct ActivePaneDetails: View {
 private struct WorkspaceDetails: View {
 	let workspaceTitle: String
 	let paneCount: Int
-	let onStartShell: () -> Void
 
 	var body: some View {
 		VStack(alignment: .leading, spacing: 16) {
 			Text("Workspace")
 				.font(.title2.weight(.semibold))
-
-			VStack(alignment: .leading, spacing: 10) {
-				Text("Actions")
-					.font(.caption.weight(.semibold))
-					.foregroundStyle(.secondary)
-
-				Button("Start Shell", action: onStartShell)
-					.buttonStyle(.borderedProminent)
-			}
 
 			Group {
 				labelValue("Workspace", workspaceTitle)

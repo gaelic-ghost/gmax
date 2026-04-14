@@ -12,6 +12,7 @@ import SwiftUI
 
 struct MainShellSceneCommandState: Equatable {
 	var hasSelectedWorkspace = false
+	var canSplitFocusedPane = false
 	var canUndoCloseWorkspace = false
 	var canDeleteSelectedWorkspace = false
 	var canCloseWorkspace = false
@@ -76,6 +77,13 @@ final class MainShellSceneContext {
 		canCloseWorkspace
 	}
 
+	var canSplitFocusedPane: Bool {
+		guard let selectedWorkspaceID else {
+			return false
+		}
+		return shellModel.focusedPane(in: selectedWorkspaceID) != nil
+	}
+
 	var isSidebarVisible: Bool {
 		columnVisibility == .all
 	}
@@ -83,6 +91,7 @@ final class MainShellSceneContext {
 	var commandState: MainShellSceneCommandState {
 		MainShellSceneCommandState(
 			hasSelectedWorkspace: selectedWorkspaceID != nil,
+			canSplitFocusedPane: canSplitFocusedPane,
 			canUndoCloseWorkspace: shellModel.canUndoCloseWorkspace(),
 			canDeleteSelectedWorkspace: canDeleteSelectedWorkspace,
 			canCloseWorkspace: canCloseWorkspace,
@@ -259,15 +268,6 @@ final class MainShellSceneContext {
 
 		let previousIndex = (currentIndex - 1 + shellModel.workspaces.count) % shellModel.workspaces.count
 		self.selectedWorkspaceID = shellModel.workspaces[previousIndex].id
-		shellModel.setCurrentWorkspaceID(self.selectedWorkspaceID)
-	}
-
-	func createPane() {
-		if let selectedWorkspaceID {
-			self.selectedWorkspaceID = shellModel.createPane(in: selectedWorkspaceID)
-		} else {
-			self.selectedWorkspaceID = shellModel.createWorkspace()
-		}
 		shellModel.setCurrentWorkspaceID(self.selectedWorkspaceID)
 	}
 

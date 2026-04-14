@@ -359,7 +359,7 @@ The current built-in-command guidance is:
 The command and keyboard pass is in a good place structurally, but two follow-ups remain active:
 
 - workspace rename is currently presented from the top-level `Workspace` menu through a notification bridge into the sidebar-owned rename sheet; this works, but it should move to a cleaner scene-level presentation seam
-- inspector visibility still uses custom command wiring because the current shell does not use the SwiftUI inspector scene API directly; revisit whether a more native inspector command path is worthwhile before a `0.1.0` release
+- inspector visibility still uses custom command wiring even though the current shell now presents inspector content through SwiftUI's `.inspector(...)` API; revisit whether a more native inspector command path is worthwhile before a `0.1.0` release
 
 These are polish follow-ups, not blockers for the current command architecture.
 

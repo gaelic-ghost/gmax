@@ -111,8 +111,7 @@ From there you can:
 - create a new workspace from the toolbar or `cmd-shift-n`
 - open the saved-workspace library from the toolbar or `cmd-o`
 - save the selected workspace into the library with `cmd-s`
-- create a new pane from the toolbar or `cmd-t`
-- split the focused pane right or down with keyboard commands
+- split the focused pane right or down from the toolbar or with keyboard commands
 - close a workspace directly or close it into the saved-workspace library
 - reopen a previously saved workspace with its layout and preserved shell history
 - hide or show the sidebar and inspector independently

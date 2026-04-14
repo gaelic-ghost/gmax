@@ -4,6 +4,7 @@
 - [ ] Evaluate `LocalProcessTerminalView` accessibility behavior and document whether `SwiftTerm` needs a local extension path for VoiceOver and Full Keyboard Access.
 - [ ] Use `docs/maintainers/logging-validation-guide.md` during the first manual `v0.1.0` validation pass and capture any missing or confusing diagnostics wording that still needs cleanup.
 - [ ] Replace the temporary pane-header material chip with more intentional terminal-native pane chrome and stronger focus treatment.
+- [ ] Add pane-local tabs and use `cmd-t` for `New Tab` once the pane tab model exists.
 - [ ] Add configurable startup behavior for new panes and new workspaces.
 - [ ] Add configurable transcript retention limits for saved workspace history.
 - [ ] Add broader save and restore coverage for stale or more deeply corrupted persisted layouts beyond the current missing-session and corrupted-pane-tree cases.

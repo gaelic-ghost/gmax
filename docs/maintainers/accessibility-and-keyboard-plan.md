@@ -127,7 +127,7 @@ The current command surface is also frontmost-window scoped:
 
 ### Risks
 
-- If toolbar labels, menu titles, and inspector action titles drift apart, Voice Control and spoken-navigation users get a worse experience even when all actions technically exist.
+- If toolbar labels and menu section titles drift apart, Voice Control and spoken-navigation users get a worse experience even when all actions technically exist.
 - If command routing, toolbar focus, and scene-local selection disagree, a keyboard or spoken-navigation user may act on the wrong window even though the command itself succeeded.
 
 ### macOS Alignment Notes
@@ -240,26 +240,24 @@ The pane tree is a custom SwiftUI composition:
 
 ### Current Shape
 
-The inspector is mostly standard SwiftUI text and buttons showing:
+The inspector is now a standard SwiftUI inspector surface showing:
 
 - workspace
 - title
 - state
 - current directory
 - pane and session IDs
-- pane-local actions
 
 ### Plan
 
-- Keep the inspector as a standard SwiftUI information-and-actions surface.
-- Group the action row and metadata blocks with concise accessibility labels so they read as intentional sections rather than a flat wall of text.
+- Keep the inspector as a standard SwiftUI information surface that stays aligned with focused-pane state.
+- Group the metadata blocks with concise accessibility labels so they read as intentional sections rather than a flat wall of text.
 - Consider de-emphasizing raw IDs for general navigation while leaving them selectable for debugging; they should not dominate the VoiceOver reading order.
-- Ensure Restart Shell, Split Right, Split Down, and Close Pane read as ordinary actionable controls.
 
 ### Risks
 
 - The current inspector includes UUID-heavy details that are useful for debugging but noisy for spoken output.
-- If the inspector reads every field literally in order, it may become tedious and distract from the actions users actually need.
+- If the inspector reads every field literally in order, it may become tedious and distract from the pane identity and state users actually need.
 
 ### macOS Alignment Notes
 
