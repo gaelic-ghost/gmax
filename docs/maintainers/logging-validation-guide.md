@@ -163,15 +163,15 @@ Instead, unit tests should verify:
 
 The logs themselves should then be verified manually with `Console.app` or `/usr/bin/log`.
 
-### UI Tests And Launch Performance Tests
+### UI Tests And Launch Scaffolding
 
 Repeated app launches during UI tests are expected to produce repeated `app` category messages.
 
 That is normal for:
 
 - `gmaxUITests`
-- launch-performance measurements
-- any future UI flow that restarts the app under automation
+- the currently scaffolded launch-test surface once it grows into a real smoke harness
+- any UI flow that restarts the app under automation
 
 Do not treat repeated launch-restoration logs during those runs as an app bug by default. The first question should be whether the test intentionally launched the app again.
 
