@@ -46,7 +46,7 @@ struct gmaxTests {
 		model.duplicateWorkspace(workspace.id)
 
 		#expect(model.workspaces.count == 2)
-		#expect(model.selectedWorkspaceID == model.workspaces[1].id)
+		#expect(model.selectedWorkspace?.id == model.workspaces[1].id)
 		#expect(model.workspaces[1].title == "Workspace 1 Copy")
 
 		let originalLeaves = Set(workspace.paneLeaves.map(\.id))
@@ -71,7 +71,7 @@ struct gmaxTests {
 
 		#expect(model.workspaces.count == 1)
 		#expect(model.workspaces[0].id == secondWorkspace.id)
-		#expect(model.selectedWorkspaceID == secondWorkspace.id)
+		#expect(model.selectedWorkspace?.id == secondWorkspace.id)
 	}
 
 	@Test func deleteWorkspaceDoesNothingWhenItIsTheLastWorkspace() {
@@ -84,7 +84,7 @@ struct gmaxTests {
 		model.deleteWorkspace(workspace.id)
 
 		#expect(model.workspaces.count == 1)
-		#expect(model.selectedWorkspaceID == workspace.id)
+		#expect(model.selectedWorkspace?.id == workspace.id)
 	}
 
 	private func makeWorkspace(title: String) -> Workspace {
