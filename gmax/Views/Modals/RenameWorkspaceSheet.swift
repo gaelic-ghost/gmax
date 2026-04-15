@@ -13,6 +13,7 @@ struct WorkspaceRenameSheet: View {
 	let onSave: () -> Void
 
 	var body: some View {
+		let canSave = !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
 		VStack(alignment: .leading, spacing: 16) {
 			Text("Rename Workspace")
 				.font(.title3.weight(.semibold))
@@ -44,9 +45,5 @@ struct WorkspaceRenameSheet: View {
 		.padding(20)
 		.frame(width: 360)
 		.accessibilityIdentifier("sidebar.renameWorkspaceSheet")
-	}
-
-	private var canSave: Bool {
-		!title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
 	}
 }

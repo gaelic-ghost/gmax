@@ -12,10 +12,8 @@ import SwiftTerm
 extension TerminalPaneRepresentable {
 	@MainActor
 	final class Coordinator: NSObject, LocalProcessTerminalViewDelegate {
-		private let paneLogger = Logger.gmax(.pane)
 		let controller: TerminalPaneController
 		let onFocus: () -> Void
-		private var didStartProcess = false
 
 		init(controller: TerminalPaneController, onFocus: @escaping () -> Void) {
 			self.controller = controller
@@ -48,7 +46,7 @@ extension TerminalPaneRepresentable {
 
 		private func startProcessIfNeeded(in terminalView: LocalProcessTerminalView) {
 			let generation = controller.session.relaunchGeneration
-			guard !didStartProcess, controller.needsProcessStart(for: generation) else {
+			guard controller.needsProcessStart(for: generation) else {
 				return
 			}
 
@@ -64,8 +62,7 @@ extension TerminalPaneRepresentable {
 			let paneID = controller.paneID.rawValue.uuidString
 			let sessionID = controller.session.id.rawValue.uuidString
 			let resolvedCurrentDirectory = launch.currentDirectory ?? "(default shell directory)"
-			paneLogger.notice("Launching a shell process for a pane terminal host. Pane ID: \(paneID, privacy: .public). Session ID: \(sessionID, privacy: .public). Executable: \(launch.executable, privacy: .public). Current directory: \(resolvedCurrentDirectory, privacy: .public)")
-			didStartProcess = true
+			Logger.pane.notice("Launching a shell process for a pane terminal host. Pane ID: \(paneID, privacy: .public). Session ID: \(sessionID, privacy: .public). Executable: \(launch.executable, privacy: .public). Current directory: \(resolvedCurrentDirectory, privacy: .public)")
 			controller.markProcessStarted(for: generation)
 			Task { @MainActor in
 				await Task.yield()
@@ -94,9 +91,9 @@ extension TerminalPaneRepresentable {
 			let paneID = controller.paneID.rawValue.uuidString
 			let sessionID = controller.session.id.rawValue.uuidString
 			if let exitCode {
-				paneLogger.notice("A shell session ended in a pane terminal host. Pane ID: \(paneID, privacy: .public). Session ID: \(sessionID, privacy: .public). Exit status: \(exitCode)")
+				Logger.pane.notice("A shell session ended in a pane terminal host. Pane ID: \(paneID, privacy: .public). Session ID: \(sessionID, privacy: .public). Exit status: \(exitCode)")
 			} else {
-				paneLogger.notice("A shell session ended in a pane terminal host without a reported exit status. Pane ID: \(paneID, privacy: .public). Session ID: \(sessionID, privacy: .public)")
+				Logger.pane.notice("A shell session ended in a pane terminal host without a reported exit status. Pane ID: \(paneID, privacy: .public). Session ID: \(sessionID, privacy: .public)")
 			}
 			Task { @MainActor in
 				await Task.yield()

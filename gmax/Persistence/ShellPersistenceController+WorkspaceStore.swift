@@ -59,7 +59,7 @@ extension ShellPersistenceController {
 		}
 	}
 
-	nonisolated static func decodeNode(_ nodeEntity: PaneNodeEntity?, logger: Logger) -> PaneNode? {
+	nonisolated static func decodeNode(_ nodeEntity: PaneNodeEntity?) -> PaneNode? {
 		guard let nodeEntity else {
 			return nil
 		}
@@ -67,7 +67,7 @@ extension ShellPersistenceController {
 		switch PaneNodeKind(rawValue: nodeEntity.kind) {
 			case .leaf:
 				guard let sessionID = nodeEntity.sessionID else {
-					logger.error("A persisted leaf node is missing its session identifier. That node will be skipped during restore. Node ID: \(nodeEntity.id.uuidString, privacy: .public)")
+					Logger.persistence.error("A persisted leaf node is missing its session identifier. That node will be skipped during restore. Node ID: \(nodeEntity.id.uuidString, privacy: .public)")
 					return nil
 				}
 				return .leaf(
@@ -79,13 +79,13 @@ extension ShellPersistenceController {
 
 			case .split:
 				guard let axis = nodeEntity.axis.flatMap(PaneSplit.Axis.init(rawValue:)) else {
-					logger.error("A persisted split node is missing or has an invalid axis. That node will be skipped during restore. Node ID: \(nodeEntity.id.uuidString, privacy: .public)")
+					Logger.persistence.error("A persisted split node is missing or has an invalid axis. That node will be skipped during restore. Node ID: \(nodeEntity.id.uuidString, privacy: .public)")
 					return nil
 				}
-				guard let first = decodeNode(nodeEntity.firstChild, logger: logger),
-					  let second = decodeNode(nodeEntity.secondChild, logger: logger)
+				guard let first = decodeNode(nodeEntity.firstChild),
+					  let second = decodeNode(nodeEntity.secondChild)
 				else {
-					logger.error("A persisted split node is missing one or both child nodes. That node will be skipped during restore. Node ID: \(nodeEntity.id.uuidString, privacy: .public)")
+					Logger.persistence.error("A persisted split node is missing one or both child nodes. That node will be skipped during restore. Node ID: \(nodeEntity.id.uuidString, privacy: .public)")
 					return nil
 				}
 				return .split(
@@ -99,7 +99,7 @@ extension ShellPersistenceController {
 				)
 
 			case .none:
-				logger.error("A persisted pane node has an unknown kind value. That node will be skipped during restore. Node ID: \(nodeEntity.id.uuidString, privacy: .public)")
+				Logger.persistence.error("A persisted pane node has an unknown kind value. That node will be skipped during restore. Node ID: \(nodeEntity.id.uuidString, privacy: .public)")
 				return nil
 		}
 	}
@@ -150,7 +150,7 @@ extension ShellPersistenceController {
 		}
 	}
 
-	nonisolated static func decodeSnapshotNode(_ nodeEntity: PaneSnapshotNodeEntity?, logger: Logger) -> PaneNode? {
+	nonisolated static func decodeSnapshotNode(_ nodeEntity: PaneSnapshotNodeEntity?) -> PaneNode? {
 		guard let nodeEntity else {
 			return nil
 		}
@@ -158,7 +158,7 @@ extension ShellPersistenceController {
 		switch PaneNodeKind(rawValue: nodeEntity.kind) {
 			case .leaf:
 				guard let sessionSnapshotID = nodeEntity.sessionSnapshotID else {
-					logger.error("A saved workspace snapshot leaf node is missing its session snapshot identifier. That pane will be skipped during restore. Node ID: \(nodeEntity.id.uuidString, privacy: .public)")
+					Logger.persistence.error("A saved workspace snapshot leaf node is missing its session snapshot identifier. That pane will be skipped during restore. Node ID: \(nodeEntity.id.uuidString, privacy: .public)")
 					return nil
 				}
 				return .leaf(
@@ -170,13 +170,13 @@ extension ShellPersistenceController {
 
 			case .split:
 				guard let axis = nodeEntity.axis.flatMap(PaneSplit.Axis.init(rawValue:)) else {
-					logger.error("A saved workspace snapshot split node is missing or has an invalid axis. That node will be skipped during restore. Node ID: \(nodeEntity.id.uuidString, privacy: .public)")
+					Logger.persistence.error("A saved workspace snapshot split node is missing or has an invalid axis. That node will be skipped during restore. Node ID: \(nodeEntity.id.uuidString, privacy: .public)")
 					return nil
 				}
-				guard let first = decodeSnapshotNode(nodeEntity.firstChild, logger: logger),
-					  let second = decodeSnapshotNode(nodeEntity.secondChild, logger: logger)
+				guard let first = decodeSnapshotNode(nodeEntity.firstChild),
+					  let second = decodeSnapshotNode(nodeEntity.secondChild)
 				else {
-					logger.error("A saved workspace snapshot split node is missing one or both child nodes. That node will be skipped during restore. Node ID: \(nodeEntity.id.uuidString, privacy: .public)")
+					Logger.persistence.error("A saved workspace snapshot split node is missing one or both child nodes. That node will be skipped during restore. Node ID: \(nodeEntity.id.uuidString, privacy: .public)")
 					return nil
 				}
 				return .split(
@@ -190,35 +190,8 @@ extension ShellPersistenceController {
 				)
 
 			case .none:
-				logger.error("A saved workspace snapshot pane node has an unknown kind value. That node will be skipped during restore. Node ID: \(nodeEntity.id.uuidString, privacy: .public)")
+				Logger.persistence.error("A saved workspace snapshot pane node has an unknown kind value. That node will be skipped during restore. Node ID: \(nodeEntity.id.uuidString, privacy: .public)")
 				return nil
 		}
-	}
-
-	nonisolated static func normalizedWorkspace(_ workspace: Workspace, logger: Logger) -> Workspace? {
-		guard let root = workspace.root else {
-			logger.error("A persisted workspace has no root pane tree. That empty workspace will be discarded during restore. Workspace ID: \(workspace.id.rawValue.uuidString, privacy: .public)")
-			return nil
-		}
-
-		let leaves = root.leaves()
-		guard !leaves.isEmpty else {
-			logger.error("A persisted workspace decoded to an empty pane tree. That workspace will be discarded during restore. Workspace ID: \(workspace.id.rawValue.uuidString, privacy: .public)")
-			return nil
-		}
-
-		let focusedPaneID = if let focusedPaneID = workspace.focusedPaneID,
-			leaves.contains(where: { $0.id == focusedPaneID }) {
-			focusedPaneID
-		} else {
-			leaves[0].id
-		}
-
-		return Workspace(
-			id: workspace.id,
-			title: workspace.title,
-			root: root,
-			focusedPaneID: focusedPaneID
-		)
 	}
 }

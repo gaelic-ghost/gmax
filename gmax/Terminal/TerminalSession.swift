@@ -92,7 +92,7 @@ final class TerminalSessionRegistry {
 		self.defaultLaunchConfiguration = defaultLaunchConfiguration
 		self.sessionsByID = [:]
 		for workspace in workspaces {
-			for leaf in workspace.paneLeaves {
+			for leaf in workspace.root?.leaves() ?? [] {
 				sessionsByID[leaf.sessionID] = TerminalSession(
 					id: leaf.sessionID,
 					launchConfiguration: defaultLaunchConfiguration,

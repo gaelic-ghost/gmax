@@ -1,11 +1,3 @@
-//
-//  gmaxApp.swift
-//  gmax
-//
-//  Created by Gale Williams on 3/13/26.
-//
-
-import OSLog
 import SwiftUI
 
 @main

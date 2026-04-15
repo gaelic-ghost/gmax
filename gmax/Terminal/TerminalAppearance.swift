@@ -22,26 +22,11 @@ struct TerminalFontOption: Identifiable, Hashable {
 	let displayName: String
 }
 
-enum TerminalTheme: String, CaseIterable, Identifiable {
+enum TerminalTheme: String, CaseIterable {
 	case defaultTerminal
 	case midnight
 	case paper
 	case phosphor
-
-	var id: String { rawValue }
-
-	var displayName: String {
-		switch self {
-			case .defaultTerminal:
-				return "Default"
-			case .midnight:
-				return "Midnight"
-			case .paper:
-				return "Paper"
-			case .phosphor:
-				return "Phosphor"
-		}
-	}
 
 	var backgroundColor: NSColor {
 		switch self {
@@ -98,11 +83,6 @@ struct TerminalAppearance: Hashable {
 	var fontName: String
 	var fontSize: Double
 	var theme: TerminalTheme
-
-	static let fallbackFont = NSFont.monospacedSystemFont(
-		ofSize: TerminalAppearanceDefaults.defaultFontSize,
-		weight: .regular
-	)
 
 	static let fallback = TerminalAppearance(
 		fontName: TerminalAppearanceDefaults.systemMonospacedFontName,

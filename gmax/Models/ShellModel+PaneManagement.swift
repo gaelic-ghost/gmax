@@ -47,13 +47,13 @@ extension ShellModel {
 		}
 		let workspace = workspaces[workspaceIndex]
 		guard let pane = workspace.root?.findPane(id: paneID) else {
-			paneLogger.error("The app was asked to relaunch a pane, but the target pane could not be resolved inside the selected workspace. The relaunch request was dropped before any shell state changed. Workspace ID: \(workspaceID.rawValue.uuidString, privacy: .public). Pane ID: \(paneID.rawValue.uuidString, privacy: .public)")
+			Logger.pane.error("The app was asked to relaunch a pane, but the target pane could not be resolved inside the selected workspace. The relaunch request was dropped before any shell state changed. Workspace ID: \(workspaceID.rawValue.uuidString, privacy: .public). Pane ID: \(paneID.rawValue.uuidString, privacy: .public)")
 			return
 		}
 
 		let session = sessions.ensureSession(id: pane.sessionID)
 		session.prepareForRelaunch()
-		paneLogger.notice("Requested a shell relaunch for the focused pane in a live workspace. Workspace title: \(workspace.title, privacy: .public). Workspace ID: \(workspaceID.rawValue.uuidString, privacy: .public). Pane ID: \(paneID.rawValue.uuidString, privacy: .public). Session ID: \(session.id.rawValue.uuidString, privacy: .public)")
+		Logger.pane.notice("Requested a shell relaunch for the focused pane in a live workspace. Workspace title: \(workspace.title, privacy: .public). Workspace ID: \(workspaceID.rawValue.uuidString, privacy: .public). Pane ID: \(paneID.rawValue.uuidString, privacy: .public). Session ID: \(session.id.rawValue.uuidString, privacy: .public)")
 		focusPane(paneID, in: workspaceID)
 	}
 
@@ -164,7 +164,7 @@ extension ShellModel {
 			return
 		}
 
-		let removedPaneIndex = priorLeaves.firstIndex(where: { $0.id == paneID }) ?? survivingLeaves.endIndex
+		let removedPaneIndex = priorLeaves.firstIndex { $0.id == paneID } ?? survivingLeaves.endIndex
 		let fallbackIndex = min(removedPaneIndex, survivingLeaves.count - 1)
 		workspaces[workspaceIndex].focusedPaneID = survivingLeaves[fallbackIndex].id
 		recordPaneFocus(survivingLeaves[fallbackIndex].id, in: workspaceID)
@@ -176,7 +176,7 @@ extension ShellModel {
 			return
 		}
 
-		let leaves = workspaces[workspaceIndex].paneLeaves
+		let leaves = workspaces[workspaceIndex].root?.leaves() ?? []
 		guard !leaves.isEmpty else { return }
 
 		guard let focusedPaneID = workspaces[workspaceIndex].focusedPaneID,
@@ -260,7 +260,7 @@ extension ShellModel {
 
 	func removeUnreferencedSessions() {
 		let activeLeaves = workspaces.flatMap { workspace in
-			workspace.paneLeaves.map { (workspace.id, $0) }
+			(workspace.root?.leaves() ?? []).map { (workspace.id, $0) }
 		}
 		let activeSessionIDs = Set(activeLeaves.map(\.1.sessionID))
 		let activePaneIDsByWorkspace = Dictionary(grouping: activeLeaves, by: \.0)

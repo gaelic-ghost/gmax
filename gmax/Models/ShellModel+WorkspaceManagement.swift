@@ -28,7 +28,7 @@ extension ShellModel {
 			launchConfiguration: launchContextBuilder.makeLaunchConfiguration()
 		)
 		paneFocusHistoryByWorkspace[workspace.id] = [pane.id]
-		workspaceLogger.notice("Created a new workspace and seeded it with an initial pane. Workspace title: \(workspace.title, privacy: .public). Workspace ID: \(workspace.id.rawValue.uuidString, privacy: .public)")
+		Logger.workspace.notice("Created a new workspace and seeded it with an initial pane. Workspace title: \(workspace.title, privacy: .public). Workspace ID: \(workspace.id.rawValue.uuidString, privacy: .public)")
 		schedulePersistenceSave()
 		return workspace.id
 	}
@@ -45,7 +45,7 @@ extension ShellModel {
 
 		let previousTitle = workspaces[workspaceIndex].title
 		workspaces[workspaceIndex].title = trimmedTitle
-		workspaceLogger.notice("Renamed a workspace. Previous title: \(previousTitle, privacy: .public). New title: \(trimmedTitle, privacy: .public). Workspace ID: \(workspaceID.rawValue.uuidString, privacy: .public)")
+		Logger.workspace.notice("Renamed a workspace. Previous title: \(previousTitle, privacy: .public). New title: \(trimmedTitle, privacy: .public). Workspace ID: \(workspaceID.rawValue.uuidString, privacy: .public)")
 		schedulePersistenceSave()
 	}
 
@@ -55,48 +55,44 @@ extension ShellModel {
 			return nil
 		}
 
-		let duplicatedWorkspace = duplicatedWorkspace(from: workspaces[workspaceIndex])
+		let workspace = workspaces[workspaceIndex]
+		var focusedPaneID: PaneID?
+		let duplicatedWorkspace = Workspace(
+			title: uniqueWorkspaceTitle(startingWith: "\(workspace.title) Copy"),
+			root: workspace.root.map {
+				duplicateNode($0, focusedPaneID: workspace.focusedPaneID, clonedFocusedPaneID: &focusedPaneID)
+			},
+			focusedPaneID: focusedPaneID
+		)
 		workspaces.insert(duplicatedWorkspace, at: workspaceIndex + 1)
 		paneFocusHistoryByWorkspace[duplicatedWorkspace.id] = [duplicatedWorkspace.focusedPaneID].compactMap { $0 }
-		workspaceLogger.notice("Duplicated a workspace layout into a new workspace. Source workspace ID: \(workspaceID.rawValue.uuidString, privacy: .public). New workspace title: \(duplicatedWorkspace.title, privacy: .public). New workspace ID: \(duplicatedWorkspace.id.rawValue.uuidString, privacy: .public)")
+		Logger.workspace.notice("Duplicated a workspace layout into a new workspace. Source workspace ID: \(workspaceID.rawValue.uuidString, privacy: .public). New workspace title: \(duplicatedWorkspace.title, privacy: .public). New workspace ID: \(duplicatedWorkspace.id.rawValue.uuidString, privacy: .public)")
 		schedulePersistenceSave()
 		return duplicatedWorkspace.id
-	}
-
-	func canDeleteWorkspace(_ workspaceID: WorkspaceID) -> Bool {
-		workspaces.count > 1 && workspaces.contains(where: { $0.id == workspaceID })
 	}
 
 	func closeWorkspace(_ workspaceID: WorkspaceID) -> WorkspaceID? {
 		removeWorkspace(
 			workspaceID,
-			closeEffects: WorkspaceCloseEffects(
-				recordRecentlyClosed: UserDefaults.standard.bool(
-					forKey: WorkspacePersistenceDefaults.keepRecentlyClosedWorkspacesKey
-				),
-				saveToLibrary: UserDefaults.standard.bool(
-					forKey: WorkspacePersistenceDefaults.autoSaveClosedWorkspacesKey
-				)
+			recordRecentlyClosed: UserDefaults.standard.bool(
+				forKey: WorkspacePersistenceDefaults.keepRecentlyClosedWorkspacesKey
+			),
+			saveToLibrary: UserDefaults.standard.bool(
+				forKey: WorkspacePersistenceDefaults.autoSaveClosedWorkspacesKey
 			)
 		)
 	}
 
 	func deleteWorkspace(_ workspaceID: WorkspaceID) {
-		guard canDeleteWorkspace(workspaceID) else {
+		guard workspaces.count > 1, workspaces.contains(where: { $0.id == workspaceID }) else {
 			return
 		}
 
 		_ = removeWorkspace(
 			workspaceID,
-			closeEffects: WorkspaceCloseEffects(
-				recordRecentlyClosed: false,
-				saveToLibrary: false
-			)
+			recordRecentlyClosed: false,
+			saveToLibrary: false
 		)
-	}
-
-	func canUndoCloseWorkspace() -> Bool {
-		recentlyClosedWorkspaceCount > 0
 	}
 
 	@discardableResult
@@ -109,14 +105,14 @@ extension ShellModel {
 		workspaces.insert(closedWorkspace.workspace, at: insertionIndex)
 		paneFocusHistoryByWorkspace[closedWorkspace.workspace.id] = [closedWorkspace.workspace.focusedPaneID].compactMap { $0 }
 
-		for leaf in closedWorkspace.workspace.paneLeaves {
+		for leaf in closedWorkspace.workspace.root?.leaves() ?? [] {
 			let launchConfiguration = closedWorkspace.launchConfigurationsBySessionID[leaf.sessionID]
 				?? launchContextBuilder.makeLaunchConfiguration()
 			_ = sessions.ensureSession(id: leaf.sessionID, launchConfiguration: launchConfiguration)
 		}
 
 		recentlyClosedWorkspaceCount = recentlyClosedWorkspaces.count
-		workspaceLogger.notice("Reopened a recently closed workspace from the in-memory history stack. Workspace title: \(closedWorkspace.workspace.title, privacy: .public). Workspace ID: \(closedWorkspace.workspace.id.rawValue.uuidString, privacy: .public)")
+		Logger.workspace.notice("Reopened a recently closed workspace from the in-memory history stack. Workspace title: \(closedWorkspace.workspace.title, privacy: .public). Workspace ID: \(closedWorkspace.workspace.id.rawValue.uuidString, privacy: .public)")
 		schedulePersistenceSave()
 		return closedWorkspace.workspace.id
 	}
@@ -124,11 +120,7 @@ extension ShellModel {
 	func clearRecentlyClosedWorkspaces() {
 		recentlyClosedWorkspaces.removeAll()
 		recentlyClosedWorkspaceCount = 0
-		workspaceLogger.notice("Cleared the in-memory recently closed workspace stack for the current app session.")
-	}
-
-	func listSavedWorkspaceSnapshots(matching query: String? = nil) -> [SavedWorkspaceSnapshotSummary] {
-		persistence.listWorkspaceSnapshots(matching: query)
+		Logger.workspace.notice("Cleared the in-memory recently closed workspace stack for the current app session.")
 	}
 
 	@discardableResult
@@ -137,7 +129,7 @@ extension ShellModel {
 		transcriptsBySessionID: [TerminalSessionID: String] = [:]
 	) -> SavedWorkspaceSnapshotSummary? {
 		guard let workspace = workspaces.first(where: { $0.id == workspaceID }) else {
-			workspaceLogger.error("The app was asked to save a workspace to the library, but that workspace no longer exists in the current shell model. Workspace ID: \(workspaceID.rawValue.uuidString, privacy: .public)")
+			Logger.workspace.error("The app was asked to save a workspace to the library, but that workspace no longer exists in the current shell model. Workspace ID: \(workspaceID.rawValue.uuidString, privacy: .public)")
 			return nil
 		}
 
@@ -152,7 +144,7 @@ extension ShellModel {
 			transcriptsBySessionID: resolvedTranscripts
 		)
 		if let summary {
-			workspaceLogger.notice("Saved a workspace to the library. Workspace title: \(workspace.title, privacy: .public). Workspace ID: \(workspace.id.rawValue.uuidString, privacy: .public). Snapshot ID: \(summary.id.rawValue.uuidString, privacy: .public)")
+			Logger.workspace.notice("Saved a workspace to the library. Workspace title: \(workspace.title, privacy: .public). Workspace ID: \(workspace.id.rawValue.uuidString, privacy: .public). Snapshot ID: \(summary.id.rawValue.uuidString, privacy: .public)")
 		}
 		return summary
 	}
@@ -164,12 +156,10 @@ extension ShellModel {
 	) -> WorkspaceID? {
 		return removeWorkspace(
 			workspaceID,
-			closeEffects: WorkspaceCloseEffects(
-				recordRecentlyClosed: UserDefaults.standard.bool(
-					forKey: WorkspacePersistenceDefaults.keepRecentlyClosedWorkspacesKey
-				),
-				saveToLibrary: true
+			recordRecentlyClosed: UserDefaults.standard.bool(
+				forKey: WorkspacePersistenceDefaults.keepRecentlyClosedWorkspacesKey
 			),
+			saveToLibrary: true,
 			explicitTranscriptsBySessionID: transcriptsBySessionID
 		)
 	}
@@ -177,34 +167,60 @@ extension ShellModel {
 	@discardableResult
 	func openSavedWorkspace(_ snapshotID: WorkspaceSnapshotID) -> WorkspaceID? {
 		guard let snapshot = persistence.loadWorkspaceSnapshot(id: snapshotID) else {
-			workspaceLogger.error("The app could not reopen a saved workspace because the requested library snapshot was missing or unreadable. Check the persistence logs for the exact load failure. Snapshot ID: \(snapshotID.rawValue.uuidString, privacy: .public)")
+			Logger.workspace.error("The app could not reopen a saved workspace because the requested library snapshot was missing or unreadable. Check the persistence logs for the exact load failure. Snapshot ID: \(snapshotID.rawValue.uuidString, privacy: .public)")
 			return nil
 		}
 
-		let restoredWorkspace = restoredWorkspace(from: snapshot)
-		workspaces.append(restoredWorkspace.workspace)
-		paneFocusHistoryByWorkspace[restoredWorkspace.workspace.id] = [restoredWorkspace.workspace.focusedPaneID].compactMap { $0 }
+		var launchConfigurationsBySessionID: [TerminalSessionID: TerminalLaunchConfiguration] = [:]
+		var transcriptsBySessionID: [TerminalSessionID: String] = [:]
+		var titlesBySessionID: [TerminalSessionID: String] = [:]
+		var focusedPaneID: PaneID?
+		let restoredWorkspace = Workspace(
+			title: {
+				let title = snapshot.title.trimmingCharacters(in: .whitespacesAndNewlines)
+				let baseTitle = title.isEmpty ? "Workspace" : title
+				return uniqueWorkspaceTitle(
+					startingWith: workspaces.map(\.title).contains(baseTitle)
+						? "\(baseTitle) (Opened \(Date.now.formatted(date: .omitted, time: .shortened)))"
+						: baseTitle
+				)
+			}(),
+			root: snapshot.workspace.root.map {
+				restoreNode(
+					$0,
+					focusedPaneID: snapshot.workspace.focusedPaneID,
+					paneSnapshotsBySessionID: snapshot.paneSnapshotsBySessionID,
+					launchConfigurationsBySessionID: &launchConfigurationsBySessionID,
+					transcriptsBySessionID: &transcriptsBySessionID,
+					titlesBySessionID: &titlesBySessionID,
+					restoredFocusedPaneID: &focusedPaneID
+				)
+			},
+			focusedPaneID: focusedPaneID
+		)
+		workspaces.append(restoredWorkspace)
+		paneFocusHistoryByWorkspace[restoredWorkspace.id] = [restoredWorkspace.focusedPaneID].compactMap { $0 }
 
-		for (sessionID, launchConfiguration) in restoredWorkspace.launchConfigurationsBySessionID {
+		for (sessionID, launchConfiguration) in launchConfigurationsBySessionID {
 			let session = sessions.ensureSession(id: sessionID, launchConfiguration: launchConfiguration)
-			session.title = restoredWorkspace.titlesBySessionID[sessionID] ?? "Shell"
+			session.title = titlesBySessionID[sessionID] ?? "Shell"
 			session.currentDirectory = launchConfiguration.currentDirectory
-			session.setRestoredTranscript(restoredWorkspace.transcriptsBySessionID[sessionID])
+			session.setRestoredTranscript(transcriptsBySessionID[sessionID])
 		}
 
 		persistence.markWorkspaceSnapshotOpened(snapshotID)
-		workspaceLogger.notice("Opened a workspace from the saved-workspace library. Snapshot title: \(snapshot.title, privacy: .public). Snapshot ID: \(snapshotID.rawValue.uuidString, privacy: .public). Restored pane count: \(restoredWorkspace.workspace.paneCount)")
+		Logger.workspace.notice("Opened a workspace from the saved-workspace library. Snapshot title: \(snapshot.title, privacy: .public). Snapshot ID: \(snapshotID.rawValue.uuidString, privacy: .public). Restored pane count: \((restoredWorkspace.root?.leaves().count ?? 0))")
 		schedulePersistenceSave()
-		return restoredWorkspace.workspace.id
+		return restoredWorkspace.id
 	}
 
 	func deleteSavedWorkspace(_ snapshotID: WorkspaceSnapshotID) {
 		guard persistence.deleteWorkspaceSnapshot(id: snapshotID) else {
-			workspaceLogger.error("The app could not delete a saved workspace snapshot from the library because persistence did not confirm the deletion. Check the persistence logs for the exact failure. Snapshot ID: \(snapshotID.rawValue.uuidString, privacy: .public)")
+			Logger.workspace.error("The app could not delete a saved workspace snapshot from the library because persistence did not confirm the deletion. Check the persistence logs for the exact failure. Snapshot ID: \(snapshotID.rawValue.uuidString, privacy: .public)")
 			return
 		}
 
-		workspaceLogger.notice("Deleted a saved workspace snapshot from the library. Snapshot ID: \(snapshotID.rawValue.uuidString, privacy: .public)")
+		Logger.workspace.notice("Deleted a saved workspace snapshot from the library. Snapshot ID: \(snapshotID.rawValue.uuidString, privacy: .public)")
 	}
 
 }
@@ -217,30 +233,6 @@ extension ShellModel {
 		let workspace: Workspace
 		let formerIndex: Int
 		let launchConfigurationsBySessionID: [TerminalSessionID: TerminalLaunchConfiguration]
-	}
-
-	struct WorkspaceCloseEffects {
-		let recordRecentlyClosed: Bool
-		let saveToLibrary: Bool
-	}
-
-	struct RestoredWorkspace {
-		let workspace: Workspace
-		let launchConfigurationsBySessionID: [TerminalSessionID: TerminalLaunchConfiguration]
-		let transcriptsBySessionID: [TerminalSessionID: String]
-		let titlesBySessionID: [TerminalSessionID: String]
-	}
-
-	private func restoredWorkspaceTitle(startingWith baseTitle: String) -> String {
-		let normalizedBaseTitle = baseTitle.trimmingCharacters(in: .whitespacesAndNewlines)
-		let resolvedBaseTitle = normalizedBaseTitle.isEmpty ? "Workspace" : normalizedBaseTitle
-		let existingTitles = Set(workspaces.map(\.title))
-		guard existingTitles.contains(resolvedBaseTitle) else {
-			return resolvedBaseTitle
-		}
-
-		let openedTimestamp = Date.now.formatted(date: .omitted, time: .shortened)
-		return uniqueWorkspaceTitle(startingWith: "\(resolvedBaseTitle) (Opened \(openedTimestamp))")
 	}
 
 	private func uniqueWorkspaceTitle(startingWith baseTitle: String) -> String {
@@ -259,23 +251,6 @@ extension ShellModel {
 			}
 			suffix += 1
 		}
-	}
-
-	private func duplicatedWorkspace(from workspace: Workspace) -> Workspace {
-		var clonedFocusedPaneID: PaneID?
-		let clonedRoot = workspace.root.map {
-			duplicateNode(
-				$0,
-				focusedPaneID: workspace.focusedPaneID,
-				clonedFocusedPaneID: &clonedFocusedPaneID
-			)
-		}
-
-		return Workspace(
-			title: uniqueWorkspaceTitle(startingWith: "\(workspace.title) Copy"),
-			root: clonedRoot,
-			focusedPaneID: clonedFocusedPaneID
-		)
 	}
 
 	private func duplicateNode(
@@ -335,7 +310,8 @@ extension ShellModel {
 	@discardableResult
 	func removeWorkspace(
 		_ workspaceID: WorkspaceID,
-		closeEffects: WorkspaceCloseEffects,
+		recordRecentlyClosed: Bool,
+		saveToLibrary: Bool,
 		explicitTranscriptsBySessionID: [TerminalSessionID: String] = [:]
 	) -> WorkspaceID? {
 		guard let workspaceIndex = workspaces.firstIndex(where: { $0.id == workspaceID }) else {
@@ -343,7 +319,7 @@ extension ShellModel {
 		}
 
 		let workspace = workspaces[workspaceIndex]
-		if closeEffects.saveToLibrary {
+		if saveToLibrary {
 			let resolvedTranscripts = snapshotTranscripts(
 				for: workspace,
 				explicitTranscriptsBySessionID: explicitTranscriptsBySessionID
@@ -355,7 +331,7 @@ extension ShellModel {
 			)
 		}
 
-		if closeEffects.recordRecentlyClosed {
+		if recordRecentlyClosed {
 			recordRecentlyClosedWorkspace(workspace, formerIndex: workspaceIndex)
 		}
 
@@ -364,15 +340,9 @@ extension ShellModel {
 		paneFocusHistoryByWorkspace.removeValue(forKey: workspaceID)
 		removeUnreferencedSessions()
 
-		let nextSelectedWorkspaceID: WorkspaceID?
-		if workspaces.isEmpty {
-			nextSelectedWorkspaceID = nil
-		} else {
-			let nextIndex = min(workspaceIndex, workspaces.count - 1)
-			nextSelectedWorkspaceID = workspaces[nextIndex].id
-		}
+		let nextSelectedWorkspaceID = workspaces.isEmpty ? nil : workspaces[min(workspaceIndex, workspaces.count - 1)].id
 
-		workspaceLogger.notice("Closed a workspace from the live shell. Workspace title: \(workspace.title, privacy: .public). Workspace ID: \(workspace.id.rawValue.uuidString, privacy: .public). Recorded in recently closed: \(closeEffects.recordRecentlyClosed). Saved to library: \(closeEffects.saveToLibrary)")
+		Logger.workspace.notice("Closed a workspace from the live shell. Workspace title: \(workspace.title, privacy: .public). Workspace ID: \(workspace.id.rawValue.uuidString, privacy: .public). Recorded in recently closed: \(recordRecentlyClosed). Saved to library: \(saveToLibrary)")
 		schedulePersistenceSave()
 		return nextSelectedWorkspaceID
 	}
@@ -382,7 +352,7 @@ extension ShellModel {
 			return
 		}
 
-		let launchConfigurationsBySessionID = Dictionary(uniqueKeysWithValues: workspace.paneLeaves.map { leaf in
+		let launchConfigurationsBySessionID = Dictionary(uniqueKeysWithValues: (workspace.root?.leaves() ?? []).map { leaf in
 			let session = sessions.ensureSession(id: leaf.sessionID)
 			let currentDirectory = session.currentDirectory ?? session.launchConfiguration.currentDirectory
 			let launchConfiguration = launchContextBuilder.makeLaunchConfiguration(
@@ -413,51 +383,15 @@ extension ShellModel {
 	) -> [TerminalSessionID: String] {
 		var resolvedTranscripts = explicitTranscriptsBySessionID
 
-		for leaf in workspace.paneLeaves where resolvedTranscripts[leaf.sessionID] == nil {
-			guard
-				let controller = paneControllers.existingController(for: leaf.id),
-				let transcript = controller.captureTranscript()
-			else {
+		for leaf in workspace.root?.leaves() ?? [] where resolvedTranscripts[leaf.sessionID] == nil {
+			guard let transcript = paneControllers.existingController(for: leaf.id)?.captureTranscript() else {
 				continue
 			}
-
 			resolvedTranscripts[leaf.sessionID] = transcript
 		}
 
 		return resolvedTranscripts
 	}
-
-	private func restoredWorkspace(from snapshot: SavedWorkspaceSnapshot) -> RestoredWorkspace {
-		var launchConfigurationsBySessionID: [TerminalSessionID: TerminalLaunchConfiguration] = [:]
-		var transcriptsBySessionID: [TerminalSessionID: String] = [:]
-		var titlesBySessionID: [TerminalSessionID: String] = [:]
-		var restoredFocusedPaneID: PaneID?
-		let restoredRoot = snapshot.workspace.root.map {
-			restoreNode(
-				$0,
-				focusedPaneID: snapshot.workspace.focusedPaneID,
-				paneSnapshotsBySessionID: snapshot.paneSnapshotsBySessionID,
-				launchConfigurationsBySessionID: &launchConfigurationsBySessionID,
-				transcriptsBySessionID: &transcriptsBySessionID,
-				titlesBySessionID: &titlesBySessionID,
-				restoredFocusedPaneID: &restoredFocusedPaneID
-			)
-		}
-
-		let workspace = Workspace(
-			title: restoredWorkspaceTitle(startingWith: snapshot.title),
-			root: restoredRoot,
-			focusedPaneID: restoredFocusedPaneID
-		)
-
-		return RestoredWorkspace(
-			workspace: workspace,
-			launchConfigurationsBySessionID: launchConfigurationsBySessionID,
-			transcriptsBySessionID: transcriptsBySessionID,
-			titlesBySessionID: titlesBySessionID
-		)
-	}
-
 	private func restoreNode(
 		_ node: PaneNode,
 		focusedPaneID: PaneID?,

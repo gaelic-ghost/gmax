@@ -13,22 +13,17 @@ import OSLog
 final class ShellPersistenceController {
 	static let shared = ShellPersistenceController()
 
-	let logger: Logger
 	let container: NSPersistentContainer
 
 	private init() {
-		let logger = Logger.gmax(.persistence)
-		self.logger = logger
-		self.container = Self.makePersistentContainer(logger: logger)
+		container = Self.makePersistentContainer()
 	}
 
-	private init(container: NSPersistentContainer, logger: Logger) {
-		self.logger = logger
+	private init(container: NSPersistentContainer) {
 		self.container = container
 	}
 
 	static func inMemoryForTesting() -> ShellPersistenceController {
-		let logger = Logger.gmax(.persistence)
 		let container = makeContainer(
 			model: makeManagedObjectModel(),
 			description: {
@@ -40,11 +35,11 @@ final class ShellPersistenceController {
 		)
 
 		precondition(
-			loadPersistentStores(for: container, logger: logger),
+			loadPersistentStores(for: container),
 			"The in-memory shell persistence store must load successfully for tests."
 		)
 
-		return ShellPersistenceController(container: container, logger: logger)
+		return ShellPersistenceController(container: container)
 	}
 
 	func loadWorkspaces() -> [Workspace] {
@@ -57,14 +52,29 @@ final class ShellPersistenceController {
 				let workspace = Workspace(
 					id: WorkspaceID(rawValue: workspaceEntity.id),
 					title: workspaceEntity.title,
-					root: Self.decodeNode(workspaceEntity.rootNode, logger: logger),
+					root: Self.decodeNode(workspaceEntity.rootNode),
 					focusedPaneID: workspaceEntity.focusedPaneID.map(PaneID.init(rawValue:))
 				)
+				guard let root = workspace.root else {
+					Logger.persistence.error("A persisted workspace has no root pane tree. That empty workspace will be discarded during restore. Workspace ID: \(workspace.id.rawValue.uuidString, privacy: .public)")
+					return nil
+				}
 
-				return Self.normalizedWorkspace(workspace, logger: logger)
+				let leaves = root.leaves()
+				guard !leaves.isEmpty else {
+					Logger.persistence.error("A persisted workspace decoded to an empty pane tree. That workspace will be discarded during restore. Workspace ID: \(workspace.id.rawValue.uuidString, privacy: .public)")
+					return nil
+				}
+
+				return Workspace(
+					id: workspace.id,
+					title: workspace.title,
+					root: root,
+					focusedPaneID: leaves.contains { $0.id == workspace.focusedPaneID } ? workspace.focusedPaneID : leaves[0].id
+				)
 			}
 		} catch {
-			logger.error("Core Data could not read the saved-workspace list from the shell store. The app will continue with default workspace state for this launch. Error: \(String(describing: error), privacy: .public)")
+			Logger.persistence.error("Core Data could not read the saved-workspace list from the shell store. The app will continue with default workspace state for this launch. Error: \(String(describing: error), privacy: .public)")
 			return []
 		}
 	}
@@ -109,7 +119,7 @@ final class ShellPersistenceController {
 					try context.save()
 				}
 			} catch {
-				logger.error("Core Data could not save the latest shell workspace state. The current session remains live, but the last workspace change was not persisted to disk. Error: \(String(describing: error), privacy: .public)")
+				Logger.persistence.error("Core Data could not save the latest shell workspace state. The current session remains live, but the last workspace change was not persisted to disk. Error: \(String(describing: error), privacy: .public)")
 				context.rollback()
 			}
 		}
@@ -125,7 +135,7 @@ final class ShellPersistenceController {
 		let context = container.viewContext
 		var createdSummary: SavedWorkspaceSnapshotSummary?
 		let now = Date()
-		let paneSnapshots = workspace.paneLeaves.map { leaf in
+		let paneSnapshots = (workspace.root?.leaves() ?? []).map { leaf in
 			let session = sessions.ensureSession(id: leaf.sessionID)
 			let launchConfiguration = TerminalLaunchConfiguration(
 				executable: session.launchConfiguration.executable,
@@ -138,7 +148,7 @@ final class ShellPersistenceController {
 				transcript
 					.split(whereSeparator: \.isNewline)
 					.map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
-					.first(where: { !$0.isEmpty })
+					.first { !$0.isEmpty }
 					.map { String($0.prefix(160)) }
 			}
 			let transcriptLineCount = transcript.map { transcript in
@@ -250,10 +260,10 @@ final class ShellPersistenceController {
 					lastOpenedAt: snapshotEntity.lastOpenedAt,
 					isPinned: snapshotEntity.isPinned,
 					previewText: previewText,
-					paneCount: workspace.paneCount
+					paneCount: workspace.root?.leaves().count ?? 0
 				)
 			} catch {
-				logger.error("Core Data failed to create a saved workspace snapshot. The live workspace remains open, but the snapshot was not written. Workspace title: \(workspace.title, privacy: .public). Error: \(String(describing: error), privacy: .public)")
+				Logger.persistence.error("Core Data failed to create a saved workspace snapshot. The live workspace remains open, but the snapshot was not written. Workspace title: \(workspace.title, privacy: .public). Error: \(String(describing: error), privacy: .public)")
 				context.rollback()
 			}
 		}
@@ -278,21 +288,6 @@ final class ShellPersistenceController {
 
 		do {
 			return try context.fetch(request).map { entity in
-				func snapshotPaneCount(from rootNode: PaneSnapshotNodeEntity?) -> Int {
-					guard let rootNode else {
-						return 0
-					}
-
-					switch PaneNodeKind(rawValue: rootNode.kind) {
-						case .leaf:
-							return 1
-						case .split:
-							return snapshotPaneCount(from: rootNode.firstChild) + snapshotPaneCount(from: rootNode.secondChild)
-						case .none:
-							return 0
-					}
-				}
-
 				return SavedWorkspaceSnapshotSummary(
 					id: WorkspaceSnapshotID(rawValue: entity.id),
 					title: entity.title,
@@ -301,11 +296,11 @@ final class ShellPersistenceController {
 					lastOpenedAt: entity.lastOpenedAt,
 					isPinned: entity.isPinned,
 					previewText: entity.previewText,
-					paneCount: snapshotPaneCount(from: entity.rootNode)
+					paneCount: Self.decodeSnapshotNode(entity.rootNode)?.leaves().count ?? 0
 				)
 			}
 		} catch {
-			logger.error("Core Data failed to list saved workspace snapshots. The app will continue, but the saved-workspace index could not be read. Error: \(String(describing: error), privacy: .public)")
+			Logger.persistence.error("Core Data failed to list saved workspace snapshots. The app will continue, but the saved-workspace index could not be read. Error: \(String(describing: error), privacy: .public)")
 			return []
 		}
 	}
@@ -318,26 +313,38 @@ final class ShellPersistenceController {
 
 		do {
 			guard let entity = try context.fetch(request).first else {
-				logger.error("The saved-workspace library could not find the requested snapshot during reopen. The snapshot may have been deleted or the library index may be stale. Snapshot ID: \(id.rawValue.uuidString, privacy: .public)")
+				Logger.persistence.error("The saved-workspace library could not find the requested snapshot during reopen. The snapshot may have been deleted or the library index may be stale. Snapshot ID: \(id.rawValue.uuidString, privacy: .public)")
 				return nil
 			}
 
 			let workspace = Workspace(
 				title: entity.title,
-				root: Self.decodeSnapshotNode(entity.rootNode, logger: logger),
+				root: Self.decodeSnapshotNode(entity.rootNode),
 				focusedPaneID: entity.focusedPaneID.map(PaneID.init(rawValue:))
 			)
 
-			guard let normalizedWorkspace = Self.normalizedWorkspace(workspace, logger: logger) else {
-				logger.error("A saved workspace snapshot decoded into an unusable pane layout during reopen. The snapshot remains on disk, but the app could not rebuild a restorable workspace from it. Snapshot ID: \(id.rawValue.uuidString, privacy: .public)")
-				return nil
-			}
+				guard let root = workspace.root else {
+					Logger.persistence.error("A saved workspace snapshot decoded into an unusable pane layout during reopen because it had no root pane tree. The snapshot remains on disk, but the app could not rebuild a restorable workspace from it. Snapshot ID: \(id.rawValue.uuidString, privacy: .public)")
+					return nil
+				}
 
-			let paneSnapshots = entity.sessionSnapshots as? Set<PaneSessionSnapshotEntity> ?? []
+				let leaves = root.leaves()
+				guard !leaves.isEmpty else {
+					Logger.persistence.error("A saved workspace snapshot decoded into an unusable pane layout during reopen because its pane tree was empty. The snapshot remains on disk, but the app could not rebuild a restorable workspace from it. Snapshot ID: \(id.rawValue.uuidString, privacy: .public)")
+					return nil
+				}
+
+				let normalizedWorkspace = Workspace(
+					title: workspace.title,
+					root: root,
+					focusedPaneID: leaves.contains { $0.id == workspace.focusedPaneID } ? workspace.focusedPaneID : leaves[0].id
+				)
+
+				let paneSnapshots = entity.sessionSnapshots as? Set<PaneSessionSnapshotEntity> ?? []
 			let paneSnapshotsBySessionID: [TerminalSessionID: SavedPaneSessionSnapshot] = Dictionary(
 				uniqueKeysWithValues: paneSnapshots.compactMap { sessionSnapshot in
 					guard let argumentsData = sessionSnapshot.argumentsData else {
-						logger.error("A saved workspace pane session snapshot is missing its encoded argument list. That pane history will be skipped during restore. Session snapshot ID: \(sessionSnapshot.id.uuidString, privacy: .public)")
+						Logger.persistence.error("A saved workspace pane session snapshot is missing its encoded argument list. That pane history will be skipped during restore. Session snapshot ID: \(sessionSnapshot.id.uuidString, privacy: .public)")
 						return nil
 					}
 					do {
@@ -361,7 +368,7 @@ final class ShellPersistenceController {
 						)
 						return (paneSnapshot.id, paneSnapshot)
 					} catch {
-						logger.error("A saved workspace pane session snapshot could not be decoded. That pane history will be skipped during restore. Session snapshot ID: \(sessionSnapshot.id.uuidString, privacy: .public). Error: \(String(describing: error), privacy: .public)")
+						Logger.persistence.error("A saved workspace pane session snapshot could not be decoded. That pane history will be skipped during restore. Session snapshot ID: \(sessionSnapshot.id.uuidString, privacy: .public). Error: \(String(describing: error), privacy: .public)")
 						return nil
 					}
 				}
@@ -380,7 +387,7 @@ final class ShellPersistenceController {
 				paneSnapshotsBySessionID: paneSnapshotsBySessionID
 			)
 		} catch {
-			logger.error("Core Data failed while reading a saved-workspace snapshot for reopen. The live session remains available, but the requested snapshot could not be loaded from the library store. Snapshot ID: \(id.rawValue.uuidString, privacy: .public). Error: \(String(describing: error), privacy: .public)")
+			Logger.persistence.error("Core Data failed while reading a saved-workspace snapshot for reopen. The live session remains available, but the requested snapshot could not be loaded from the library store. Snapshot ID: \(id.rawValue.uuidString, privacy: .public). Error: \(String(describing: error), privacy: .public)")
 			return nil
 		}
 	}
@@ -395,7 +402,7 @@ final class ShellPersistenceController {
 				request.fetchLimit = 1
 				request.predicate = NSPredicate(format: "id == %@", id.rawValue as CVarArg)
 				guard let entity = try context.fetch(request).first else {
-					logger.error("The saved-workspace library could not find the snapshot requested for deletion. The library may already be up to date, or the selection may have gone stale. Snapshot ID: \(id.rawValue.uuidString, privacy: .public)")
+					Logger.persistence.error("The saved-workspace library could not find the snapshot requested for deletion. The library may already be up to date, or the selection may have gone stale. Snapshot ID: \(id.rawValue.uuidString, privacy: .public)")
 					return
 				}
 				context.delete(entity)
@@ -404,7 +411,7 @@ final class ShellPersistenceController {
 				}
 				didDeleteSnapshot = true
 			} catch {
-				logger.error("Core Data failed to delete a saved workspace snapshot. The snapshot remains in the library. Snapshot ID: \(id.rawValue.uuidString, privacy: .public). Error: \(String(describing: error), privacy: .public)")
+				Logger.persistence.error("Core Data failed to delete a saved workspace snapshot. The snapshot remains in the library. Snapshot ID: \(id.rawValue.uuidString, privacy: .public). Error: \(String(describing: error), privacy: .public)")
 				context.rollback()
 			}
 		}
@@ -428,7 +435,7 @@ final class ShellPersistenceController {
 					try context.save()
 				}
 			} catch {
-				logger.error("Core Data failed to update the last-opened date for a saved workspace snapshot. The snapshot remains usable, but its recency metadata is stale. Snapshot ID: \(id.rawValue.uuidString, privacy: .public). Error: \(String(describing: error), privacy: .public)")
+				Logger.persistence.error("Core Data failed to update the last-opened date for a saved workspace snapshot. The snapshot remains usable, but its recency metadata is stale. Snapshot ID: \(id.rawValue.uuidString, privacy: .public). Error: \(String(describing: error), privacy: .public)")
 				context.rollback()
 			}
 		}

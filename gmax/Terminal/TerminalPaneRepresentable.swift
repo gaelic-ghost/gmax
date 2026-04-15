@@ -34,30 +34,40 @@ struct TerminalPaneRepresentable: NSViewRepresentable {
 	func makeNSView(context: Context) -> TerminalHostingContainerView {
 		let hostingView = context.coordinator.makeHostingView()
 		applyCurrentAppearance(to: hostingView)
-		configureAccessibility(for: hostingView)
+		hostingView.updateAccessibility(
+			snapshot: accessibilitySnapshot,
+			onFocus: onFocus,
+			onRestart: onRestart,
+			onSplitRight: onSplitRight,
+			onSplitDown: onSplitDown,
+			onClose: onClose
+		)
 		return hostingView
 	}
 
 	func updateNSView(_ nsView: TerminalHostingContainerView, context: Context) {
 		applyCurrentAppearance(to: nsView)
 		context.coordinator.update(hostingView: nsView, isFocused: isFocused)
-		configureAccessibility(for: nsView)
+		nsView.updateAccessibility(
+			snapshot: accessibilitySnapshot,
+			onFocus: onFocus,
+			onRestart: onRestart,
+			onSplitRight: onSplitRight,
+			onSplitDown: onSplitDown,
+			onClose: onClose
+		)
 	}
 
 	static func dismantleNSView(_ nsView: TerminalHostingContainerView, coordinator: Coordinator) {
 		coordinator.dismantle(hostingView: nsView)
 	}
 
-	private var currentAppearance: TerminalAppearance {
-		TerminalAppearance.persisted(
+	private func applyCurrentAppearance(to hostingView: TerminalHostingContainerView) {
+		let appearance = TerminalAppearance.persisted(
 			fontName: terminalFontName,
 			fontSize: terminalFontSize,
 			themeName: terminalThemeName
 		)
-	}
-
-	private func applyCurrentAppearance(to hostingView: TerminalHostingContainerView) {
-		let appearance = currentAppearance
 		appearance.apply(to: hostingView.terminalView)
 		hostingView.onEffectiveAppearanceChange = { [weak terminalView = hostingView.terminalView] _ in
 			guard let terminalView else {
@@ -68,17 +78,6 @@ struct TerminalPaneRepresentable: NSViewRepresentable {
 		}
 	}
 
-	private func configureAccessibility(for hostingView: TerminalHostingContainerView) {
-		hostingView.updateAccessibility(
-			snapshot: accessibilitySnapshot,
-			onFocus: onFocus,
-			onRestart: onRestart,
-			onSplitRight: onSplitRight,
-			onSplitDown: onSplitDown,
-			onClose: onClose
-		)
-	}
-
 	private var accessibilitySnapshot: TerminalAccessibilitySnapshot {
 		let trimmedTitle = session.title.trimmingCharacters(in: .whitespacesAndNewlines)
 		let label: String
@@ -87,12 +86,17 @@ struct TerminalPaneRepresentable: NSViewRepresentable {
 		} else {
 			label = "\(trimmedTitle) terminal"
 		}
+		let state = switch session.state {
+			case .idle: "Shell ready to launch"
+			case .running: "Shell running"
+			case .exited(let exitCode): exitCode.map { "Shell exited with status \($0)" } ?? "Shell exited"
+		}
 
 		var valueParts: [String] = []
 		if isFocused {
 			valueParts.append("Focused")
 		}
-		valueParts.append(stateAccessibilityValue)
+		valueParts.append(state)
 		if let currentDirectory = session.currentDirectory, !currentDirectory.isEmpty {
 			valueParts.append("Directory \(currentDirectory)")
 		}
@@ -102,19 +106,5 @@ struct TerminalPaneRepresentable: NSViewRepresentable {
 			value: valueParts.joined(separator: ". "),
 			help: "This terminal lives inside a workspace pane. Use the available accessibility actions to focus the pane, restart the shell, split the pane, or close the pane."
 		)
-	}
-
-	private var stateAccessibilityValue: String {
-		switch session.state {
-			case .idle:
-				return "Shell ready to launch"
-			case .running:
-				return "Shell running"
-			case .exited(let exitCode):
-				if let exitCode {
-					return "Shell exited with status \(exitCode)"
-				}
-				return "Shell exited"
-		}
 	}
 }

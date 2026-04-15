@@ -34,7 +34,7 @@ struct ContentPaneSplitView<First: View, Second: View>: View {
 	var body: some View {
 		GeometryReader { geometry in
 			let primaryLength = axis == .horizontal ? geometry.size.width : geometry.size.height
-			let clampedFraction = clampedFraction(for: primaryLength)
+			let clampedFraction = clamped(fraction, for: primaryLength)
 			let availableLength = max(primaryLength - dividerThickness, 0)
 			let firstLength = availableLength * clampedFraction
 			let secondLength = max(availableLength - firstLength, 0)
@@ -68,7 +68,7 @@ struct ContentPaneSplitView<First: View, Second: View>: View {
 
 	private func divider(for size: CGSize) -> some View {
 		let totalLength = axis == .horizontal ? size.width : size.height
-		let currentFraction = clampedFraction(for: totalLength)
+		let currentFraction = clamped(fraction, for: totalLength)
 
 		return Rectangle()
 			.fill(.separator.opacity(0.9))
@@ -107,7 +107,7 @@ struct ContentPaneSplitView<First: View, Second: View>: View {
 				}
 			}
 			.accessibilityElement()
-			.accessibilityLabel(dividerAccessibilityLabel)
+			.accessibilityLabel(axis == .horizontal ? "Vertical pane divider" : "Horizontal pane divider")
 			.accessibilityValue("\(Int(currentFraction * 100)) percent")
 			.accessibilityHint("Adjust to resize the panes on either side of this divider.")
 			.accessibilityAdjustableAction { direction in
@@ -123,10 +123,6 @@ struct ContentPaneSplitView<First: View, Second: View>: View {
 			}
 	}
 
-	private func clampedFraction(for totalLength: CGFloat) -> CGFloat {
-		clamped(fraction, for: totalLength)
-	}
-
 	private func clamped(_ proposedFraction: CGFloat, for totalLength: CGFloat) -> CGFloat {
 		let usableLength = max(totalLength - dividerThickness, 0)
 		guard usableLength > 0 else {
@@ -136,14 +132,5 @@ struct ContentPaneSplitView<First: View, Second: View>: View {
 		let minimumFraction = min(minimumPaneLength / usableLength, 0.5)
 		let maximumFraction = max(1 - minimumFraction, 0.5)
 		return min(max(proposedFraction, minimumFraction), maximumFraction)
-	}
-
-	private var dividerAccessibilityLabel: String {
-		switch axis {
-			case .horizontal:
-				return "Vertical pane divider"
-			case .vertical:
-				return "Horizontal pane divider"
-		}
 	}
 }

@@ -15,7 +15,22 @@ struct SavedWorkspaceLibrarySheet: View {
 	@State private var selectedSnapshotID: WorkspaceSnapshotID?
 
 	var body: some View {
-		let snapshots = displayedSnapshots
+		let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+		let snapshots = model.persistence.listWorkspaceSnapshots(matching: query.isEmpty ? nil : query)
+		let normalizeSelection = {
+			if !snapshots.contains(where: { $0.id == selectedSnapshotID }) {
+				selectedSnapshotID = snapshots.first?.id
+			}
+		}
+		let open: (WorkspaceSnapshotID) -> Void = { snapshotID in
+			guard let workspaceID = model.openSavedWorkspace(snapshotID) else { return }
+			selectedWorkspaceID = workspaceID
+			dismiss()
+		}
+		let delete: (WorkspaceSnapshotID) -> Void = { snapshotID in
+			model.deleteSavedWorkspace(snapshotID)
+			selectedSnapshotID = snapshots.first { $0.id != snapshotID }?.id
+		}
 
 		VStack(spacing: 0) {
 			Group {
@@ -23,21 +38,65 @@ struct SavedWorkspaceLibrarySheet: View {
 					ContentUnavailableView {
 						Label("No Saved Workspaces", systemImage: "externaldrive.badge.timemachine")
 					} description: {
-						Text(emptyStateDescription)
+						Text(
+							query.isEmpty
+								? "Save a workspace to the library to reopen its pane layout and shell history later."
+								: "No saved workspaces matched that search. Try a different title, pane count, or transcript text."
+						)
 					}
 					.accessibilityIdentifier("savedWorkspaceLibrary.emptyState")
 				} else {
 					List(selection: $selectedSnapshotID) {
 						ForEach(snapshots) { snapshot in
-							snapshotRow(for: snapshot)
+							let paneCountText = snapshot.paneCount == 1 ? "1 pane" : "\(snapshot.paneCount) panes"
+							let timestampText = if let lastOpenedAt = snapshot.lastOpenedAt {
+								"Opened \(lastOpenedAt.formatted(.relative(presentation: .named)))"
+							} else {
+								"Saved \(snapshot.updatedAt.formatted(.relative(presentation: .named)))"
+							}
+							VStack(alignment: .leading, spacing: 6) {
+								HStack(alignment: .firstTextBaseline, spacing: 8) {
+									Text(snapshot.title)
+										.font(.headline)
+										.lineLimit(1)
+										.accessibilityIdentifier("savedWorkspaceLibrary.title.\(snapshot.title)")
+
+									if snapshot.isPinned {
+										Image(systemName: "pin.fill")
+											.font(.caption)
+											.foregroundStyle(.secondary)
+									}
+								}
+
+								HStack(spacing: 10) {
+									Label(paneCountText, systemImage: "rectangle.split.3x1")
+									Text(timestampText)
+								}
+								.font(.caption)
+								.foregroundStyle(.secondary)
+
+								if let previewText = snapshot.previewText {
+									Text(previewText)
+										.font(.callout)
+										.foregroundStyle(.secondary)
+										.lineLimit(2)
+								}
+							}
+							.padding(.vertical, 4)
+							.accessibilityIdentifier("savedWorkspaceLibrary.row.\(snapshot.title)")
+							.simultaneousGesture(
+								TapGesture(count: 2).onEnded {
+									open(snapshot.id)
+								}
+							)
 								.tag(snapshot.id)
 								.contextMenu {
 									Button("Open Workspace") {
-										openSnapshot(snapshot.id)
+										open(snapshot.id)
 									}
 
 									Button("Delete Saved Workspace", role: .destructive) {
-										deleteSnapshot(snapshot.id)
+										delete(snapshot.id)
 									}
 								}
 						}
@@ -58,19 +117,19 @@ struct SavedWorkspaceLibrarySheet: View {
 				Spacer()
 
 				Button("Delete") {
-					guard let selectedSnapshotID else {
+					guard let snapshotID = selectedSnapshotID else {
 						return
 					}
-					deleteSnapshot(selectedSnapshotID)
+					delete(snapshotID)
 				}
 				.disabled(selectedSnapshotID == nil)
 				.accessibilityIdentifier("savedWorkspaceLibrary.deleteButton")
 
 				Button("Open") {
-					guard let selectedSnapshotID else {
+					guard let snapshotID = selectedSnapshotID else {
 						return
 					}
-					openSnapshot(selectedSnapshotID)
+					open(snapshotID)
 				}
 				.keyboardShortcut(.defaultAction)
 				.disabled(selectedSnapshotID == nil)
@@ -81,107 +140,10 @@ struct SavedWorkspaceLibrarySheet: View {
 		.frame(minWidth: 620, minHeight: 420)
 		.searchable(text: $searchText, prompt: "Search saved workspaces")
 		.onAppear {
-			synchronizeSelection(with: snapshots)
+			normalizeSelection()
 		}
-		.onChange(of: searchQueryKey) { _, _ in
-			synchronizeSelection(with: displayedSnapshots)
-		}
-	}
-
-	@ViewBuilder
-	private func snapshotRow(for snapshot: SavedWorkspaceSnapshotSummary) -> some View {
-		VStack(alignment: .leading, spacing: 6) {
-			HStack(alignment: .firstTextBaseline, spacing: 8) {
-				Text(snapshot.title)
-					.font(.headline)
-					.lineLimit(1)
-					.accessibilityIdentifier("savedWorkspaceLibrary.title.\(snapshot.title)")
-
-				if snapshot.isPinned {
-					Image(systemName: "pin.fill")
-						.font(.caption)
-						.foregroundStyle(.secondary)
-				}
-			}
-
-			HStack(spacing: 10) {
-				Label(paneCountText(for: snapshot.paneCount), systemImage: "rectangle.split.3x1")
-				Text(timestampText(for: snapshot))
-			}
-			.font(.caption)
-			.foregroundStyle(.secondary)
-
-			if let previewText = snapshot.previewText {
-				Text(previewText)
-					.font(.callout)
-					.foregroundStyle(.secondary)
-					.lineLimit(2)
-			}
-		}
-		.padding(.vertical, 4)
-		.accessibilityIdentifier("savedWorkspaceLibrary.row.\(snapshot.title)")
-		.simultaneousGesture(
-			TapGesture(count: 2).onEnded {
-				openSnapshot(snapshot.id)
-			}
-		)
-	}
-
-	private var emptyStateDescription: String {
-		searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-			? "Save a workspace to the library to reopen its pane layout and shell history later."
-			: "No saved workspaces matched that search. Try a different title, pane count, or transcript text."
-	}
-
-	private func paneCountText(for paneCount: Int) -> String {
-		switch paneCount {
-			case 1:
-				return "1 pane"
-			default:
-				return "\(paneCount) panes"
-		}
-	}
-
-	private func timestampText(for snapshot: SavedWorkspaceSnapshotSummary) -> String {
-		if let lastOpenedAt = snapshot.lastOpenedAt {
-			return "Opened \(lastOpenedAt.formatted(.relative(presentation: .named)))"
-		}
-
-		return "Saved \(snapshot.updatedAt.formatted(.relative(presentation: .named)))"
-	}
-
-	private func openSnapshot(_ snapshotID: WorkspaceSnapshotID) {
-		Task { @MainActor in
-			await Task.yield()
-			guard let workspaceID = model.openSavedWorkspace(snapshotID) else {
-				return
-			}
-
-			selectedWorkspaceID = workspaceID
-			dismiss()
-		}
-	}
-
-	private func deleteSnapshot(_ snapshotID: WorkspaceSnapshotID) {
-		Task { @MainActor in
-			await Task.yield()
-			model.deleteSavedWorkspace(snapshotID)
-			synchronizeSelection(with: displayedSnapshots)
-		}
-	}
-
-	private var searchQueryKey: String {
-		searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-	}
-
-	private var displayedSnapshots: [SavedWorkspaceSnapshotSummary] {
-		let query = searchQueryKey
-		return model.listSavedWorkspaceSnapshots(matching: query.isEmpty ? nil : query)
-	}
-
-	private func synchronizeSelection(with snapshots: [SavedWorkspaceSnapshotSummary]) {
-		if !snapshots.contains(where: { $0.id == selectedSnapshotID }) {
-			selectedSnapshotID = snapshots.first?.id
+		.onChange(of: query) { _, _ in
+			normalizeSelection()
 		}
 	}
 }

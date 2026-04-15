@@ -12,9 +12,8 @@ struct ContentPane: View {
 	@Binding var selectedWorkspaceID: WorkspaceID?
 
 	var body: some View {
-		if let workspace = selectedWorkspaceID.flatMap({ workspaceID in
-			model.workspaces.first(where: { $0.id == workspaceID })
-		}) {
+		let workspace = selectedWorkspaceID.flatMap { workspaceID in model.workspaces.first { $0.id == workspaceID } }
+		if let workspace {
 			Group {
 				if let root = workspace.root {
 					ContentPaneNodeView(
@@ -30,13 +29,9 @@ struct ContentPane: View {
 							model.setSplitFraction(fraction, for: splitID, in: workspace.id)
 						},
 						onFocusPane: { paneID in
-							Task { @MainActor in
-								await Task.yield()
-								model.focusPane(paneID, in: workspace.id)
-							}
+							model.focusPane(paneID, in: workspace.id)
 						},
 						onSplitPane: { paneID, direction in
-							model.focusPane(paneID, in: workspace.id)
 							model.splitPane(paneID, in: workspace.id, direction: direction)
 						},
 						onClosePane: { paneID in

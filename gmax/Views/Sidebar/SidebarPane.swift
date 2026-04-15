@@ -14,13 +14,16 @@ struct SidebarPane: View {
 	let requestDeleteWorkspace: (WorkspaceID) -> Void
 
 	var body: some View {
+		let selectedWorkspace = selection.flatMap { workspaceID in model.workspaces.first { $0.id == workspaceID } }
+
 		List(selection: $selection) {
 			ForEach(model.workspaces) { workspace in
+				let paneCount = workspace.root?.leaves().count ?? 0
 				NavigationLink(value: workspace.id) {
 					VStack(alignment: .leading, spacing: 4) {
 						Text(workspace.title)
 							.accessibilityIdentifier("sidebar.workspaceTitle.\(workspace.title)")
-						Text(paneCountText(for: workspace))
+						Text(paneCount == 1 ? "1 pane" : "\(paneCount) panes")
 							.font(.caption)
 							.foregroundStyle(.secondary)
 							.accessibilityIdentifier("sidebar.workspacePaneCount.\(workspace.title)")
@@ -28,7 +31,7 @@ struct SidebarPane: View {
 				}
 					.accessibilityElement(children: .combine)
 					.accessibilityLabel(workspace.title)
-					.accessibilityValue(paneCountText(for: workspace))
+					.accessibilityValue(paneCount == 1 ? "1 pane" : "\(paneCount) panes")
 					.accessibilityIdentifier("sidebar.workspaceRow.\(workspace.title)")
 					.contextMenu {
 						workspaceActions(for: workspace)
@@ -41,7 +44,7 @@ struct SidebarPane: View {
 			ToolbarItem(placement: .automatic) {
 				if let workspace = selectedWorkspace {
 					Menu {
-						sidebarWorkspaceActions(for: workspace)
+						workspaceActions(for: workspace)
 					} label: {
 						Label("Workspace Actions", systemImage: "ellipsis.circle")
 					}
@@ -52,95 +55,37 @@ struct SidebarPane: View {
 		}
 	}
 
-	private var selectedWorkspace: Workspace? {
-		selection.flatMap { workspaceID in
-			model.workspaces.first(where: { $0.id == workspaceID })
-		}
-	}
-
 	@ViewBuilder
 	private func workspaceActions(for workspace: Workspace) -> some View {
 		Button("Rename Workspace") {
 			requestRenameWorkspace(workspace.id)
 		}
 
-			Button("Duplicate Workspace Layout") {
-				Task { @MainActor in
-					await Task.yield()
-					selection = model.duplicateWorkspace(workspace.id)
-				}
-			}
-
-		Divider()
-
-			Button("Save Workspace") {
-				Task { @MainActor in
-					await Task.yield()
-					_ = model.saveWorkspaceToLibrary(workspace.id)
-				}
-			}
-
-			Button("Close Workspace to Library") {
-				Task { @MainActor in
-					await Task.yield()
-					selection = model.closeWorkspaceToLibrary(workspace.id)
-				}
-			}
-
-		Divider()
-
-			Button("Close Workspace") {
-				Task { @MainActor in
-					await Task.yield()
-					selection = model.closeWorkspace(workspace.id)
-				}
-			}
-
-		Button("Delete Workspace", role: .destructive) {
-			requestDeleteWorkspace(workspace.id)
-		}
-		.disabled(!model.canDeleteWorkspace(workspace.id))
-	}
-
-	@ViewBuilder
-	private func sidebarWorkspaceActions(for workspace: Workspace) -> some View {
-		Button("Rename Workspace") {
-			requestRenameWorkspace(workspace.id)
-		}
-
 		Button("Duplicate Workspace Layout") {
-			Task { @MainActor in
-				await Task.yield()
-				selection = model.duplicateWorkspace(workspace.id)
-			}
+			selection = model.duplicateWorkspace(workspace.id)
 		}
 
 		Divider()
+
+		Button("Save Workspace") {
+			_ = model.saveWorkspaceToLibrary(workspace.id)
+		}
 
 		Button("Close Workspace to Library") {
-			Task { @MainActor in
-				await Task.yield()
-				selection = model.closeWorkspaceToLibrary(workspace.id)
-			}
+			selection = model.closeWorkspaceToLibrary(workspace.id)
 		}
 
 		Divider()
 
+		Button("Close Workspace") {
+			selection = model.closeWorkspace(workspace.id)
+		}
+
 		Button("Delete Workspace", role: .destructive) {
 			requestDeleteWorkspace(workspace.id)
 		}
-		.disabled(!model.canDeleteWorkspace(workspace.id))
+		.disabled(model.workspaces.count <= 1)
 	}
-
-	private func paneCountText(for workspace: Workspace) -> String {
-		switch workspace.paneCount {
-			case 1:
-				return "1 pane"
-			default:
-				return "\(workspace.paneCount) panes"
-		}
-	}
-
 }
 
 #Preview {

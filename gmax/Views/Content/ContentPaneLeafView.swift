@@ -17,11 +17,19 @@ struct ContentPaneLeafView: View {
 	let onSplitDown: () -> Void
 	let onClose: () -> Void
 
-	private var terminalHostIdentity: String {
-		"\(pane.id.rawValue.uuidString)-\(session.relaunchGeneration)"
-	}
-
 	var body: some View {
+		let title = session.title.trimmingCharacters(in: .whitespacesAndNewlines)
+		let state = switch session.state {
+			case .idle: "Shell ready to launch"
+			case .running: "Shell running"
+			case .exited(let exitCode): exitCode.map { "Shell exited with status \($0)" } ?? "Shell exited"
+		}
+		let accessibilityLabel = title.isEmpty || title == "Shell" ? "Shell pane" : "\(title) pane"
+		let accessibilityValue = [
+			isFocused ? "Focused" : nil,
+			state,
+			session.currentDirectory.flatMap { $0.isEmpty ? nil : "Directory \($0)" }
+		].compactMap(\.self).joined(separator: ". ")
 		ZStack(alignment: .topLeading) {
 			TerminalPaneRepresentable(
 				controller: controller,
@@ -35,7 +43,7 @@ struct ContentPaneLeafView: View {
 			)
 			// The pane host must stay keyed to the actual pane leaf, not just relaunches,
 			// or SwiftUI can reuse a surviving sibling's coordinator after split collapse.
-			.id(terminalHostIdentity)
+			.id("\(pane.id.rawValue.uuidString)-\(session.relaunchGeneration)")
 			.background(.black)
 
 			if case .exited(let exitCode) = session.state {
@@ -74,14 +82,14 @@ struct ContentPaneLeafView: View {
 				)
 			}
 		}
-		.background(backgroundStyle)
+		.background(isFocused ? AnyShapeStyle(.tint.opacity(0.18)) : AnyShapeStyle(.quaternary.opacity(0.35)))
 		.contentShape(Rectangle())
 		.focusedValue(\.closeFocusedPane, isFocused ? onClose : nil)
 		.onTapGesture(perform: onFocus)
 		.accessibilityElement(children: .contain)
 		.accessibilityLabel(accessibilityLabel)
 		.accessibilityValue(accessibilityValue)
-		.accessibilityHint(accessibilityHint)
+		.accessibilityHint("Activate to focus this pane. Additional actions are available for splitting, closing, and restarting the shell.")
 		.accessibilityRespondsToUserInteraction(true)
 		.accessibilityAddTraits(isFocused ? .isSelected : [])
 		.accessibilityAction(.default) {
@@ -101,13 +109,14 @@ struct ContentPaneLeafView: View {
 		}
 	}
 
-	@ViewBuilder
 	private func exitedSessionOverlay(exitCode: Int32?) -> some View {
 		VStack(spacing: 10) {
 			Text("Shell Session Ended")
 				.font(.headline.weight(.semibold))
 
-			Text(exitDescription(exitCode: exitCode))
+			Text(exitCode.map {
+				"The shell process exited with status \($0). Start a fresh login shell in this pane when you're ready."
+			} ?? "The shell process ended unexpectedly or without a reported exit status. Start a fresh login shell in this pane when you're ready.")
 				.font(.callout)
 				.foregroundStyle(.secondary)
 				.multilineTextAlignment(.center)
@@ -121,63 +130,8 @@ struct ContentPaneLeafView: View {
 		.background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
 	}
 
-	private func exitDescription(exitCode: Int32?) -> String {
-		if let exitCode {
-			return "The shell process exited with status \(exitCode). Start a fresh login shell in this pane when you're ready."
-		}
-
-		return "The shell process ended unexpectedly or without a reported exit status. Start a fresh login shell in this pane when you're ready."
-	}
-
-	private var backgroundStyle: some ShapeStyle {
-		if isFocused {
-			return AnyShapeStyle(.tint.opacity(0.18))
-		}
-		return AnyShapeStyle(.quaternary.opacity(0.35))
-	}
-
-	private var accessibilityLabel: String {
-		let trimmedTitle = session.title.trimmingCharacters(in: .whitespacesAndNewlines)
-		if trimmedTitle.isEmpty || trimmedTitle == "Shell" {
-			return "Shell pane"
-		}
-		return "\(trimmedTitle) pane"
-	}
-
-	private var accessibilityValue: String {
-		var details: [String] = []
-		if isFocused {
-			details.append("Focused")
-		}
-		details.append(stateAccessibilityValue)
-		if let currentDirectory = session.currentDirectory, !currentDirectory.isEmpty {
-			details.append("Directory \(currentDirectory)")
-		}
-		return details.joined(separator: ". ")
-	}
-
-	private var accessibilityHint: String {
-		"Activate to focus this pane. Additional actions are available for splitting, closing, and restarting the shell."
-	}
-
 	private func restartShell() {
-		guard session.state != .running else {
-			return
-		}
+		guard session.state != .running else { return }
 		controller.session.prepareForRelaunch()
-	}
-
-	private var stateAccessibilityValue: String {
-		switch session.state {
-			case .idle:
-				return "Shell ready to launch"
-			case .running:
-				return "Shell running"
-			case .exited(let exitCode):
-				if let exitCode {
-					return "Shell exited with status \(exitCode)"
-				}
-				return "Shell exited"
-		}
 	}
 }

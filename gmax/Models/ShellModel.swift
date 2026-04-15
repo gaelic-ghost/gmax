@@ -23,25 +23,26 @@ final class ShellModel: ObservableObject {
 	var paneFocusHistoryByWorkspace: [WorkspaceID: [PaneID]]
 	var pendingPersistenceTask: Task<Void, Never>?
 	var recentlyClosedWorkspaces: [RecentlyClosedWorkspace] = []
-	let appLogger = Logger.gmax(.app)
-	let diagnosticsLogger = Logger.gmax(.diagnostics)
-	let workspaceLogger = Logger.gmax(.workspace)
-	let paneLogger = Logger.gmax(.pane)
 
 	init(
 		workspaces: [Workspace]? = nil,
 		persistence: ShellPersistenceController? = nil,
 		launchContextBuilder: TerminalLaunchContextBuilder? = nil
 	) {
-		WorkspacePersistenceDefaults.registerDefaults()
+		UserDefaults.standard.register(
+			defaults: [
+				WorkspacePersistenceDefaults.restoreWorkspacesOnLaunchKey:
+					WorkspacePersistenceDefaults.systemRestoresWindowsByDefault(),
+				WorkspacePersistenceDefaults.keepRecentlyClosedWorkspacesKey: true,
+				WorkspacePersistenceDefaults.autoSaveClosedWorkspacesKey: false
+			]
+		)
 		let persistence = persistence ?? .shared
 		let launchContextBuilder = launchContextBuilder ?? .live()
 		let resolvedWorkspaces: [Workspace]
-		let launchRestoreLog: (message: String, restoredCount: Int?)?
 
 		if let workspaces {
 			resolvedWorkspaces = workspaces
-			launchRestoreLog = nil
 		} else {
 			let shouldRestorePersistedWorkspaces = UserDefaults.standard.bool(
 				forKey: WorkspacePersistenceDefaults.restoreWorkspacesOnLaunchKey
@@ -55,20 +56,11 @@ final class ShellModel: ObservableObject {
 			}
 
 			if shouldRestorePersistedWorkspaces, !persistedWorkspaces.isEmpty {
-				launchRestoreLog = (
-					"Restored persisted workspaces during app launch.",
-					persistedWorkspaces.count
-				)
+				Logger.app.notice("Restored persisted workspaces during app launch. Restored workspace count: \(persistedWorkspaces.count)")
 			} else if shouldRestorePersistedWorkspaces {
-				launchRestoreLog = (
-					"Workspace restoration is enabled for launch, but there were no persisted workspaces to restore. The app started with the default workspace instead.",
-					nil
-				)
+				Logger.app.notice("Workspace restoration is enabled for launch, but there were no persisted workspaces to restore. The app started with the default workspace instead.")
 			} else {
-				launchRestoreLog = (
-					"Workspace restoration on launch is disabled, so the app started with the default workspace state for this session.",
-					nil
-				)
+				Logger.app.notice("Workspace restoration on launch is disabled, so the app started with the default workspace state for this session.")
 			}
 		}
 
@@ -89,13 +81,5 @@ final class ShellModel: ObservableObject {
 				return (workspace.id, [focusedPaneID])
 			}
 		)
-
-		if let launchRestoreLog {
-			if let restoredCount = launchRestoreLog.restoredCount {
-				appLogger.notice("\(launchRestoreLog.message) Restored workspace count: \(restoredCount)")
-			} else {
-				appLogger.notice("\(launchRestoreLog.message)")
-			}
-		}
 	}
 }

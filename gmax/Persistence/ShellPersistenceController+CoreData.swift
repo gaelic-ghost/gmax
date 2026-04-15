@@ -17,13 +17,13 @@ extension ShellPersistenceController {
 		do {
 			try fileManager.createDirectory(at: directoryURL, withIntermediateDirectories: true)
 		} catch {
-			Logger.gmax(.persistence)
+			Logger.persistence
 				.error("The app could not create the Application Support directory for shell persistence. The SQLite store may fail to open on this launch. Directory: \(directoryURL.path, privacy: .public). Error: \(String(describing: error), privacy: .public)")
 		}
 		return directoryURL.appendingPathComponent("ShellStore.sqlite")
 	}
 
-	static func makePersistentContainer(logger: Logger) -> NSPersistentContainer {
+	static func makePersistentContainer() -> NSPersistentContainer {
 		let model = makeManagedObjectModel()
 		let primaryContainer = makeContainer(
 			model: model,
@@ -36,11 +36,11 @@ extension ShellPersistenceController {
 			contextName: "ShellPersistence.viewContext"
 		)
 
-		if loadPersistentStores(for: primaryContainer, logger: logger) {
+		if loadPersistentStores(for: primaryContainer) {
 			return primaryContainer
 		}
 
-		logger.error("Core Data could not open the on-disk shell store, so the app is falling back to an in-memory store for this launch. Workspace changes will remain live, but they will not survive quitting the app until the disk-backed store loads successfully again.")
+		Logger.persistence.error("Core Data could not open the on-disk shell store, so the app is falling back to an in-memory store for this launch. Workspace changes will remain live, but they will not survive quitting the app until the disk-backed store loads successfully again.")
 
 		let fallbackContainer = makeContainer(
 			model: model,
@@ -52,7 +52,7 @@ extension ShellPersistenceController {
 			contextName: "ShellPersistence.inMemoryViewContext"
 		)
 
-		guard loadPersistentStores(for: fallbackContainer, logger: logger) else {
+		guard loadPersistentStores(for: fallbackContainer) else {
 			fatalError("Core Data could not load either the disk-backed shell store or the in-memory fallback store. The app cannot continue without a managed object context.")
 		}
 
@@ -71,10 +71,7 @@ extension ShellPersistenceController {
 		return container
 	}
 
-	static func loadPersistentStores(
-		for container: NSPersistentContainer,
-		logger: Logger
-	) -> Bool {
+	static func loadPersistentStores(for container: NSPersistentContainer) -> Bool {
 		var loadError: Error?
 		let semaphore = DispatchSemaphore(value: 0)
 		container.loadPersistentStores { _, error in
@@ -84,7 +81,7 @@ extension ShellPersistenceController {
 		semaphore.wait()
 
 		if let loadError {
-			logger.error("Core Data could not load a shell persistent store description. The store described by this container will remain unavailable for this launch. Error: \(String(describing: loadError), privacy: .public)")
+			Logger.persistence.error("Core Data could not load a shell persistent store description. The store described by this container will remain unavailable for this launch. Error: \(String(describing: loadError), privacy: .public)")
 			return false
 		}
 
