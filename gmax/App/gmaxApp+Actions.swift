@@ -13,7 +13,6 @@ import SwiftUI
 final class MainShellSceneContext {
 	let shellModel: ShellModel
 
-	var selectedWorkspaceID: WorkspaceID?
 	var workspacePendingDeletionID: WorkspaceID?
 	var workspacePendingRenameID: WorkspaceID?
 	var workspaceRenameTitleDraft = ""
@@ -23,12 +22,10 @@ final class MainShellSceneContext {
 
 	init(
 		shellModel: ShellModel,
-		selectedWorkspaceID: WorkspaceID?,
 		isSidebarVisible: Bool = true,
 		isInspectorVisible: Bool = true
 	) {
 		self.shellModel = shellModel
-		self.selectedWorkspaceID = shellModel.normalizedWorkspaceSelection(selectedWorkspaceID)
 		self.columnVisibility = isSidebarVisible ? .all : .doubleColumn
 		self.isInspectorVisible = isInspectorVisible
 	}
@@ -36,4 +33,5 @@ final class MainShellSceneContext {
 
 extension FocusedValues {
 	@Entry var mainShellSceneContext: MainShellSceneContext?
+	@Entry var selectedWorkspaceSelection: Binding<WorkspaceID?>?
 }

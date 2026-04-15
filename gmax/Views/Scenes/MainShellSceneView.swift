@@ -11,6 +11,7 @@ import SwiftUI
 struct MainShellSceneView: View {
 	@ObservedObject var shellModel: ShellModel
 	@State private var sceneContext: MainShellSceneContext
+	@State private var selectedWorkspaceID: WorkspaceID?
 	@SceneStorage("mainShell.selectedWorkspaceID") private var restoredSelectedWorkspaceID: String?
 	@SceneStorage("mainShell.isInspectorVisible") private var restoredInspectorVisible = true
 	@SceneStorage("mainShell.isSidebarVisible") private var restoredSidebarVisible = true
@@ -25,10 +26,10 @@ struct MainShellSceneView: View {
 
 	init(shellModel: ShellModel) {
 		self.shellModel = shellModel
+		_selectedWorkspaceID = State(initialValue: shellModel.normalizedWorkspaceSelection(nil))
 		_sceneContext = State(
 			initialValue: MainShellSceneContext(
-				shellModel: shellModel,
-				selectedWorkspaceID: shellModel.normalizedWorkspaceSelection(nil)
+				shellModel: shellModel
 			)
 		)
 	}
@@ -39,7 +40,7 @@ struct MainShellSceneView: View {
 		NavigationSplitView(columnVisibility: $bindableSceneContext.columnVisibility) {
 			SidebarPane(
 				model: shellModel,
-				selection: selectedWorkspaceID,
+				selection: workspaceSelection,
 				requestRenameWorkspace: { workspaceID in
 					presentWorkspaceRename(for: workspaceID)
 				},
@@ -49,11 +50,11 @@ struct MainShellSceneView: View {
 			)
 				.navigationSplitViewColumnWidth(sidebarColumnWidth)
 		} detail: {
-			ContentPane(model: shellModel, selectedWorkspaceID: selectedWorkspaceID)
+			ContentPane(model: shellModel, selectedWorkspaceID: workspaceSelection)
 				.navigationSplitViewColumnWidth(min: 640, ideal: contentColumnIdealWidth)
 		}
 		.inspector(isPresented: $bindableSceneContext.isInspectorVisible) {
-			DetailPane(model: shellModel, selectedWorkspaceID: selectedWorkspaceID)
+			DetailPane(model: shellModel, selectedWorkspaceID: workspaceSelection)
 				.inspectorColumnWidth(
 					min: inspectorColumnMinimumWidth,
 					ideal: inspectorColumnIdealWidth,
@@ -63,7 +64,7 @@ struct MainShellSceneView: View {
 		.sheet(isPresented: $bindableSceneContext.isSavedWorkspaceLibraryPresented) {
 			SavedWorkspaceLibrarySheet(
 				model: shellModel,
-				selectedWorkspaceID: selectedWorkspaceID
+				selectedWorkspaceID: workspaceSelection
 			)
 		}
 		.alert(
@@ -95,6 +96,7 @@ struct MainShellSceneView: View {
 			)
 		}
 		.focusedSceneValue(\.mainShellSceneContext, sceneContext)
+		.focusedSceneValue(\.selectedWorkspaceSelection, workspaceSelection)
 		.toolbar {
 				ToolbarItem(placement: .navigation) {
 					Button("Open Saved Workspaces", systemImage: "folder") {
@@ -107,7 +109,7 @@ struct MainShellSceneView: View {
 
 				ToolbarItem(placement: .navigation) {
 					Button("New Workspace", systemImage: "plus.rectangle.on.rectangle") {
-						sceneContext.selectedWorkspaceID = shellModel.createWorkspace()
+						selectedWorkspaceID = shellModel.createWorkspace()
 					}
 				.labelStyle(.iconOnly)
 				.help("Create a new workspace (\u{2318}N)")
@@ -147,7 +149,7 @@ struct MainShellSceneView: View {
 		.task {
 			applySceneStateIfNeeded()
 		}
-			.onChange(of: sceneContext.selectedWorkspaceID?.rawValue.uuidString) { _, newValue in
+			.onChange(of: selectedWorkspaceID?.rawValue.uuidString) { _, newValue in
 				restoredSelectedWorkspaceID = newValue
 			}
 			.onChange(of: shellModel.workspaces.map(\.id.rawValue)) { _, _ in
@@ -176,17 +178,17 @@ struct MainShellSceneView: View {
 	}
 
 	private var canSplitFocusedPane: Bool {
-		guard let selectedWorkspaceID = sceneContext.selectedWorkspaceID else {
+		guard let selectedWorkspaceID else {
 			return false
 		}
 		return shellModel.focusedPane(in: selectedWorkspaceID) != nil
 	}
 
-	private var selectedWorkspaceID: Binding<WorkspaceID?> {
+	private var workspaceSelection: Binding<WorkspaceID?> {
 		Binding(
-			get: { sceneContext.selectedWorkspaceID },
+			get: { selectedWorkspaceID },
 			set: { newValue in
-				sceneContext.selectedWorkspaceID = shellModel.normalizedWorkspaceSelection(newValue)
+				selectedWorkspaceID = shellModel.normalizedWorkspaceSelection(newValue)
 			}
 		)
 	}
@@ -200,15 +202,15 @@ struct MainShellSceneView: View {
 		let restoredSelection = restoredSelectedWorkspaceID
 			.flatMap(UUID.init(uuidString:))
 			.map { WorkspaceID(rawValue: $0) }
-		sceneContext.selectedWorkspaceID = shellModel.normalizedWorkspaceSelection(
-			restoredSelection ?? sceneContext.selectedWorkspaceID
+		selectedWorkspaceID = shellModel.normalizedWorkspaceSelection(
+			restoredSelection ?? selectedWorkspaceID
 		)
 		sceneContext.columnVisibility = restoredSidebarVisible ? .all : .doubleColumn
 		sceneContext.isInspectorVisible = restoredInspectorVisible
 		diagnosticsLogger.notice(
 			"""
 			Applied per-window shell scene restoration. Restored workspace selection: \(restoredSelection?.rawValue.uuidString ?? "(none)", privacy: .public). \
-			Normalized workspace selection: \(sceneContext.selectedWorkspaceID?.rawValue.uuidString ?? "(none)", privacy: .public). \
+			Normalized workspace selection: \(selectedWorkspaceID?.rawValue.uuidString ?? "(none)", privacy: .public). \
 			Sidebar visibility: \(restoredSidebarVisible ? "visible" : "hidden", privacy: .public). \
 			Inspector visibility: \(restoredInspectorVisible ? "visible" : "hidden", privacy: .public).
 			"""
@@ -216,14 +218,14 @@ struct MainShellSceneView: View {
 	}
 
 	private func splitFocusedPane(_ direction: SplitDirection) {
-		guard let selectedWorkspaceID = sceneContext.selectedWorkspaceID else {
+		guard let selectedWorkspaceID else {
 			return
 		}
 		shellModel.splitFocusedPane(in: selectedWorkspaceID, direction)
 	}
 
 	private func normalizeSelectionAfterWorkspaceMutation() {
-		sceneContext.selectedWorkspaceID = shellModel.normalizedWorkspaceSelection(sceneContext.selectedWorkspaceID)
+		selectedWorkspaceID = shellModel.normalizedWorkspaceSelection(selectedWorkspaceID)
 	}
 
 	private func presentWorkspaceDeletionConfirmation(for workspaceID: WorkspaceID) {
@@ -277,7 +279,7 @@ struct MainShellSceneView: View {
 
 		sceneContext.workspaceRenameTitleDraft = workspace.title
 		sceneContext.workspacePendingRenameID = workspace.id
-		sceneContext.selectedWorkspaceID = workspace.id
+		selectedWorkspaceID = workspace.id
 		diagnosticsLogger.notice(
 			"Presented the workspace rename sheet for the active shell window. Workspace title: \(workspace.title, privacy: .public). Workspace ID: \(workspace.id.rawValue.uuidString, privacy: .public)"
 		)
@@ -303,7 +305,7 @@ struct MainShellSceneView: View {
 		}
 
 		shellModel.renameWorkspace(pendingWorkspaceID, to: sceneContext.workspaceRenameTitleDraft)
-		sceneContext.selectedWorkspaceID = pendingWorkspaceID
+		selectedWorkspaceID = pendingWorkspaceID
 		diagnosticsLogger.notice(
 			"Saved a workspace rename from the active shell window. Workspace ID: \(pendingWorkspaceID.rawValue.uuidString, privacy: .public). New title: \(sceneContext.workspaceRenameTitleDraft, privacy: .public)"
 		)

@@ -16,8 +16,9 @@ struct SidebarPane: View {
 	var body: some View {
 		List(selection: $selection) {
 			ForEach(model.workspaces) { workspace in
-				workspaceRow(for: workspace)
-					.tag(workspace.id)
+				NavigationLink(value: workspace.id) {
+					workspaceRow(for: workspace)
+				}
 					.accessibilityElement(children: .combine)
 					.accessibilityLabel(workspace.title)
 					.accessibilityValue(paneCountText(for: workspace))

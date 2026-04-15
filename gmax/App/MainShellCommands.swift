@@ -10,6 +10,7 @@ import SwiftUI
 
 struct MainShellCommands: Commands {
 	@FocusedValue(\.mainShellSceneContext) private var sceneContext
+	@FocusedValue(\.selectedWorkspaceSelection) private var selectedWorkspaceSelection
 	private let diagnosticsLogger = Logger.gmax(.diagnostics)
 
 	var body: some Commands {
@@ -40,7 +41,7 @@ struct MainShellCommands: Commands {
 				saveSelectedWorkspace(in: sceneContext)
 			}
 			.keyboardShortcut("s", modifiers: [.command])
-			.disabled(sceneContext?.selectedWorkspaceID == nil)
+			.disabled(selectedWorkspaceID == nil)
 		}
 
 		CommandMenu("Workspace") {
@@ -53,17 +54,17 @@ struct MainShellCommands: Commands {
 			Divider()
 
 			Button("Rename Workspace") {
-				guard let sceneContext, let selectedWorkspaceID = sceneContext.selectedWorkspaceID else {
+				guard let sceneContext, let selectedWorkspaceID else {
 					return
 				}
 				presentWorkspaceRename(for: selectedWorkspaceID, in: sceneContext)
 			}
-			.disabled(sceneContext?.selectedWorkspaceID == nil)
+			.disabled(selectedWorkspaceID == nil)
 
 			Button("Duplicate Workspace Layout") {
 				duplicateSelectedWorkspaceLayout(in: sceneContext)
 			}
-			.disabled(sceneContext?.selectedWorkspaceID == nil)
+			.disabled(selectedWorkspaceID == nil)
 
 			Button("Close Workspace to Library") {
 				closeSelectedWorkspaceToLibrary(in: sceneContext)
@@ -77,7 +78,7 @@ struct MainShellCommands: Commands {
 			.disabled(!canCloseWorkspace(in: sceneContext))
 
 			Button("Delete Workspace", role: .destructive) {
-				guard let sceneContext, let selectedWorkspaceID = sceneContext.selectedWorkspaceID else {
+				guard let sceneContext, let selectedWorkspaceID else {
 					return
 				}
 				presentWorkspaceDeletionConfirmation(for: selectedWorkspaceID, in: sceneContext)
@@ -148,22 +149,30 @@ struct MainShellCommands: Commands {
 		}
 	}
 
+	private var selectedWorkspaceID: WorkspaceID? {
+		selectedWorkspaceSelection?.wrappedValue
+	}
+
+	private func updateSelectedWorkspaceID(_ workspaceID: WorkspaceID?) {
+		selectedWorkspaceSelection?.wrappedValue = workspaceID
+	}
+
 	private func canDeleteSelectedWorkspace(in sceneContext: MainShellSceneContext?) -> Bool {
-		guard let sceneContext, let selectedWorkspaceID = sceneContext.selectedWorkspaceID else {
+		guard let sceneContext, let selectedWorkspaceID else {
 			return false
 		}
 		return sceneContext.shellModel.canDeleteWorkspace(selectedWorkspaceID)
 	}
 
 	private func canCloseWorkspace(in sceneContext: MainShellSceneContext?) -> Bool {
-		guard let sceneContext else {
+		guard sceneContext != nil else {
 			return false
 		}
-		return sceneContext.selectedWorkspaceID != nil
+		return selectedWorkspaceID != nil
 	}
 
 	private func canSplitFocusedPane(in sceneContext: MainShellSceneContext?) -> Bool {
-		guard let sceneContext, let selectedWorkspaceID = sceneContext.selectedWorkspaceID else {
+		guard let sceneContext, let selectedWorkspaceID else {
 			return false
 		}
 		return sceneContext.shellModel.focusedPane(in: selectedWorkspaceID) != nil
@@ -173,7 +182,7 @@ struct MainShellCommands: Commands {
 		guard let sceneContext else {
 			return
 		}
-		sceneContext.selectedWorkspaceID = sceneContext.shellModel.createWorkspace()
+		updateSelectedWorkspaceID(sceneContext.shellModel.createWorkspace())
 	}
 
 	private func presentWorkspaceRename(for workspaceID: WorkspaceID, in sceneContext: MainShellSceneContext) {
@@ -186,7 +195,7 @@ struct MainShellCommands: Commands {
 
 		sceneContext.workspaceRenameTitleDraft = workspace.title
 		sceneContext.workspacePendingRenameID = workspace.id
-		sceneContext.selectedWorkspaceID = workspace.id
+		updateSelectedWorkspaceID(workspace.id)
 		diagnosticsLogger.notice(
 			"Presented the workspace rename sheet for the active shell window. Workspace title: \(workspace.title, privacy: .public). Workspace ID: \(workspace.id.rawValue.uuidString, privacy: .public)"
 		)
@@ -210,21 +219,21 @@ struct MainShellCommands: Commands {
 		guard let sceneContext else {
 			return
 		}
-		sceneContext.selectedWorkspaceID = sceneContext.shellModel.undoCloseWorkspace()
+		updateSelectedWorkspaceID(sceneContext.shellModel.undoCloseWorkspace())
 	}
 
 	private func duplicateSelectedWorkspaceLayout(in sceneContext: MainShellSceneContext?) {
-		guard let sceneContext, let selectedWorkspaceID = sceneContext.selectedWorkspaceID else {
+		guard let sceneContext, let selectedWorkspaceID else {
 			return
 		}
-		sceneContext.selectedWorkspaceID = sceneContext.shellModel.duplicateWorkspace(selectedWorkspaceID)
+		updateSelectedWorkspaceID(sceneContext.shellModel.duplicateWorkspace(selectedWorkspaceID))
 	}
 
 	private func closeSelectedWorkspaceToLibrary(in sceneContext: MainShellSceneContext?) {
-		guard let sceneContext, let selectedWorkspaceID = sceneContext.selectedWorkspaceID else {
+		guard let sceneContext, let selectedWorkspaceID else {
 			return
 		}
-		sceneContext.selectedWorkspaceID = sceneContext.shellModel.closeWorkspaceToLibrary(selectedWorkspaceID)
+		updateSelectedWorkspaceID(sceneContext.shellModel.closeWorkspaceToLibrary(selectedWorkspaceID))
 	}
 
 	private func selectPreviousWorkspace(in sceneContext: MainShellSceneContext?) {
@@ -234,18 +243,18 @@ struct MainShellCommands: Commands {
 
 		let workspaces = sceneContext.shellModel.workspaces
 		guard !workspaces.isEmpty else {
-			sceneContext.selectedWorkspaceID = nil
+			updateSelectedWorkspaceID(nil)
 			return
 		}
 
-		guard let selectedWorkspaceID = sceneContext.selectedWorkspaceID,
+		guard let selectedWorkspaceID,
 			  let currentIndex = workspaces.firstIndex(where: { $0.id == selectedWorkspaceID }) else {
-			sceneContext.selectedWorkspaceID = workspaces.last?.id
+			updateSelectedWorkspaceID(workspaces.last?.id)
 			return
 		}
 
 		let previousIndex = (currentIndex - 1 + workspaces.count) % workspaces.count
-		sceneContext.selectedWorkspaceID = workspaces[previousIndex].id
+		updateSelectedWorkspaceID(workspaces[previousIndex].id)
 	}
 
 	private func selectNextWorkspace(in sceneContext: MainShellSceneContext?) {
@@ -255,29 +264,29 @@ struct MainShellCommands: Commands {
 
 		let workspaces = sceneContext.shellModel.workspaces
 		guard !workspaces.isEmpty else {
-			sceneContext.selectedWorkspaceID = nil
+			updateSelectedWorkspaceID(nil)
 			return
 		}
 
-		guard let selectedWorkspaceID = sceneContext.selectedWorkspaceID,
+		guard let selectedWorkspaceID,
 			  let currentIndex = workspaces.firstIndex(where: { $0.id == selectedWorkspaceID }) else {
-			sceneContext.selectedWorkspaceID = workspaces.first?.id
+			updateSelectedWorkspaceID(workspaces.first?.id)
 			return
 		}
 
 		let nextIndex = (currentIndex + 1) % workspaces.count
-		sceneContext.selectedWorkspaceID = workspaces[nextIndex].id
+		updateSelectedWorkspaceID(workspaces[nextIndex].id)
 	}
 
 	private func movePaneFocus(_ direction: PaneFocusDirection, in sceneContext: MainShellSceneContext?) {
-		guard let sceneContext, let selectedWorkspaceID = sceneContext.selectedWorkspaceID else {
+		guard let sceneContext, let selectedWorkspaceID else {
 			return
 		}
 		sceneContext.shellModel.movePaneFocus(direction, in: selectedWorkspaceID)
 	}
 
 	private func splitFocusedPane(_ direction: SplitDirection, in sceneContext: MainShellSceneContext?) {
-		guard let sceneContext, let selectedWorkspaceID = sceneContext.selectedWorkspaceID else {
+		guard let sceneContext, let selectedWorkspaceID else {
 			return
 		}
 		sceneContext.shellModel.splitFocusedPane(in: selectedWorkspaceID, direction)
@@ -287,7 +296,7 @@ struct MainShellCommands: Commands {
 		guard let sceneContext else {
 			return
 		}
-		guard let selectedWorkspaceID = sceneContext.selectedWorkspaceID else {
+		guard let selectedWorkspaceID else {
 			diagnosticsLogger.error(
 				"The app received a save-workspace command for the active shell window, but that window has no selected workspace to save."
 			)
@@ -304,7 +313,7 @@ struct MainShellCommands: Commands {
 		guard let sceneContext else {
 			return
 		}
-		guard let selectedWorkspaceID = sceneContext.selectedWorkspaceID else {
+		guard let selectedWorkspaceID else {
 			diagnosticsLogger.notice(
 				"Skipped the close-workspace command because the active shell scene has no selected workspace."
 			)
@@ -315,6 +324,6 @@ struct MainShellCommands: Commands {
 		diagnosticsLogger.notice(
 			"Ran the close-workspace command from the active shell window. Next selected workspace ID: \(nextSelectedWorkspaceID?.rawValue.uuidString ?? "(none)", privacy: .public)"
 		)
-		sceneContext.selectedWorkspaceID = nextSelectedWorkspaceID
+		updateSelectedWorkspaceID(nextSelectedWorkspaceID)
 	}
 }
