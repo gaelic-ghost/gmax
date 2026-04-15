@@ -159,6 +159,7 @@ final class TerminalPaneController: ObservableObject {
 	private weak var attachedTerminalView: LocalProcessTerminalView?
 	private var retainedTerminalView: LocalProcessTerminalView?
 	private var retainedTerminalGeneration: Int?
+	private var startedTerminalGeneration: Int?
 
 	init(paneID: PaneID, session: TerminalSession) {
 		self.paneID = paneID
@@ -187,6 +188,7 @@ final class TerminalPaneController: ObservableObject {
 		let terminalView = LocalProcessTerminalView(frame: .zero)
 		retainedTerminalView = terminalView
 		retainedTerminalGeneration = generation
+		startedTerminalGeneration = nil
 		configureTerminalView(
 			terminalView,
 			processDelegate: processDelegate,
@@ -205,6 +207,14 @@ final class TerminalPaneController: ObservableObject {
 			return
 		}
 		attachedTerminalView = nil
+	}
+
+	func needsProcessStart(for generation: Int) -> Bool {
+		startedTerminalGeneration != generation
+	}
+
+	func markProcessStarted(for generation: Int) {
+		startedTerminalGeneration = generation
 	}
 
 	func restoreTranscriptIfNeeded(into terminalView: LocalProcessTerminalView) {
@@ -247,15 +257,11 @@ final class TerminalPaneController: ObservableObject {
 		clickAction: Selector
 	) {
 		terminalView.processDelegate = processDelegate
-		let recognizerSelector = clickAction
-		let hasMatchingRecognizer = terminalView.gestureRecognizers.contains { recognizer in
-			guard let clickRecognizer = recognizer as? NSClickGestureRecognizer else {
-				return false
+		for recognizer in terminalView.gestureRecognizers {
+			guard recognizer is NSClickGestureRecognizer else {
+				continue
 			}
-			return clickRecognizer.target === clickTarget && clickRecognizer.action == recognizerSelector
-		}
-		guard !hasMatchingRecognizer else {
-			return
+			terminalView.removeGestureRecognizer(recognizer)
 		}
 
 		let clickRecognizer = NSClickGestureRecognizer(target: clickTarget, action: clickAction)

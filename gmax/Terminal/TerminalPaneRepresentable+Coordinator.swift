@@ -47,7 +47,8 @@ extension TerminalPaneRepresentable {
 		}
 
 		private func startProcessIfNeeded(in terminalView: LocalProcessTerminalView) {
-			guard !didStartProcess else {
+			let generation = controller.session.relaunchGeneration
+			guard !didStartProcess, controller.needsProcessStart(for: generation) else {
 				return
 			}
 
@@ -65,6 +66,7 @@ extension TerminalPaneRepresentable {
 			let resolvedCurrentDirectory = launch.currentDirectory ?? "(default shell directory)"
 			paneLogger.notice("Launching a shell process for a pane terminal host. Pane ID: \(paneID, privacy: .public). Session ID: \(sessionID, privacy: .public). Executable: \(launch.executable, privacy: .public). Current directory: \(resolvedCurrentDirectory, privacy: .public)")
 			didStartProcess = true
+			controller.markProcessStarted(for: generation)
 			Task { @MainActor in
 				await Task.yield()
 				controller.session.state = .running

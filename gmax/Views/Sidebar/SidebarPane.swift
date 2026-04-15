@@ -17,7 +17,14 @@ struct SidebarPane: View {
 		List(selection: $selection) {
 			ForEach(model.workspaces) { workspace in
 				NavigationLink(value: workspace.id) {
-					workspaceRow(for: workspace)
+					VStack(alignment: .leading, spacing: 4) {
+						Text(workspace.title)
+							.accessibilityIdentifier("sidebar.workspaceTitle.\(workspace.title)")
+						Text(paneCountText(for: workspace))
+							.font(.caption)
+							.foregroundStyle(.secondary)
+							.accessibilityIdentifier("sidebar.workspacePaneCount.\(workspace.title)")
+					}
 				}
 					.accessibilityElement(children: .combine)
 					.accessibilityLabel(workspace.title)
@@ -47,18 +54,6 @@ struct SidebarPane: View {
 
 	private var selectedWorkspace: Workspace? {
 		selection.flatMap(model.workspace(for:))
-	}
-
-	@ViewBuilder
-	private func workspaceRow(for workspace: Workspace) -> some View {
-		VStack(alignment: .leading, spacing: 4) {
-			Text(workspace.title)
-				.accessibilityIdentifier("sidebar.workspaceTitle.\(workspace.title)")
-			Text(paneCountText(for: workspace))
-				.font(.caption)
-				.foregroundStyle(.secondary)
-				.accessibilityIdentifier("sidebar.workspacePaneCount.\(workspace.title)")
-		}
 	}
 
 	@ViewBuilder
