@@ -10,6 +10,9 @@ import SwiftUI
 
 struct MainShellCommands: Commands {
 	@FocusedValue(\.mainShellSceneContext) private var sceneContext
+	@FocusedValue(\.closePaneCommand) private var closePaneCommand
+	@FocusedValue(\.closeWorkspaceCommand) private var closeWorkspaceCommand
+	@Environment(\.dismiss) private var dismiss
 	private let diagnosticsLogger = Logger.gmax(.diagnostics)
 
 	var body: some Commands {
@@ -41,6 +44,11 @@ struct MainShellCommands: Commands {
 			}
 			.keyboardShortcut("s", modifiers: [.command])
 			.disabled(sceneContext?.selectedWorkspaceID == nil)
+
+			Button("Close") {
+				performClose()
+			}
+			.keyboardShortcut("w", modifiers: [.command])
 		}
 
 		CommandMenu("Workspace") {
@@ -174,6 +182,20 @@ struct MainShellCommands: Commands {
 			return
 		}
 		sceneContext.selectedWorkspaceID = sceneContext.shellModel.createWorkspace()
+	}
+
+	private func performClose() {
+		if let closePaneCommand {
+			closePaneCommand()
+			return
+		}
+
+		if let closeWorkspaceCommand {
+			closeWorkspaceCommand()
+			return
+		}
+
+		dismiss()
 	}
 
 	private func presentWorkspaceRename(for workspaceID: WorkspaceID, in sceneContext: MainShellSceneContext) {

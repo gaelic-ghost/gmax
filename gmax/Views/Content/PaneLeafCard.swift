@@ -5,7 +5,6 @@
 //  Created by Gale Williams on 4/14/26.
 //
 
-import AppKit
 import SwiftUI
 
 struct PaneLeafCard: View {
@@ -72,13 +71,7 @@ struct PaneLeafCard: View {
 		.background(backgroundStyle)
 		.contentShape(Rectangle())
 		.onTapGesture(perform: onFocus)
-		// Use SwiftUI's documented view command handling so the focused pane owns pane close.
-		.onCommand(#selector(NSWindow.performClose(_:))) {
-			guard isFocused else {
-				return
-			}
-			onClose()
-		}
+		.focusedValue(\.closePaneCommand, onClose)
 		.accessibilityElement(children: .contain)
 		.accessibilityLabel(accessibilityLabel)
 		.accessibilityValue(accessibilityValue)
