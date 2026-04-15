@@ -143,50 +143,6 @@ struct SidebarPane: View {
 
 }
 
-struct WorkspaceRenameSheet: View {
-	@Binding var title: String
-	let onCancel: () -> Void
-	let onSave: () -> Void
-
-	var body: some View {
-		VStack(alignment: .leading, spacing: 16) {
-			Text("Rename Workspace")
-				.font(.title3.weight(.semibold))
-
-			Text("Choose the name that should appear in the sidebar, window title, and workspace actions.")
-				.font(.subheadline)
-				.foregroundStyle(.secondary)
-
-			TextField("Workspace Name", text: $title)
-				.textFieldStyle(.roundedBorder)
-				.accessibilityIdentifier("sidebar.renameWorkspaceField")
-				.onSubmit {
-					guard canSave else {
-						return
-					}
-					onSave()
-				}
-
-			HStack {
-				Spacer()
-				Button("Cancel", action: onCancel)
-					.accessibilityIdentifier("sidebar.renameWorkspaceCancelButton")
-				Button("Save", action: onSave)
-					.keyboardShortcut(.defaultAction)
-					.disabled(!canSave)
-					.accessibilityIdentifier("sidebar.renameWorkspaceSaveButton")
-			}
-		}
-		.padding(20)
-		.frame(width: 360)
-		.accessibilityIdentifier("sidebar.renameWorkspaceSheet")
-	}
-
-	private var canSave: Bool {
-		!title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-	}
-}
-
 #Preview {
 	SidebarPane(
 		model: ShellModel(),
