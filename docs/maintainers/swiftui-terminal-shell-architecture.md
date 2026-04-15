@@ -18,15 +18,13 @@ This document is intentionally maintainer-facing. It describes the durable primi
 The source tree is now organized to match the current ownership boundaries in the app:
 
 - `gmaxApp.swift` keeps app bootstrap and scene declarations
-- `App/` holds scene actions, menu commands, AppKit window interop, and UI-test launch behavior
-- `Models/` keeps shell state plus pane and workspace management split by concern
-- `Persistence/` keeps Core Data setup, snapshot helpers, and workspace storage split by concern
+- `gmaxApp.swift` and the scene roots hold app bootstrap, menu commands, and UI-test launch behavior
+- `Workspace/` keeps workspace state plus pane and workspace management split by concern
+- `Persistence/Workspace/` keeps Core Data setup, persistence profiles, snapshot helpers, and workspace storage split by concern
 - `Terminal/` keeps the SwiftUI representable boundary, coordinator, AppKit host, and terminal-session plumbing
-- `Views/Content/` keeps the recursive pane tree, split container, leaf card, and geometry preferences
-- `Views/Detail/` keeps the active-pane inspector
-- `Views/Scenes/` keeps top-level shell scene composition and scene-bound presentation surfaces
-- `Views/Settings/` keeps the settings entry view plus the terminal appearance and workspace sections
-- `Views/Sidebar/` keeps the workspace list and saved-workspace library sheet
+- `Scenes/WorkspaceWindowGroup/` keeps top-level workspace-window scene composition and scene-bound presentation surfaces
+- `Scenes/Settings/` keeps the settings entry view plus the terminal appearance and workspace sections
+- `Views/Sheets/` keeps the workspace rename and saved-workspace library sheets
 
 This is a durable building-block cleanup, not a stopgap. The source layout should continue to reflect ownership boundaries rather than collapsing unrelated shell, persistence, or AppKit code back into oversized single files.
 
@@ -49,7 +47,7 @@ Why this shape is preferred now:
 - it makes scene-local state restoration a better fit for the real UX
 - it keeps the app aligned with SwiftUI's expected routing for frontmost-window commands
 
-The shared `ShellModel` remains app-global, but selection and presentation state that should vary by window is scene-local.
+The shared `WorkspaceStore` remains app-global, but selection and presentation state that should vary by window is scene-local.
 
 ## Frontmost-Window Command Routing
 
@@ -57,7 +55,7 @@ Menu commands now route through the frontmost shell window's scene context inste
 
 The current preferred model is:
 
-- keep shared shell data in one `ShellModel`
+- keep shared shell data in one `WorkspaceStore`
 - keep per-window selection and presentation state in a scene-local context object
 - expose that context through `focusedSceneValue`
 - have `Commands` read it through `@FocusedValue`
@@ -249,8 +247,8 @@ Overloading one Core Data entity with mixed `open`, `closed`, `archived`, or `sa
 The current implementation is:
 
 - keep the `WorkspaceEntity` / `PaneNodeEntity` graph for the live session
-- keep the in-memory recently closed stack in `ShellModel` for low-latency undo
-- use a separate snapshot graph in `ShellPersistenceController` for the saved library
+- keep the in-memory recently closed stack in `WorkspaceStore` for low-latency undo
+- use a separate snapshot graph in `WorkspacePersistenceController` for the saved library
 
 ## Saved Workspace Library
 
@@ -267,7 +265,7 @@ A saved workspace snapshot should store:
 - per-pane preserved transcript text for restore and search
 - a flattened search field derived from title, notes, and transcript content
 
-The first recommended implementation is a second Core Data graph inside `ShellPersistenceController`, parallel to the live session graph.
+The first recommended implementation is a second Core Data graph inside `WorkspacePersistenceController`, parallel to the live session graph.
 
 Preferred snapshot entity direction:
 
@@ -437,7 +435,7 @@ The saved-workspace work should be shipped in phases so we can get durable value
 
 ### Phase 1: Persistence And Model Foundation
 
-Add a parallel saved-workspace snapshot graph inside `ShellPersistenceController` rather than overloading the live workspace entities.
+Add a parallel saved-workspace snapshot graph inside `WorkspacePersistenceController` rather than overloading the live workspace entities.
 
 Planned work:
 
@@ -449,9 +447,9 @@ Planned work:
 
 This phase is a durable building-block change.
 
-### Phase 2: ShellModel Actions
+### Phase 2: WorkspaceStore Actions
 
-Add high-level saved-workspace actions to `ShellModel`.
+Add high-level saved-workspace actions to `WorkspaceStore`.
 
 Planned work:
 
@@ -1264,7 +1262,7 @@ Sketch:
 import Foundation
 
 @MainActor
-extension ShellModel {
+extension WorkspaceStore {
     func focusPane(_ paneID: PaneID, in workspaceID: WorkspaceID)
     func splitPane(_ paneID: PaneID, in workspaceID: WorkspaceID, direction: SplitDirection)
     func closePane(_ paneID: PaneID, in workspaceID: WorkspaceID)
@@ -1488,7 +1486,7 @@ Sketch:
 
 ```swift
 @MainActor
-extension ShellModel {
+extension WorkspaceStore {
     func splitPane(_ paneID: PaneID, in workspaceID: WorkspaceID, direction: SplitDirection) {
         guard let workspaceIndex = workspaces.firstIndex(where: { $0.id == workspaceID }) else {
             return
@@ -1537,9 +1535,9 @@ If later edits make structural paths too unstable, we can promote split identity
 
 That should only happen if concrete use cases demand it.
 
-## Shell Model Responsibilities
+## Workspace Store Responsibilities
 
-The shell model should remain the sole owner of:
+The workspace store should remain the sole owner of:
 
 - workspace list
 - selected workspace
@@ -1554,13 +1552,13 @@ The view layer should not:
 - manipulate tree nodes directly
 - decide focus outcomes after mutations
 
-## Suggested ShellModel Sketch
+## Suggested WorkspaceStore Sketch
 
 ```swift
 import SwiftUI
 
 @MainActor
-final class ShellModel: ObservableObject {
+final class WorkspaceStore: ObservableObject {
     @Published var workspaces: [Workspace]
     @Published var selectedWorkspaceID: WorkspaceID?
     @Published var columnVisibility: NavigationSplitViewVisibility = .all
@@ -1586,7 +1584,7 @@ Useful computed accessors:
 
 ```swift
 @MainActor
-extension ShellModel {
+extension WorkspaceStore {
     var selectedWorkspaceIndex: Int? {
         guard let selectedWorkspaceID else { return nil }
         return workspaces.firstIndex { $0.id == selectedWorkspaceID }
@@ -1664,7 +1662,7 @@ Benefits:
 
 Suggested ownership:
 
-- `ShellModel` owns workspace topology
+- `WorkspaceStore` owns workspace topology
 - `TerminalSessionRegistry` owns live session objects
 
 ## Focus Model

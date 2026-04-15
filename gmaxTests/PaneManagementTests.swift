@@ -13,7 +13,7 @@ import Testing
 struct PaneManagementTests {
 	@Test func splitFocusedPaneTwiceCreatesANestedTreeAndTracksTheNewestPane() throws {
 		let workspace = TestSupport.makeWorkspace(title: "Workspace 1")
-		let model = ShellModel(
+		let model = WorkspaceStore(
 			workspaces: [workspace],
 			persistence: .inMemoryForTesting(),
 			launchContextBuilder: TestSupport.makeLaunchContextBuilder(defaultCurrentDirectory: "/tmp/gmax-tests")
@@ -48,7 +48,7 @@ struct PaneManagementTests {
 	@Test func splitFocusedPaneInheritsTheLaunchDirectoryAndMovesFocus() throws {
 		let workspace = TestSupport.makeWorkspace(title: "Workspace 1")
 		let launchContextBuilder = TestSupport.makeLaunchContextBuilder(defaultCurrentDirectory: "/tmp/gmax-tests")
-		let model = ShellModel(
+		let model = WorkspaceStore(
 			workspaces: [workspace],
 			persistence: .inMemoryForTesting(),
 			launchContextBuilder: launchContextBuilder
@@ -97,7 +97,7 @@ struct PaneManagementTests {
 			),
 			focusedPaneID: topRightPane.id
 		)
-		let model = ShellModel(
+		let model = WorkspaceStore(
 			workspaces: [workspace],
 			persistence: .inMemoryForTesting(),
 			launchContextBuilder: TestSupport.makeLaunchContextBuilder(defaultCurrentDirectory: "/tmp/gmax-tests")
@@ -131,7 +131,7 @@ struct PaneManagementTests {
 
 	@Test func closePaneLeavesAnEmptyWorkspaceWhenItWasTheLastPane() throws {
 		let workspace = TestSupport.makeWorkspace(title: "Workspace 1")
-		let model = ShellModel(
+		let model = WorkspaceStore(
 			workspaces: [workspace],
 			persistence: .inMemoryForTesting(),
 			launchContextBuilder: TestSupport.makeLaunchContextBuilder(defaultCurrentDirectory: "/tmp/gmax-tests")
@@ -154,7 +154,7 @@ struct PaneManagementTests {
 
 	@Test func closingTheFocusedPaneAfterMultipleSplitsPrefersTheMostRecentSurvivingFocus() throws {
 		let workspace = TestSupport.makeWorkspace(title: "Workspace 1")
-		let model = ShellModel(
+		let model = WorkspaceStore(
 			workspaces: [workspace],
 			persistence: .inMemoryForTesting(),
 			launchContextBuilder: TestSupport.makeLaunchContextBuilder(defaultCurrentDirectory: "/tmp/gmax-tests")
@@ -208,7 +208,7 @@ struct PaneManagementTests {
 			root: .split(split),
 			focusedPaneID: leftPane.id
 		)
-		let model = ShellModel(
+		let model = WorkspaceStore(
 			workspaces: [workspace],
 			persistence: .inMemoryForTesting(),
 			launchContextBuilder: TestSupport.makeLaunchContextBuilder(defaultCurrentDirectory: "/tmp/gmax-tests")
@@ -236,7 +236,7 @@ struct PaneManagementTests {
 			),
 			focusedPaneID: leftPane.id
 		)
-		let model = ShellModel(
+		let model = WorkspaceStore(
 			workspaces: [workspace],
 			persistence: .inMemoryForTesting(),
 			launchContextBuilder: TestSupport.makeLaunchContextBuilder(defaultCurrentDirectory: "/tmp/gmax-tests")
@@ -280,7 +280,7 @@ struct PaneManagementTests {
 			),
 			focusedPaneID: leftPane.id
 		)
-		let model = ShellModel(
+		let model = WorkspaceStore(
 			workspaces: [workspace],
 			persistence: .inMemoryForTesting(),
 			launchContextBuilder: TestSupport.makeLaunchContextBuilder(defaultCurrentDirectory: "/tmp/gmax-tests")

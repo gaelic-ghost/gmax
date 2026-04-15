@@ -1,16 +1,16 @@
-//
-//  ShellPersistenceController+CoreData.swift
-//  gmax
-//
-//  Created by Gale Williams on 4/14/26.
-//
+/*
+ WorkspacePersistenceController+CoreData owns the storage engine setup.
+ It defines where the workspace store lives on disk, constructs the Core Data
+ container and managed object model, and handles store loading plus the
+ in-memory fallback path when the disk-backed store is unavailable.
+ */
 
 import CoreData
 import Foundation
 import OSLog
 
-extension ShellPersistenceController {
-	static func storeURL() -> URL {
+extension WorkspacePersistenceController {
+	nonisolated static func storeDirectoryURL() -> URL {
 		let fileManager = FileManager.default
 		let directoryURL = URL.applicationSupportDirectory
 			.appending(path: "gmax-exploration", directoryHint: .isDirectory)
@@ -18,29 +18,48 @@ extension ShellPersistenceController {
 			try fileManager.createDirectory(at: directoryURL, withIntermediateDirectories: true)
 		} catch {
 			Logger.persistence
-				.error("The app could not create the Application Support directory for shell persistence. The SQLite store may fail to open on this launch. Directory: \(directoryURL.path, privacy: .public). Error: \(String(describing: error), privacy: .public)")
+				.error("The app could not create the Application Support directory for workspace persistence. The SQLite store may fail to open on this launch. Directory: \(directoryURL.path, privacy: .public). Error: \(String(describing: error), privacy: .public)")
 		}
-		return directoryURL.appendingPathComponent("ShellStore.sqlite")
+		return directoryURL
 	}
 
-	static func makePersistentContainer() -> NSPersistentContainer {
+	nonisolated static func storeURL(for profile: WorkspacePersistenceProfile = .appDefault()) -> URL {
+		precondition(
+			!profile.usesInMemoryStore,
+			"The in-memory workspace persistence profile does not have an on-disk store URL."
+		)
+		return storeDirectoryURL().appendingPathComponent(profile.storeFileName ?? "WorkspaceStore.sqlite")
+	}
+
+	nonisolated static func storeCleanupURLs(for profile: WorkspacePersistenceProfile = .appDefault()) -> [URL] {
+		guard !profile.usesInMemoryStore else {
+			return []
+		}
+
+		let storeURL = storeURL(for: profile)
+		return [storeURL, storeURL.appendingPathExtension("shm"), storeURL.appendingPathExtension("wal")]
+	}
+
+	static func makePersistentContainer(profile: WorkspacePersistenceProfile) -> NSPersistentContainer {
 		let model = makeManagedObjectModel()
+		let description = makeStoreDescription(for: profile)
+		description.shouldMigrateStoreAutomatically = true
+		description.shouldInferMappingModelAutomatically = true
 		let primaryContainer = makeContainer(
 			model: model,
-			description: {
-				let description = NSPersistentStoreDescription(url: storeURL())
-				description.shouldMigrateStoreAutomatically = true
-				description.shouldInferMappingModelAutomatically = true
-				return description
-			}(),
-			contextName: "ShellPersistence.viewContext"
+			description: description,
+			contextName: profile.contextName
+		)
+
+		Logger.persistence.notice(
+			"Configured workspace persistence using the \(profile.displayName, privacy: .public)."
 		)
 
 		if loadPersistentStores(for: primaryContainer) {
 			return primaryContainer
 		}
 
-		Logger.persistence.error("Core Data could not open the on-disk shell store, so the app is falling back to an in-memory store for this launch. Workspace changes will remain live, but they will not survive quitting the app until the disk-backed store loads successfully again.")
+		Logger.persistence.error("Core Data could not open the on-disk workspace store, so the app is falling back to an in-memory store for this launch. Workspace changes will remain live, but they will not survive quitting the app until the disk-backed store loads successfully again.")
 
 		let fallbackContainer = makeContainer(
 			model: model,
@@ -49,21 +68,32 @@ extension ShellPersistenceController {
 				description.type = NSInMemoryStoreType
 				return description
 			}(),
-			contextName: "ShellPersistence.inMemoryViewContext"
+			contextName: WorkspacePersistenceProfile.inMemory.contextName
 		)
 
 		guard loadPersistentStores(for: fallbackContainer) else {
-			fatalError("Core Data could not load either the disk-backed shell store or the in-memory fallback store. The app cannot continue without a managed object context.")
+			fatalError("Core Data could not load either the disk-backed workspace store or the in-memory fallback store. The app cannot continue without a managed object context.")
 		}
 
 		return fallbackContainer
 	}
+
+	static func makeStoreDescription(for profile: WorkspacePersistenceProfile) -> NSPersistentStoreDescription {
+		if profile.usesInMemoryStore {
+			let description = NSPersistentStoreDescription()
+			description.type = NSInMemoryStoreType
+			return description
+		}
+
+		return NSPersistentStoreDescription(url: storeURL(for: profile))
+	}
+
 	static func makeContainer(
 		model: NSManagedObjectModel,
 		description: NSPersistentStoreDescription,
 		contextName: String
 	) -> NSPersistentContainer {
-		let container = NSPersistentContainer(name: "ShellStore", managedObjectModel: model)
+		let container = NSPersistentContainer(name: "WorkspaceStore", managedObjectModel: model)
 		container.persistentStoreDescriptions = [description]
 		container.viewContext.mergePolicy = NSMergeByPropertyObjectTrumpMergePolicy
 		container.viewContext.automaticallyMergesChangesFromParent = true
@@ -81,7 +111,7 @@ extension ShellPersistenceController {
 		semaphore.wait()
 
 		if let loadError {
-			Logger.persistence.error("Core Data could not load a shell persistent store description. The store described by this container will remain unavailable for this launch. Error: \(String(describing: loadError), privacy: .public)")
+			Logger.persistence.error("Core Data could not load a workspace persistent store description. The store described by this container will remain unavailable for this launch. Error: \(String(describing: loadError), privacy: .public)")
 			return false
 		}
 

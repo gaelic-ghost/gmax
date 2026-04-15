@@ -8,7 +8,7 @@
 import SwiftUI
 
 struct SavedWorkspaceLibrarySheet: View {
-	@ObservedObject var model: ShellModel
+	@ObservedObject var model: WorkspaceStore
 	@Binding var selectedWorkspaceID: WorkspaceID?
 	@Environment(\.dismiss) private var dismiss
 	@State private var searchText = ""
@@ -150,7 +150,7 @@ struct SavedWorkspaceLibrarySheet: View {
 
 #Preview {
 	SavedWorkspaceLibrarySheet(
-		model: ShellModel(),
+		model: WorkspaceStore(),
 		selectedWorkspaceID: .constant(nil)
 	)
 }

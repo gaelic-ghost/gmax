@@ -8,7 +8,7 @@
 import SwiftUI
 
 struct ContentPane: View {
-	@ObservedObject var model: ShellModel
+	@ObservedObject var model: WorkspaceStore
 	@Binding var selectedWorkspaceID: WorkspaceID?
 
 	var body: some View {
@@ -158,5 +158,5 @@ private struct ContentPaneEmptyWorkspaceView: View {
 }
 
 #Preview {
-	ContentPane(model: ShellModel(), selectedWorkspaceID: .constant(nil))
+	ContentPane(model: WorkspaceStore(), selectedWorkspaceID: .constant(nil))
 }

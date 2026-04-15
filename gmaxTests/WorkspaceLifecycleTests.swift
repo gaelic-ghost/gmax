@@ -13,7 +13,7 @@ import Testing
 struct WorkspaceLifecycleTests {
 	@Test func renameWorkspaceUpdatesTheTitle() {
 		let initialWorkspace = TestSupport.makeWorkspace(title: "Workspace 1")
-		let model = ShellModel(
+		let model = WorkspaceStore(
 			workspaces: [initialWorkspace]
 		)
 
@@ -37,7 +37,7 @@ struct WorkspaceLifecycleTests {
 			),
 			focusedPaneID: rightPane.id
 		)
-		let model = ShellModel(
+		let model = WorkspaceStore(
 			workspaces: [workspace]
 		)
 
@@ -60,7 +60,7 @@ struct WorkspaceLifecycleTests {
 	@Test func deleteWorkspaceRemovesItAndSelectsTheNeighbor() {
 		let firstWorkspace = TestSupport.makeWorkspace(title: "Workspace 1")
 		let secondWorkspace = TestSupport.makeWorkspace(title: "Workspace 2")
-		let model = ShellModel(workspaces: [firstWorkspace, secondWorkspace])
+		let model = WorkspaceStore(workspaces: [firstWorkspace, secondWorkspace])
 
 		model.deleteWorkspace(firstWorkspace.id)
 
@@ -70,7 +70,7 @@ struct WorkspaceLifecycleTests {
 
 	@Test func deleteWorkspaceDoesNothingWhenItIsTheLastWorkspace() {
 		let workspace = TestSupport.makeWorkspace(title: "Workspace 1")
-		let model = ShellModel(workspaces: [workspace])
+		let model = WorkspaceStore(workspaces: [workspace])
 
 		model.deleteWorkspace(workspace.id)
 
@@ -81,9 +81,9 @@ struct WorkspaceLifecycleTests {
 	@Test func undoCloseWorkspaceRestoresTheWorkspaceAndItsLaunchDirectory() throws {
 		let firstWorkspace = TestSupport.makeWorkspace(title: "Workspace 1")
 		let secondWorkspace = TestSupport.makeWorkspace(title: "Workspace 2")
-		let persistence = ShellPersistenceController.inMemoryForTesting()
+		let persistence = WorkspacePersistenceController.inMemoryForTesting()
 		let launchContextBuilder = TestSupport.makeLaunchContextBuilder(defaultCurrentDirectory: "/tmp/gmax-tests")
-		let model = ShellModel(
+		let model = WorkspaceStore(
 			workspaces: [firstWorkspace, secondWorkspace],
 			persistence: persistence,
 			launchContextBuilder: launchContextBuilder
@@ -107,7 +107,7 @@ struct WorkspaceLifecycleTests {
 
 	@Test func closeWorkspaceRemovesTheLastWorkspaceWithoutAskingToCloseTheWindow() {
 		let workspace = TestSupport.makeWorkspace(title: "Workspace 1")
-		let model = ShellModel(workspaces: [workspace])
+		let model = WorkspaceStore(workspaces: [workspace])
 
 		let nextSelectedWorkspaceID = model.closeWorkspace(workspace.id)
 

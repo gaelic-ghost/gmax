@@ -51,8 +51,8 @@ struct WorkspacePersistenceTests {
 			),
 			focusedPaneID: rightMiddlePane.id
 		)
-		let persistence = ShellPersistenceController.inMemoryForTesting()
-		let model = ShellModel(
+		let persistence = WorkspacePersistenceController.inMemoryForTesting()
+		let model = WorkspaceStore(
 			workspaces: [workspace],
 			persistence: persistence,
 			launchContextBuilder: TestSupport.makeLaunchContextBuilder(defaultCurrentDirectory: "/tmp/gmax-tests")
@@ -134,8 +134,8 @@ struct WorkspacePersistenceTests {
 			),
 			focusedPaneID: bottomRightPane.id
 		)
-		let persistence = ShellPersistenceController.inMemoryForTesting()
-		let model = ShellModel(
+		let persistence = WorkspacePersistenceController.inMemoryForTesting()
+		let model = WorkspaceStore(
 			workspaces: [workspace],
 			persistence: persistence,
 			launchContextBuilder: TestSupport.makeLaunchContextBuilder(defaultCurrentDirectory: "/tmp/gmax-tests")
@@ -195,9 +195,9 @@ struct WorkspacePersistenceTests {
 
 	@Test func saveAndOpenSavedWorkspaceRestoreSessionMetadataAndTranscript() throws {
 		let workspace = TestSupport.makeWorkspace(title: "Workspace 1")
-		let persistence = ShellPersistenceController.inMemoryForTesting()
+		let persistence = WorkspacePersistenceController.inMemoryForTesting()
 		let launchContextBuilder = TestSupport.makeLaunchContextBuilder(defaultCurrentDirectory: "/tmp/gmax-tests")
-		let model = ShellModel(
+		let model = WorkspaceStore(
 			workspaces: [workspace],
 			persistence: persistence,
 			launchContextBuilder: launchContextBuilder
@@ -250,8 +250,8 @@ struct WorkspacePersistenceTests {
 			),
 			focusedPaneID: topRightPane.id
 		)
-		let persistence = ShellPersistenceController.inMemoryForTesting()
-		let model = ShellModel(
+		let persistence = WorkspacePersistenceController.inMemoryForTesting()
+		let model = WorkspaceStore(
 			workspaces: [workspace],
 			persistence: persistence,
 			launchContextBuilder: TestSupport.makeLaunchContextBuilder(defaultCurrentDirectory: "/tmp/gmax-tests")
@@ -309,8 +309,8 @@ struct WorkspacePersistenceTests {
 			),
 			focusedPaneID: leftPane.id
 		)
-		let persistence = ShellPersistenceController.inMemoryForTesting()
-		let model = ShellModel(
+		let persistence = WorkspacePersistenceController.inMemoryForTesting()
+		let model = WorkspaceStore(
 			workspaces: [workspace],
 			persistence: persistence,
 			launchContextBuilder: TestSupport.makeLaunchContextBuilder(defaultCurrentDirectory: "/tmp/gmax-tests")
@@ -346,9 +346,9 @@ struct WorkspacePersistenceTests {
 			),
 			focusedPaneID: rightPane.id
 		)
-		let persistence = ShellPersistenceController.inMemoryForTesting()
+		let persistence = WorkspacePersistenceController.inMemoryForTesting()
 		let launchContextBuilder = TestSupport.makeLaunchContextBuilder(defaultCurrentDirectory: "/tmp/default-fallback")
-		let model = ShellModel(
+		let model = WorkspaceStore(
 			workspaces: [workspace],
 			persistence: persistence,
 			launchContextBuilder: launchContextBuilder
@@ -399,9 +399,9 @@ struct WorkspacePersistenceTests {
 	@Test func closeWorkspaceToLibraryCreatesAReusableSnapshotAndSelectsTheNeighbor() throws {
 		let firstWorkspace = TestSupport.makeWorkspace(title: "Workspace 1")
 		let secondWorkspace = TestSupport.makeWorkspace(title: "Workspace 2")
-		let persistence = ShellPersistenceController.inMemoryForTesting()
+		let persistence = WorkspacePersistenceController.inMemoryForTesting()
 		let launchContextBuilder = TestSupport.makeLaunchContextBuilder(defaultCurrentDirectory: "/tmp/gmax-tests")
-		let model = ShellModel(
+		let model = WorkspaceStore(
 			workspaces: [firstWorkspace, secondWorkspace],
 			persistence: persistence,
 			launchContextBuilder: launchContextBuilder
@@ -437,7 +437,7 @@ struct WorkspacePersistenceTests {
 			),
 			focusedPaneID: leftPane.id
 		)
-		let persistence = ShellPersistenceController.inMemoryForTesting()
+		let persistence = WorkspacePersistenceController.inMemoryForTesting()
 		persistence.save(workspaces: [workspace])
 		let context = persistence.container.viewContext
 

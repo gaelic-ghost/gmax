@@ -1,10 +1,3 @@
-//
-//  ShellModel+WorkspaceManagement.swift
-//  gmax
-//
-//  Created by Gale Williams on 4/6/26.
-//
-
 import Foundation
 import OSLog
 import SwiftUI
@@ -12,7 +5,7 @@ import SwiftUI
 // MARK: - Workspace Lifecycle
 // MARK: Workspace creation, duplication, close, restore, and library persistence flows.
 
-extension ShellModel {
+extension WorkspaceStore {
 	@discardableResult
 	func createWorkspace() -> WorkspaceID {
 		let pane = PaneLeaf()
@@ -149,6 +142,10 @@ extension ShellModel {
 		return summary
 	}
 
+	func listSavedWorkspaceSnapshots(matching query: String? = nil) -> [SavedWorkspaceSnapshotSummary] {
+		persistence.listWorkspaceSnapshots(matching: query)
+	}
+
 	@discardableResult
 	func closeWorkspaceToLibrary(
 		_ workspaceID: WorkspaceID,
@@ -228,7 +225,7 @@ extension ShellModel {
 // MARK: - Workspace Helpers
 // MARK: Internal helpers that support workspace cloning, restore, close, and persistence workflows.
 
-extension ShellModel {
+extension WorkspaceStore {
 	struct RecentlyClosedWorkspace {
 		let workspace: Workspace
 		let formerIndex: Int

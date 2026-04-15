@@ -1,10 +1,3 @@
-//
-//  ShellModel+PaneManagement.swift
-//  gmax
-//
-//  Created by Gale Williams on 4/6/26.
-//
-
 import Foundation
 import OSLog
 import SwiftUI
@@ -12,7 +5,7 @@ import SwiftUI
 // MARK: - Pane Lifecycle
 // MARK: Pane creation, relaunch, focus, split, close, and split-fraction updates.
 
-extension ShellModel {
+extension WorkspaceStore {
 	@discardableResult
 	func createPane(in workspaceID: WorkspaceID) -> WorkspaceID? {
 		guard let workspaceIndex = workspaces.firstIndex(where: { $0.id == workspaceID }) else {
@@ -233,7 +226,7 @@ extension ShellModel {
 // MARK: - Pane Navigation Helpers
 // MARK: Internal helpers that keep pane focus history, geometry, and controller state in sync.
 
-extension ShellModel {
+extension WorkspaceStore {
 	private struct PaneNavigationMetrics: Comparable {
 		let hasPerpendicularOverlap: Bool
 		let perpendicularOverlap: CGFloat

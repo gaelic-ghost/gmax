@@ -64,22 +64,20 @@ The shell uses a split-tree model rather than a flat grid:
 
 SwiftTerm is hosted through AppKit using `NSViewRepresentable`, so live terminal output stays inside the hosted terminal view instead of driving SwiftUI body churn.
 
-Persistence is handled with Core Data using relational live-workspace records plus a parallel saved-workspace snapshot graph. That gives the app a cleaner path toward undo-friendly workspace closure, searchable reopen, richer restoration, and future sync-friendly expansion if that becomes worthwhile.
+Persistence is handled with Core Data using relational live-workspace records plus a parallel saved-workspace snapshot graph. The app now also keeps production, debug, UI-test, and in-memory persistence profiles separate so local development and automated tests do not trample the same database. That gives the app a cleaner path toward undo-friendly workspace closure, searchable reopen, richer restoration, and future sync-friendly expansion if that becomes worthwhile.
 
 The maintainer-facing architecture note lives at [docs/maintainers/swiftui-terminal-shell-architecture.md](docs/maintainers/swiftui-terminal-shell-architecture.md).
 
 ## Repository Layout
 
 - `gmax/`: app source root
-- `gmax/App/`: app entry, scene actions, commands, and AppKit window interop
-- `gmax/Models/`: shell model state plus pane and workspace management
-- `gmax/Persistence/`: Core Data stack, snapshot encode and decode, and live workspace storage
-- `gmax/Terminal/`: SwiftTerm hosting boundary, terminal coordinator, and session plumbing
-- `gmax/Views/Content/`: recursive pane tree rendering and split behavior
-- `gmax/Views/Detail/`: active-pane inspector content
-- `gmax/Views/Scenes/`: top-level shell scene composition
-- `gmax/Views/Settings/`: settings window and section views
-- `gmax/Views/Sidebar/`: workspace sidebar and saved-workspace library sheet
+- `gmax/Workspace/`: workspace domain models, pane-tree structure, and workspace mutation/state surfaces
+- `gmax/Persistence/Workspace/`: Core Data setup, workspace coding, persistence profiles, and live plus saved workspace storage
+- `gmax/Terminal/`: SwiftTerm hosting boundary, terminal launch/session plumbing, and pane controllers
+- `gmax/Scenes/WorkspaceWindowGroup/`: top-level workspace window scene composition and menu commands
+- `gmax/Scenes/Settings/`: settings window and section views
+- `gmax/Views/Sheets/`: workspace rename and saved-workspace library sheets
+- `gmax/Support/`: shared support surfaces such as logging
 - `gmaxTests/`: unit tests grouped by shared support, pane-tree mutation, workspace lifecycle, and workspace persistence domains
 - `gmaxUITests/`: UI tests grouped by launch scaffolding, sidebar flows, and saved-workspace flows
 - `docs/maintainers/`: architecture and maintainer notes

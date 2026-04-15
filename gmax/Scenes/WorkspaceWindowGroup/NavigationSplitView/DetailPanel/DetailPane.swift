@@ -8,7 +8,7 @@
 import SwiftUI
 
 struct DetailPane: View {
-	@ObservedObject var model: ShellModel
+	@ObservedObject var model: WorkspaceStore
 	@Binding var selectedWorkspaceID: WorkspaceID?
 
 	var body: some View {
@@ -119,5 +119,5 @@ private struct DetailValue: View {
 }
 
 #Preview {
-	DetailPane(model: ShellModel(), selectedWorkspaceID: .constant(nil))
+	DetailPane(model: WorkspaceStore(), selectedWorkspaceID: .constant(nil))
 }

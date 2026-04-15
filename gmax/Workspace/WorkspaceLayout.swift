@@ -1,15 +1,75 @@
-//
-//  ShellModel+PaneTree.swift
-//  gmax
-//
-//  Created by Gale Williams on 4/6/26.
-//
-
 import Foundation
 import SwiftUI
 
-// MARK: - Pane Tree Operations
-// MARK: Structural editing and traversal helpers for recursive pane layouts.
+struct WorkspaceID: RawRepresentable, Hashable, Codable, Identifiable {
+	var rawValue = UUID()
+
+	var id: UUID { rawValue }
+}
+
+struct PaneID: RawRepresentable, Hashable, Codable, Identifiable {
+	var rawValue = UUID()
+
+	var id: UUID { rawValue }
+}
+
+struct SplitID: RawRepresentable, Hashable, Codable, Identifiable {
+	var rawValue = UUID()
+
+	var id: UUID { rawValue }
+}
+
+enum SplitDirection {
+	case right
+	case down
+}
+
+enum PaneFocusDirection {
+	case next
+	case previous
+	case left
+	case right
+	case up
+	case down
+}
+
+struct Workspace: Identifiable, Hashable, Codable {
+	var id = WorkspaceID()
+	var title: String
+	var root: PaneNode? = nil
+	var focusedPaneID: PaneID? = nil
+
+	var paneLeaves: [PaneLeaf] {
+		root?.leaves() ?? []
+	}
+
+	var paneCount: Int {
+		paneLeaves.count
+	}
+}
+
+indirect enum PaneNode: Hashable, Codable {
+	case leaf(PaneLeaf)
+	case split(PaneSplit)
+}
+
+struct PaneLeaf: Identifiable, Hashable, Codable {
+	var id = PaneID()
+	var sessionID = TerminalSessionID()
+}
+
+struct PaneSplit: Hashable, Codable {
+	enum Axis: String, Hashable, Codable {
+		case horizontal
+		case vertical
+	}
+
+	var id = SplitID()
+	var axis: Axis
+	var fraction: CGFloat
+	var first: PaneNode
+	var second: PaneNode
+}
 
 extension PaneNode {
 	nonisolated func leaves() -> [PaneLeaf] {

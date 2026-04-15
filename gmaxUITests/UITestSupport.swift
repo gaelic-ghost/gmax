@@ -20,6 +20,7 @@ class GmaxUITestCase: XCTestCase {
 	@discardableResult
 	func launchApp(resetState: Bool = true) -> XCUIApplication {
 		let app = XCUIApplication()
+		app.launchEnvironment["GMAX_PERSISTENCE_PROFILE"] = "ui-test"
 		if resetState {
 			app.launchEnvironment["GMAX_UI_TEST_RESET_STATE"] = "1"
 		}

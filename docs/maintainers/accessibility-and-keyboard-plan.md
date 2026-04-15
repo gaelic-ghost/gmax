@@ -66,7 +66,7 @@ The accessible path should invoke the same underlying model operation as the poi
 
 ### Make Focus State A First-Class Shell Primitive
 
-`ShellModel` already treats focused-pane identity as real state. The accessibility and keyboard story should build on that instead of inventing a second focus model. Visual focus, keyboard focus, and accessible focus should all describe the same active pane as often as the platform allows.
+`WorkspaceStore` already treats focused-pane identity as real state. The accessibility and keyboard story should build on that instead of inventing a second focus model. Visual focus, keyboard focus, and accessible focus should all describe the same active pane as often as the platform allows.
 
 ### Be Honest About The AppKit Boundary
 
@@ -143,7 +143,7 @@ The pane tree is a custom SwiftUI composition:
 - recursive split containers
 - custom draggable split dividers
 - pane cards that host `TerminalPaneView`
-- pane focus driven by `ShellModel.focusedPaneID`
+- pane focus driven by `WorkspaceStore.focusedPaneID`
 - pane activation currently triggered mainly by click or commands
 
 ### Plan
@@ -165,7 +165,7 @@ The pane tree is a custom SwiftUI composition:
 - Use SwiftUI focus helpers intentionally around the pane tree.
 - Apply `focusSection()` to the pane-tree region so sequential keyboard movement stays within the pane cohort in a predictable order before escaping to adjacent shell chrome.
 - Evaluate `focusable(interactions: .activate)` or a similar constrained focus interaction on pane cards so they participate in keyboard navigation without pretending to be generic button rows.
-- Keep pane focus changes routed back into `ShellModel.focusPane(_:in:)` so the visual highlight, inspector, and model selection remain synchronized.
+- Keep pane focus changes routed back into `WorkspaceStore.focusPane(_:in:)` so the visual highlight, inspector, and model selection remain synchronized.
 - Status:
   - `focusable(interactions: .activate)` is already applied to pane cards
   - the remaining work is to validate how that behaves against the embedded terminal host and decide whether additional focus shaping is still needed

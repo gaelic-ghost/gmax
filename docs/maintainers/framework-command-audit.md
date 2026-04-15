@@ -17,13 +17,11 @@ This document is intentionally specific. It lists the relevant Apple surfaces, w
 This audit covers the current main-shell architecture in:
 
 - `gmax/gmaxApp.swift`
-- `gmax/App/MainShellCommands.swift`
-- `gmax/App/gmaxApp+Actions.swift`
-- `gmax/App/WindowSceneInterop.swift`
-- `gmax/Views/Scenes/MainShellSceneView.swift`
-- `gmax/Models/ShellModel.swift`
-- `gmax/Models/ShellModel+WorkspaceManagement.swift`
-- `gmax/Models/ShellModel+PaneManagement.swift`
+- `gmax/Scenes/WorkspaceWindowGroup/NavigationSplitView/WorkspaceWindowSceneCommands.swift`
+- `gmax/Scenes/WorkspaceWindowGroup/NavigationSplitView/WorkspaceWindowSceneView.swift`
+- `gmax/Workspace/WorkspaceStore.swift`
+- `gmax/Workspace/WorkspaceStore+WorkspaceActions.swift`
+- `gmax/Workspace/WorkspaceStore+PaneActions.swift`
 
 ## Apple Built-In Inventory
 
@@ -220,7 +218,7 @@ Overbuilt part:
 - it duplicates framework-owned responsibilities for close routing, presentation precedence, and command dispatch
 - it exposes too many imperative wrappers around model mutations
 
-### B. `ShellModel.currentWorkspaceID`
+### B. The removed `WorkspaceStore.currentWorkspaceID` backchannel
 
 Current role:
 
@@ -303,7 +301,7 @@ Audit result:
 
 ### Remove
 
-- `ShellModel.currentWorkspaceID` as the source of truth for normal shell selection
+- the removed `WorkspaceStore.currentWorkspaceID` backchannel as the source of truth for normal shell selection
 - `selectedWorkspaceIndex`, `selectedWorkspace`, and `focusedPane` when they derive from app-global selection instead of explicit workspace IDs
 - no-argument pane and workspace command helpers that silently depend on global selection
 - custom command helpers whose only job is compensating for the global-selection model
@@ -311,7 +309,7 @@ Audit result:
 
 ## File-by-File Recommendations
 
-### `gmax/Views/Scenes/MainShellSceneView.swift`
+### `gmax/Scenes/WorkspaceWindowGroup/NavigationSplitView/WorkspaceWindowSceneView.swift`
 
 Keep:
 
@@ -326,7 +324,7 @@ Change:
 - prefer SwiftUI-owned selection and presentation rules over imperative scene-context methods where possible
 - consider whether the command-state snapshot should become a smaller scene value or a focused scene object instead of a paired custom value type plus context object
 
-### `gmax/App/MainShellCommands.swift`
+### `gmax/Scenes/WorkspaceWindowGroup/NavigationSplitView/WorkspaceWindowSceneCommands.swift`
 
 Keep:
 
@@ -341,19 +339,19 @@ Change:
 - use `InspectorCommands` and `SidebarCommands` where they match the actual UI
 - reduce custom close routing and let built-in dismissal behavior handle frontmost sheet and window semantics first
 
-### `gmax/App/gmaxApp+Actions.swift`
+### `gmax/gmaxApp.swift`
 
 Keep:
 
-- only the minimum scene-local state that SwiftUI does not already own directly and that is truly app-specific
+- only the minimum app bootstrap and scene declarations that SwiftUI does not already own directly and that are truly app-specific
 
 Remove or shrink aggressively:
 
-- the command-router shape of `MainShellSceneContext`
+- any leftover command-router shape embedded in app-level bootstrap surfaces
 - imperative wrappers that only forward to model methods
 - close-routing methods that duplicate framework behavior
 
-### `gmax/Models/ShellModel.swift`
+### `gmax/Workspace/WorkspaceStore.swift`
 
 Keep:
 
@@ -366,7 +364,7 @@ Remove:
 - app-global selection ownership
 - convenience selection accessors that depend on `currentWorkspaceID`
 
-### `gmax/Models/ShellModel+WorkspaceManagement.swift`
+### `gmax/Workspace/WorkspaceStore+WorkspaceActions.swift`
 
 Keep:
 
@@ -377,7 +375,7 @@ Remove:
 - implicit selection side effects inside create, duplicate, reopen, and workspace navigation flows unless the caller explicitly wants that result
 - global-selection-only helpers like `closeSelectedWorkspace()` and workspace cycling helpers that mutate `currentWorkspaceID`
 
-### `gmax/Models/ShellModel+PaneManagement.swift`
+### `gmax/Workspace/WorkspaceStore+PaneActions.swift`
 
 Keep:
 
@@ -386,18 +384,6 @@ Keep:
 Remove:
 
 - no-argument helpers that infer the target workspace from app-global selection
-
-### `gmax/App/WindowSceneInterop.swift`
-
-Keep for now:
-
-- the narrow AppKit bridge that adds last-pane close confirmation to a real window close
-
-Do not expand:
-
-- no general command routing
-- no menu validation framework
-- no event routing layer
 
 ## Immediate Audit Conclusions
 
@@ -423,7 +409,7 @@ Using AppKit for a missing native close-confirmation hook is different from repl
 
 ## Next Refactor Order
 
-1. Remove `ShellModel.currentWorkspaceID` and the accessors and helpers that depend on it.
+1. Remove `WorkspaceStore.currentWorkspaceID` and the accessors and helpers that depend on it.
 2. Convert model command APIs so the durable public surface is explicit-ID-based.
 3. Shrink `MainShellSceneContext` down to true scene-local view and presentation state.
 4. Rework close handling so sheet dismissal and window dismissal use built-in SwiftUI/AppKit precedence first.

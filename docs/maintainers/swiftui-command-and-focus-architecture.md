@@ -52,7 +52,7 @@ Relevant surfaces:
 
 What this means for `gmax`:
 
-- `MainShellCommands` is the right home for app-specific shell commands.
+- `WorkspaceWindowSceneCommands` is the right home for app-specific workspace-window commands.
 - A pane view should not try to define scene menus directly.
 - A child view can influence commands by publishing context upward through SwiftUI's documented focus channels, not by inventing a private router.
 

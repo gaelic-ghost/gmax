@@ -12,7 +12,7 @@ extension FocusedValues {
 
 struct WorkspaceWindowSceneCommands: Commands {
 	@Environment(\.dismiss) private var dismiss
-	@FocusedObject private var shellModel: ShellModel?
+	@FocusedObject private var workspaceStore: WorkspaceStore?
 	@FocusedValue(\.selectedWorkspaceSelection) private var selectedWorkspaceSelection
 	@FocusedValue(\.openSavedWorkspaceLibrary) private var openSavedWorkspaceLibrary
 	@FocusedValue(\.presentWorkspaceRename) private var presentWorkspaceRename
@@ -21,7 +21,7 @@ struct WorkspaceWindowSceneCommands: Commands {
 	@FocusedValue(\.closeEmptyWorkspace) private var closeEmptyWorkspace
 
 	var body: some Commands {
-		let workspaces = shellModel?.workspaces ?? []
+		let workspaces = workspaceStore?.workspaces ?? []
 		let selectedWorkspaceID = selectedWorkspaceSelection?.wrappedValue
 		let selectedWorkspace = selectedWorkspaceID.flatMap { selectedWorkspaceID in workspaces.first { $0.id == selectedWorkspaceID } }
 		let canSplitFocusedPane = selectedWorkspace?.focusedPaneID.flatMap {
@@ -38,12 +38,12 @@ struct WorkspaceWindowSceneCommands: Commands {
 
 		CommandGroup(after: .newItem) {
 			Button("New Workspace") {
-				if let shellModel {
-					selectedWorkspaceSelection?.wrappedValue = shellModel.createWorkspace()
+				if let workspaceStore {
+					selectedWorkspaceSelection?.wrappedValue = workspaceStore.createWorkspace()
 				}
 			}
 			.keyboardShortcut("n", modifiers: [.command, .shift])
-			.disabled(shellModel == nil)
+			.disabled(workspaceStore == nil)
 		}
 
 		CommandGroup(after: .newItem) {
@@ -56,7 +56,7 @@ struct WorkspaceWindowSceneCommands: Commands {
 
 		CommandGroup(replacing: .saveItem) {
 			Button("Save Workspace") {
-				guard let shellModel else {
+				guard let workspaceStore else {
 					return
 				}
 				guard let selectedWorkspaceID else {
@@ -68,10 +68,10 @@ struct WorkspaceWindowSceneCommands: Commands {
 				Logger.diagnostics.notice(
 					"Requested that the selected workspace be saved to the workspace library from the active shell window. Workspace ID: \(selectedWorkspaceID.rawValue.uuidString, privacy: .public)"
 				)
-				_ = shellModel.saveWorkspaceToLibrary(selectedWorkspaceID)
+				_ = workspaceStore.saveWorkspaceToLibrary(selectedWorkspaceID)
 			}
 			.keyboardShortcut("s", modifiers: [.command])
-			.disabled(selectedWorkspaceSelection?.wrappedValue == nil || shellModel == nil)
+			.disabled(selectedWorkspaceSelection?.wrappedValue == nil || workspaceStore == nil)
 
 			Divider()
 
@@ -89,12 +89,12 @@ struct WorkspaceWindowSceneCommands: Commands {
 
 		CommandMenu("Workspace") {
 			Button("Undo Close Workspace") {
-				if let shellModel {
-					selectedWorkspaceSelection?.wrappedValue = shellModel.undoCloseWorkspace()
+				if let workspaceStore {
+					selectedWorkspaceSelection?.wrappedValue = workspaceStore.undoCloseWorkspace()
 				}
 			}
 			.keyboardShortcut("o", modifiers: [.command, .shift])
-			.disabled((shellModel?.recentlyClosedWorkspaceCount ?? 0) == 0)
+			.disabled((workspaceStore?.recentlyClosedWorkspaceCount ?? 0) == 0)
 
 			Divider()
 
@@ -106,21 +106,21 @@ struct WorkspaceWindowSceneCommands: Commands {
 			.disabled(selectedWorkspaceID == nil || presentWorkspaceRename == nil)
 
 			Button("Duplicate Workspace Layout") {
-				if let shellModel, let selectedWorkspaceID {
-					selectedWorkspaceSelection?.wrappedValue = shellModel.duplicateWorkspace(selectedWorkspaceID)
+				if let workspaceStore, let selectedWorkspaceID {
+					selectedWorkspaceSelection?.wrappedValue = workspaceStore.duplicateWorkspace(selectedWorkspaceID)
 				}
 			}
-			.disabled(selectedWorkspaceID == nil || shellModel == nil)
+			.disabled(selectedWorkspaceID == nil || workspaceStore == nil)
 
 			Button("Close Workspace to Library") {
-				if let shellModel, let selectedWorkspaceID {
-					selectedWorkspaceSelection?.wrappedValue = shellModel.closeWorkspaceToLibrary(selectedWorkspaceID)
+				if let workspaceStore, let selectedWorkspaceID {
+					selectedWorkspaceSelection?.wrappedValue = workspaceStore.closeWorkspaceToLibrary(selectedWorkspaceID)
 				}
 			}
-			.disabled(selectedWorkspaceID == nil || shellModel == nil)
+			.disabled(selectedWorkspaceID == nil || workspaceStore == nil)
 
 			Button("Close Workspace") {
-				guard let shellModel else {
+				guard let workspaceStore else {
 					return
 				}
 				guard let selectedWorkspaceID else {
@@ -129,10 +129,10 @@ struct WorkspaceWindowSceneCommands: Commands {
 					)
 					return
 				}
-				selectedWorkspaceSelection?.wrappedValue = shellModel.closeWorkspace(selectedWorkspaceID)
+				selectedWorkspaceSelection?.wrappedValue = workspaceStore.closeWorkspace(selectedWorkspaceID)
 			}
 			.keyboardShortcut("w", modifiers: [.command, .option])
-			.disabled(selectedWorkspaceID == nil || shellModel == nil)
+			.disabled(selectedWorkspaceID == nil || workspaceStore == nil)
 
 			Button("Delete Workspace", role: .destructive) {
 				if let selectedWorkspaceID {
@@ -178,29 +178,29 @@ struct WorkspaceWindowSceneCommands: Commands {
 
 		CommandMenu("Pane") {
 			Button("Move Focus Left") {
-				if let shellModel, let selectedWorkspaceID {
-					shellModel.movePaneFocus(.left, in: selectedWorkspaceID)
+				if let workspaceStore, let selectedWorkspaceID {
+					workspaceStore.movePaneFocus(.left, in: selectedWorkspaceID)
 				}
 			}
 			.keyboardShortcut(.leftArrow, modifiers: [.command, .option])
 
 			Button("Move Focus Right") {
-				if let shellModel, let selectedWorkspaceID {
-					shellModel.movePaneFocus(.right, in: selectedWorkspaceID)
+				if let workspaceStore, let selectedWorkspaceID {
+					workspaceStore.movePaneFocus(.right, in: selectedWorkspaceID)
 				}
 			}
 			.keyboardShortcut(.rightArrow, modifiers: [.command, .option])
 
 			Button("Move Focus Up") {
-				if let shellModel, let selectedWorkspaceID {
-					shellModel.movePaneFocus(.up, in: selectedWorkspaceID)
+				if let workspaceStore, let selectedWorkspaceID {
+					workspaceStore.movePaneFocus(.up, in: selectedWorkspaceID)
 				}
 			}
 			.keyboardShortcut(.upArrow, modifiers: [.command, .option])
 
 			Button("Move Focus Down") {
-				if let shellModel, let selectedWorkspaceID {
-					shellModel.movePaneFocus(.down, in: selectedWorkspaceID)
+				if let workspaceStore, let selectedWorkspaceID {
+					workspaceStore.movePaneFocus(.down, in: selectedWorkspaceID)
 				}
 			}
 			.keyboardShortcut(.downArrow, modifiers: [.command, .option])
@@ -208,31 +208,31 @@ struct WorkspaceWindowSceneCommands: Commands {
 			Divider()
 
 			Button("Focus Next Pane") {
-				if let shellModel, let selectedWorkspaceID {
-					shellModel.movePaneFocus(.next, in: selectedWorkspaceID)
+				if let workspaceStore, let selectedWorkspaceID {
+					workspaceStore.movePaneFocus(.next, in: selectedWorkspaceID)
 				}
 			}
 			.keyboardShortcut("]", modifiers: [.command, .option])
 
 			Button("Focus Previous Pane") {
-				if let shellModel, let selectedWorkspaceID {
-					shellModel.movePaneFocus(.previous, in: selectedWorkspaceID)
+				if let workspaceStore, let selectedWorkspaceID {
+					workspaceStore.movePaneFocus(.previous, in: selectedWorkspaceID)
 				}
 			}
 			.keyboardShortcut("[", modifiers: [.command, .option])
 
 			Section("New Pane") {
 				Button("Split Right") {
-					if let shellModel, let selectedWorkspaceID {
-						shellModel.splitFocusedPane(in: selectedWorkspaceID, .right)
+					if let workspaceStore, let selectedWorkspaceID {
+						workspaceStore.splitFocusedPane(in: selectedWorkspaceID, .right)
 					}
 				}
 				.keyboardShortcut("d", modifiers: [.command])
 				.disabled(!canSplitFocusedPane)
 
 				Button("Split Down") {
-					if let shellModel, let selectedWorkspaceID {
-						shellModel.splitFocusedPane(in: selectedWorkspaceID, .down)
+					if let workspaceStore, let selectedWorkspaceID {
+						workspaceStore.splitFocusedPane(in: selectedWorkspaceID, .down)
 					}
 				}
 				.keyboardShortcut("d", modifiers: [.command, .shift])

@@ -1,9 +1,9 @@
-//
-//  ShellPersistenceEntities.swift
-//  gmax
-//
-//  Created by Gale Williams on 4/14/26.
-//
+/*
+ WorkspacePersistenceEntities defines the Core Data managed object surface for
+ workspace persistence. These entities model the stored workspace list, pane
+ trees, saved workspace snapshots, and per-pane session snapshot payloads used
+ by the workspace persistence controller.
+ */
 
 import CoreData
 import Foundation

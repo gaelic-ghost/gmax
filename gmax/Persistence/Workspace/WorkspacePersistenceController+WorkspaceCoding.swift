@@ -1,15 +1,15 @@
-//
-//  ShellPersistenceController+WorkspaceStore.swift
-//  gmax
-//
-//  Created by Gale Williams on 4/14/26.
-//
+/*
+ WorkspacePersistenceController+WorkspaceCoding owns translation between the
+ in-memory workspace model and the Core Data graph. It encodes and decodes pane
+ trees, snapshot trees, and session snapshot relationships so the repository
+ layer can persist workspace state without leaking managed object details.
+ */
 
 import CoreData
 import Foundation
 import OSLog
 
-extension ShellPersistenceController {
+extension WorkspacePersistenceController {
 	nonisolated static func syncNode(
 		_ node: PaneNode?,
 		context: NSManagedObjectContext,

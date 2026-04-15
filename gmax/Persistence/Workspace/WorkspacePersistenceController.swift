@@ -1,29 +1,32 @@
-//
-//  ShellPersistenceController.swift
-//  gmax
-//
-//  Created by Gale Williams on 4/6/26.
-//
+/*
+ WorkspacePersistenceController owns the durable workspace repository surface.
+ It loads and saves the live workspace list, manages saved workspace snapshots,
+ and gives the rest of the app one main-actor entrypoint into Core Data-backed
+ workspace persistence.
+ */
 
 import CoreData
 import Foundation
 import OSLog
 
 @MainActor
-final class ShellPersistenceController {
-	static let shared = ShellPersistenceController()
+final class WorkspacePersistenceController {
+	static let shared = WorkspacePersistenceController(profile: .appDefault())
 
 	let container: NSPersistentContainer
+	let profile: WorkspacePersistenceProfile
 
-	private init() {
-		container = Self.makePersistentContainer()
+	private init(profile: WorkspacePersistenceProfile) {
+		self.profile = profile
+		container = Self.makePersistentContainer(profile: profile)
 	}
 
-	private init(container: NSPersistentContainer) {
+	private init(container: NSPersistentContainer, profile: WorkspacePersistenceProfile) {
+		self.profile = profile
 		self.container = container
 	}
 
-	static func inMemoryForTesting() -> ShellPersistenceController {
+	static func inMemoryForTesting() -> WorkspacePersistenceController {
 		let container = makeContainer(
 			model: makeManagedObjectModel(),
 			description: {
@@ -31,15 +34,15 @@ final class ShellPersistenceController {
 				description.type = NSInMemoryStoreType
 				return description
 			}(),
-			contextName: "ShellPersistence.testInMemoryViewContext"
+			contextName: WorkspacePersistenceProfile.inMemory.contextName
 		)
 
 		precondition(
 			loadPersistentStores(for: container),
-			"The in-memory shell persistence store must load successfully for tests."
+			"The in-memory workspace persistence store must load successfully for tests."
 		)
 
-		return ShellPersistenceController(container: container)
+		return WorkspacePersistenceController(container: container, profile: .inMemory)
 	}
 
 	func loadWorkspaces() -> [Workspace] {
@@ -74,7 +77,7 @@ final class ShellPersistenceController {
 				)
 			}
 		} catch {
-			Logger.persistence.error("Core Data could not read the saved-workspace list from the shell store. The app will continue with default workspace state for this launch. Error: \(String(describing: error), privacy: .public)")
+			Logger.persistence.error("Core Data could not read the saved-workspace list from the workspace store. The app will continue with default workspace state for this launch. Error: \(String(describing: error), privacy: .public)")
 			return []
 		}
 	}
@@ -119,7 +122,7 @@ final class ShellPersistenceController {
 					try context.save()
 				}
 			} catch {
-				Logger.persistence.error("Core Data could not save the latest shell workspace state. The current session remains live, but the last workspace change was not persisted to disk. Error: \(String(describing: error), privacy: .public)")
+				Logger.persistence.error("Core Data could not save the latest workspace state. The current session remains live, but the last workspace change was not persisted to disk. Error: \(String(describing: error), privacy: .public)")
 				context.rollback()
 			}
 		}

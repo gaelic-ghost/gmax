@@ -90,6 +90,7 @@ Build `gmax` into a finished macOS terminal workspace app:
 - [x] Add `Auto-save closed workspaces` and apply it orthogonally to the recently closed stack
 - [x] Add a searchable `Open Workspace...` saved-workspace index
 - [x] Preserve transcript-backed pane scrollback in saved workspace snapshots
+- [x] Separate production, debug, UI-test, and in-memory persistence profiles so day-to-day development and tests do not share one database
 - [ ] Add configurable transcript retention limits for saved workspace history
 - [ ] Add crash-safe and operator-friendly persistence diagnostics
 - [x] Add initial failure-mode coverage for corrupted and partial workspace snapshots so restore degrades safely instead of unpredictably

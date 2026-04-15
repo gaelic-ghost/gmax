@@ -1,21 +1,14 @@
-//
-//  ShellModel.swift
-//  gmax
-//
-//  Created by Gale Williams on 4/6/26.
-//
-
 import Foundation
 import Combine
 import OSLog
 import SwiftUI
 
 @MainActor
-final class ShellModel: ObservableObject {
+final class WorkspaceStore: ObservableObject {
 	@Published var workspaces: [Workspace]
 	@Published var recentlyClosedWorkspaceCount = 0
 
-	let persistence: ShellPersistenceController
+	let persistence: WorkspacePersistenceController
 	let launchContextBuilder: TerminalLaunchContextBuilder
 	let sessions: TerminalSessionRegistry
 	let paneControllers: TerminalPaneControllerStore
@@ -26,7 +19,7 @@ final class ShellModel: ObservableObject {
 
 	init(
 		workspaces: [Workspace]? = nil,
-		persistence: ShellPersistenceController? = nil,
+		persistence: WorkspacePersistenceController? = nil,
 		launchContextBuilder: TerminalLaunchContextBuilder? = nil
 	) {
 		UserDefaults.standard.register(

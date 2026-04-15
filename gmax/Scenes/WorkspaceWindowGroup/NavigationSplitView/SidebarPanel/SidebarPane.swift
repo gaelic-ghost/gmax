@@ -8,7 +8,7 @@
 import SwiftUI
 
 struct SidebarPane: View {
-	@ObservedObject var model: ShellModel
+	@ObservedObject var model: WorkspaceStore
 	@Binding var selection: WorkspaceID?
 	let requestRenameWorkspace: (WorkspaceID) -> Void
 	let requestDeleteWorkspace: (WorkspaceID) -> Void
@@ -90,7 +90,7 @@ struct SidebarPane: View {
 
 #Preview {
 	SidebarPane(
-		model: ShellModel(),
+		model: WorkspaceStore(),
 		selection: .constant(nil),
 		requestRenameWorkspace: { _ in },
 		requestDeleteWorkspace: { _ in }

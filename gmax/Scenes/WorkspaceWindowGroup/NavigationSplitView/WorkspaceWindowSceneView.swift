@@ -2,7 +2,7 @@ import OSLog
 import SwiftUI
 
 struct WorkspaceWindowSceneView: View {
-	@StateObject private var shellModel = ShellModel()
+	@StateObject private var workspaceStore = WorkspaceStore()
 	@State private var selectedWorkspaceID: WorkspaceID?
 	@State private var workspacePendingDeletionID: WorkspaceID?
 	@State private var workspacePendingRenameID: WorkspaceID?
@@ -20,10 +20,10 @@ struct WorkspaceWindowSceneView: View {
 			isSavedWorkspaceLibraryPresented = true
 		}
 		let normalizeSelection = {
-			selectedWorkspaceID = if let selectedWorkspaceID, shellModel.workspaces.contains(where: { $0.id == selectedWorkspaceID }) {
+			selectedWorkspaceID = if let selectedWorkspaceID, workspaceStore.workspaces.contains(where: { $0.id == selectedWorkspaceID }) {
 				selectedWorkspaceID
 			} else {
-				shellModel.workspaces.first?.id
+				workspaceStore.workspaces.first?.id
 			}
 		}
 		let dismissWorkspaceDeletion = {
@@ -43,7 +43,7 @@ struct WorkspaceWindowSceneView: View {
 			workspacePendingRenameID = nil
 		}
 		let presentWorkspaceRename: (WorkspaceID) -> Void = { workspaceID in
-			guard let workspace = shellModel.workspaces.first(where: { $0.id == workspaceID }) else {
+			guard let workspace = workspaceStore.workspaces.first(where: { $0.id == workspaceID }) else {
 				Logger.diagnostics.notice(
 					"Skipped presenting the workspace rename sheet because the requested workspace no longer exists in the active shell window. Workspace ID: \(workspaceID.rawValue.uuidString, privacy: .public)"
 				)
@@ -58,7 +58,7 @@ struct WorkspaceWindowSceneView: View {
 			)
 		}
 		let presentWorkspaceDeletion: (WorkspaceID) -> Void = { workspaceID in
-			guard shellModel.workspaces.count > 1, shellModel.workspaces.contains(where: { $0.id == workspaceID }) else {
+			guard workspaceStore.workspaces.count > 1, workspaceStore.workspaces.contains(where: { $0.id == workspaceID }) else {
 				Logger.diagnostics.notice(
 					"Skipped presenting workspace deletion confirmation because the selected workspace cannot be deleted safely. Workspace ID: \(workspaceID.rawValue.uuidString, privacy: .public)"
 				)
@@ -70,32 +70,32 @@ struct WorkspaceWindowSceneView: View {
 				"Presented workspace deletion confirmation for the active shell window. Workspace ID: \(workspaceID.rawValue.uuidString, privacy: .public)"
 			)
 		}
-		let pendingDeletionWorkspace = workspacePendingDeletionID.flatMap { workspaceID in shellModel.workspaces.first { $0.id == workspaceID } }
-		let pendingRenameWorkspace = workspacePendingRenameID.flatMap { workspaceID in shellModel.workspaces.first { $0.id == workspaceID } }
+		let pendingDeletionWorkspace = workspacePendingDeletionID.flatMap { workspaceID in workspaceStore.workspaces.first { $0.id == workspaceID } }
+		let pendingRenameWorkspace = workspacePendingRenameID.flatMap { workspaceID in workspaceStore.workspaces.first { $0.id == workspaceID } }
 		let canSplitFocusedPane = selectedWorkspaceID
-			.flatMap { selectedWorkspaceID in shellModel.workspaces.first { $0.id == selectedWorkspaceID } }
+			.flatMap { selectedWorkspaceID in workspaceStore.workspaces.first { $0.id == selectedWorkspaceID } }
 			.flatMap { workspace in
 				workspace.focusedPaneID.flatMap { workspace.root?.findPane(id: $0) }
 			} != nil
 
 		NavigationSplitView(columnVisibility: $columnVisibility) {
 			SidebarPane(
-				model: shellModel,
+				model: workspaceStore,
 				selection: $selectedWorkspaceID,
 				requestRenameWorkspace: presentWorkspaceRename,
 				requestDeleteWorkspace: presentWorkspaceDeletion
 			)
 			.navigationSplitViewColumnWidth(220)
 		} detail: {
-			ContentPane(model: shellModel, selectedWorkspaceID: $selectedWorkspaceID)
+			ContentPane(model: workspaceStore, selectedWorkspaceID: $selectedWorkspaceID)
 				.navigationSplitViewColumnWidth(min: 640, ideal: 920)
 		}
 		.inspector(isPresented: $isInspectorVisible) {
-			DetailPane(model: shellModel, selectedWorkspaceID: $selectedWorkspaceID)
+			DetailPane(model: workspaceStore, selectedWorkspaceID: $selectedWorkspaceID)
 				.inspectorColumnWidth(min: 220, ideal: 260, max: 340)
 		}
 		.sheet(isPresented: $isSavedWorkspaceLibraryPresented) {
-			SavedWorkspaceLibrarySheet(model: shellModel, selectedWorkspaceID: $selectedWorkspaceID)
+			SavedWorkspaceLibrarySheet(model: workspaceStore, selectedWorkspaceID: $selectedWorkspaceID)
 		}
 		.alert(
 			"Delete Workspace?",
@@ -117,7 +117,7 @@ struct WorkspaceWindowSceneView: View {
 					return
 				}
 
-				shellModel.deleteWorkspace(workspacePendingDeletionID)
+				workspaceStore.deleteWorkspace(workspacePendingDeletionID)
 				let deletedWorkspaceID = workspacePendingDeletionID.rawValue.uuidString
 				Logger.diagnostics.notice(
 					"Deleted a workspace after the active shell window confirmed the destructive action. Workspace ID: \(deletedWorkspaceID, privacy: .public)"
@@ -155,7 +155,7 @@ struct WorkspaceWindowSceneView: View {
 						return
 					}
 
-					shellModel.renameWorkspace(workspacePendingRenameID, to: workspaceRenameTitleDraft)
+					workspaceStore.renameWorkspace(workspacePendingRenameID, to: workspaceRenameTitleDraft)
 					selectedWorkspaceID = workspacePendingRenameID
 					Logger.diagnostics.notice(
 						"Saved a workspace rename from the active shell window. Workspace ID: \(workspacePendingRenameID.rawValue.uuidString, privacy: .public). New title: \(workspaceRenameTitleDraft, privacy: .public)"
@@ -164,7 +164,7 @@ struct WorkspaceWindowSceneView: View {
 				}
 			)
 		}
-		.focusedSceneObject(shellModel)
+		.focusedSceneObject(workspaceStore)
 		.focusedSceneValue(\.selectedWorkspaceSelection, $selectedWorkspaceID)
 		.focusedSceneValue(\.openSavedWorkspaceLibrary, openSavedWorkspaceLibrary)
 		.focusedSceneValue(\.presentWorkspaceRename, presentWorkspaceRename)
@@ -179,7 +179,7 @@ struct WorkspaceWindowSceneView: View {
 
 			ToolbarItem(placement: .navigation) {
 				Button("New Workspace", systemImage: "plus.rectangle.on.rectangle") {
-					selectedWorkspaceID = shellModel.createWorkspace()
+					selectedWorkspaceID = workspaceStore.createWorkspace()
 				}
 				.labelStyle(.iconOnly)
 				.help("Create a new workspace (\u{2318}N)")
@@ -189,7 +189,7 @@ struct WorkspaceWindowSceneView: View {
 			ToolbarItemGroup(placement: .primaryAction) {
 				Button("Split Right", systemImage: "uiwindow.split.2x1") {
 					if let selectedWorkspaceID {
-						shellModel.splitFocusedPane(in: selectedWorkspaceID, .right)
+						workspaceStore.splitFocusedPane(in: selectedWorkspaceID, .right)
 					}
 				}
 				.labelStyle(.iconOnly)
@@ -199,7 +199,7 @@ struct WorkspaceWindowSceneView: View {
 
 				Button("Split Down", systemImage: "uiwindow.split.2x1.rotate.90") {
 					if let selectedWorkspaceID {
-						shellModel.splitFocusedPane(in: selectedWorkspaceID, .down)
+						workspaceStore.splitFocusedPane(in: selectedWorkspaceID, .down)
 					}
 				}
 				.labelStyle(.iconOnly)
@@ -232,7 +232,7 @@ struct WorkspaceWindowSceneView: View {
 			let restoredSelection = restoredSelectedWorkspaceID
 				.flatMap(UUID.init(uuidString:))
 				.map { WorkspaceID(rawValue: $0) }
-			selectedWorkspaceID = restoredSelection ?? shellModel.workspaces.first?.id
+			selectedWorkspaceID = restoredSelection ?? workspaceStore.workspaces.first?.id
 			normalizeSelection()
 			columnVisibility = restoredSidebarVisible ? .all : .doubleColumn
 			isInspectorVisible = restoredInspectorVisible
@@ -248,7 +248,7 @@ struct WorkspaceWindowSceneView: View {
 		.onChange(of: selectedWorkspaceID?.rawValue.uuidString) { _, newValue in
 			restoredSelectedWorkspaceID = newValue
 		}
-		.onChange(of: shellModel.workspaces.map(\.id.rawValue)) { _, _ in
+		.onChange(of: workspaceStore.workspaces.map(\.id.rawValue)) { _, _ in
 			normalizeSelection()
 		}
 		.onChange(of: isInspectorVisible) { _, newValue in
@@ -261,7 +261,7 @@ struct WorkspaceWindowSceneView: View {
 }
 
 enum UITestLaunchBehavior {
-	private static let resetStateEnvironmentKey = "GMAX_UI_TEST_RESET_STATE"
+	private static let resetStateEnvironmentKey = WorkspacePersistenceProfile.uiTestResetStateEnvironmentKey
 
 	static var isEnabled: Bool {
 		ProcessInfo.processInfo.environment[resetStateEnvironmentKey] == "1"
@@ -278,8 +278,7 @@ enum UITestLaunchBehavior {
 		}
 		defaults.synchronize()
 
-		let storeURL = ShellPersistenceController.storeURL()
-		for cleanupURL in [storeURL, storeURL.appendingPathExtension("shm"), storeURL.appendingPathExtension("wal")] {
+		for cleanupURL in WorkspacePersistenceController.storeCleanupURLs(for: .uiTestOnDisk) {
 			if FileManager.default.fileExists(atPath: cleanupURL.path) {
 				try? FileManager.default.removeItem(at: cleanupURL)
 			}
