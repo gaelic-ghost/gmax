@@ -8,28 +8,6 @@
 import AppKit
 import SwiftUI
 
-extension AppWindowRole {
-	var identifier: NSUserInterfaceItemIdentifier {
-		NSUserInterfaceItemIdentifier(rawValue)
-	}
-}
-
-struct WindowRoleAccessor: NSViewRepresentable {
-	let role: AppWindowRole
-
-	func makeNSView(context: Context) -> NSView {
-		let view = NSView(frame: .zero)
-		view.isHidden = true
-		return view
-	}
-
-	func updateNSView(_ nsView: NSView, context: Context) {
-		DispatchQueue.main.async {
-			nsView.window?.identifier = role.identifier
-		}
-	}
-}
-
 struct WindowCloseConfirmationAccessor: NSViewRepresentable {
 	let requiresConfirmation: Bool
 	@Binding var isBypassingConfirmation: Bool
@@ -105,10 +83,6 @@ struct WindowCloseConfirmationAccessor: NSViewRepresentable {
 }
 
 extension View {
-	func windowRole(_ role: AppWindowRole) -> some View {
-		background(WindowRoleAccessor(role: role))
-	}
-
 	func windowCloseConfirmation(
 		requiresConfirmation: Bool,
 		isBypassingConfirmation: Binding<Bool>

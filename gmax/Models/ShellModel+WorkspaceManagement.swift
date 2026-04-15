@@ -20,7 +20,6 @@ extension ShellModel {
 		)
 		guard let pane = workspace.root?.firstLeaf() else {
 			workspaces.append(workspace)
-			currentWorkspaceID = workspace.id
 			schedulePersistenceSave()
 			return workspace.id
 		}
@@ -30,7 +29,6 @@ extension ShellModel {
 			id: pane.sessionID,
 			launchConfiguration: launchContextBuilder.makeLaunchConfiguration()
 		)
-		currentWorkspaceID = workspace.id
 		paneFocusHistoryByWorkspace[workspace.id] = [pane.id]
 		workspaceLogger.notice("Created a new workspace and seeded it with an initial pane. Workspace title: \(workspace.title, privacy: .public). Workspace ID: \(workspace.id.rawValue.uuidString, privacy: .public)")
 		schedulePersistenceSave()
@@ -61,7 +59,6 @@ extension ShellModel {
 
 		let duplicatedWorkspace = duplicatedWorkspace(from: workspaces[workspaceIndex])
 		workspaces.insert(duplicatedWorkspace, at: workspaceIndex + 1)
-		currentWorkspaceID = duplicatedWorkspace.id
 		paneFocusHistoryByWorkspace[duplicatedWorkspace.id] = [duplicatedWorkspace.focusedPaneID].compactMap { $0 }
 		workspaceLogger.notice("Duplicated a workspace layout into a new workspace. Source workspace ID: \(workspaceID.rawValue.uuidString, privacy: .public). New workspace title: \(duplicatedWorkspace.title, privacy: .public). New workspace ID: \(duplicatedWorkspace.id.rawValue.uuidString, privacy: .public)")
 		schedulePersistenceSave()
@@ -102,7 +99,6 @@ extension ShellModel {
 
 		let insertionIndex = min(closedWorkspace.formerIndex, workspaces.count)
 		workspaces.insert(closedWorkspace.workspace, at: insertionIndex)
-		currentWorkspaceID = closedWorkspace.workspace.id
 		paneFocusHistoryByWorkspace[closedWorkspace.workspace.id] = [closedWorkspace.workspace.focusedPaneID].compactMap { $0 }
 
 		for leaf in closedWorkspace.workspace.paneLeaves {
@@ -154,20 +150,6 @@ extension ShellModel {
 	}
 
 	@discardableResult
-	func saveSelectedWorkspaceToLibrary(
-		transcriptsBySessionID: [TerminalSessionID: String] = [:]
-	) -> SavedWorkspaceSnapshotSummary? {
-		guard let currentWorkspaceID else {
-			return nil
-		}
-
-		return saveWorkspaceToLibrary(
-			currentWorkspaceID,
-			transcriptsBySessionID: transcriptsBySessionID
-		)
-	}
-
-	@discardableResult
 	func closeWorkspaceToLibrary(
 		_ workspaceID: WorkspaceID,
 		transcriptsBySessionID: [TerminalSessionID: String] = [:]
@@ -192,7 +174,6 @@ extension ShellModel {
 
 		let restoredWorkspace = restoredWorkspace(from: snapshot)
 		workspaces.append(restoredWorkspace.workspace)
-		currentWorkspaceID = restoredWorkspace.workspace.id
 		paneFocusHistoryByWorkspace[restoredWorkspace.workspace.id] = [restoredWorkspace.workspace.focusedPaneID].compactMap { $0 }
 
 		for (sessionID, launchConfiguration) in restoredWorkspace.launchConfigurationsBySessionID {
@@ -217,59 +198,6 @@ extension ShellModel {
 		workspaceLogger.notice("Deleted a saved workspace snapshot from the library. Snapshot ID: \(snapshotID.rawValue.uuidString, privacy: .public)")
 	}
 
-	func closeSelectedWorkspace() -> CloseCommandOutcome {
-		guard let currentWorkspaceID else {
-			return CloseCommandOutcome(result: .closeWindow, nextSelectedWorkspaceID: nil)
-		}
-
-		return closeWorkspace(currentWorkspaceID)
-	}
-
-	func selectNextWorkspace() -> WorkspaceID? {
-		guard !workspaces.isEmpty else {
-			return nil
-		}
-		guard let selectedWorkspaceIndex else {
-			currentWorkspaceID = workspaces.first?.id
-			return currentWorkspaceID
-		}
-
-		let nextIndex = (selectedWorkspaceIndex + 1) % workspaces.count
-		currentWorkspaceID = workspaces[nextIndex].id
-		return currentWorkspaceID
-	}
-
-	func selectPreviousWorkspace() -> WorkspaceID? {
-		guard !workspaces.isEmpty else {
-			return nil
-		}
-		guard let selectedWorkspaceIndex else {
-			currentWorkspaceID = workspaces.last?.id
-			return currentWorkspaceID
-		}
-
-		let previousIndex = (selectedWorkspaceIndex - 1 + workspaces.count) % workspaces.count
-		currentWorkspaceID = workspaces[previousIndex].id
-		return currentWorkspaceID
-	}
-
-	func performCloseCommand() -> CloseCommandOutcome {
-		guard let workspaceIndex = selectedWorkspaceIndex else {
-			return CloseCommandOutcome(result: .closeWindow, nextSelectedWorkspaceID: nil)
-		}
-
-		let workspace = workspaces[workspaceIndex]
-		guard let focusedPaneID = workspace.focusedPaneID else {
-			return CloseCommandOutcome(result: .noAction, nextSelectedWorkspaceID: currentWorkspaceID)
-		}
-
-		if workspace.paneCount == 1 {
-			return removeWorkspace(workspace.id, closeEffects: defaultCloseEffects())
-		}
-
-		closePane(focusedPaneID, in: workspace.id)
-		return CloseCommandOutcome(result: .closedPane, nextSelectedWorkspaceID: currentWorkspaceID)
-	}
 }
 
 // MARK: - Workspace Helpers
@@ -433,7 +361,7 @@ extension ShellModel {
 		explicitTranscriptsBySessionID: [TerminalSessionID: String] = [:]
 	) -> CloseCommandOutcome {
 		guard let workspaceIndex = workspaces.firstIndex(where: { $0.id == workspaceID }) else {
-			return CloseCommandOutcome(result: .noAction, nextSelectedWorkspaceID: currentWorkspaceID)
+			return CloseCommandOutcome(result: .noAction, nextSelectedWorkspaceID: nil)
 		}
 
 		if workspaces.count == 1 {
@@ -457,7 +385,6 @@ extension ShellModel {
 			recordRecentlyClosedWorkspace(workspace, formerIndex: workspaceIndex)
 		}
 
-		let wasSelectedWorkspace = currentWorkspaceID == workspaceID
 		workspaces.remove(at: workspaceIndex)
 		paneFramesByWorkspace.removeValue(forKey: workspaceID)
 		paneFocusHistoryByWorkspace.removeValue(forKey: workspaceID)
@@ -469,12 +396,6 @@ extension ShellModel {
 		} else {
 			let nextIndex = min(workspaceIndex, workspaces.count - 1)
 			nextSelectedWorkspaceID = workspaces[nextIndex].id
-		}
-
-		if wasSelectedWorkspace {
-			currentWorkspaceID = nextSelectedWorkspaceID
-		} else {
-			currentWorkspaceID = normalizedWorkspaceSelection(currentWorkspaceID)
 		}
 
 		workspaceLogger.notice("Closed a workspace from the live shell. Workspace title: \(workspace.title, privacy: .public). Workspace ID: \(workspace.id.rawValue.uuidString, privacy: .public). Recorded in recently closed: \(closeEffects.recordRecentlyClosed). Saved to library: \(closeEffects.saveToLibrary)")

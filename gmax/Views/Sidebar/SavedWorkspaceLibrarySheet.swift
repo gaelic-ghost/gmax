@@ -10,7 +10,7 @@ import SwiftUI
 struct SavedWorkspaceLibrarySheet: View {
 	@ObservedObject var model: ShellModel
 	@Binding var selectedWorkspaceID: WorkspaceID?
-	@Binding var isPresented: Bool
+	@Environment(\.dismiss) private var dismiss
 	@State private var searchText = ""
 	@State private var selectedSnapshotID: WorkspaceSnapshotID?
 
@@ -51,7 +51,7 @@ struct SavedWorkspaceLibrarySheet: View {
 
 			HStack {
 				Button("Cancel") {
-					isPresented = false
+					dismiss()
 				}
 				.accessibilityIdentifier("savedWorkspaceLibrary.cancelButton")
 
@@ -158,7 +158,7 @@ struct SavedWorkspaceLibrarySheet: View {
 			}
 
 			selectedWorkspaceID = workspaceID
-			isPresented = false
+			dismiss()
 		}
 	}
 
@@ -189,7 +189,6 @@ struct SavedWorkspaceLibrarySheet: View {
 #Preview {
 	SavedWorkspaceLibrarySheet(
 		model: ShellModel(),
-		selectedWorkspaceID: .constant(nil),
-		isPresented: .constant(true)
+		selectedWorkspaceID: .constant(nil)
 	)
 }

@@ -14,8 +14,7 @@ struct WorkspaceLifecycleTests {
 	@Test func renameWorkspaceUpdatesTheTitle() {
 		let initialWorkspace = TestSupport.makeWorkspace(title: "Workspace 1")
 		let model = ShellModel(
-			workspaces: [initialWorkspace],
-			selectedWorkspaceID: initialWorkspace.id
+			workspaces: [initialWorkspace]
 		)
 
 		model.renameWorkspace(initialWorkspace.id, to: "Primary Shell")
@@ -23,7 +22,7 @@ struct WorkspaceLifecycleTests {
 		#expect(model.workspaces[0].title == "Primary Shell")
 	}
 
-	@Test func duplicateWorkspaceClonesTheLayoutAndSelectsTheCopy() {
+	@Test func duplicateWorkspaceClonesTheLayoutAndSelectsTheCopy() throws {
 		let leftPane = PaneLeaf()
 		let rightPane = PaneLeaf()
 		let workspace = Workspace(
@@ -39,14 +38,13 @@ struct WorkspaceLifecycleTests {
 			focusedPaneID: rightPane.id
 		)
 		let model = ShellModel(
-			workspaces: [workspace],
-			selectedWorkspaceID: workspace.id
+			workspaces: [workspace]
 		)
 
-		model.duplicateWorkspace(workspace.id)
+		let duplicatedWorkspaceID = try #require(model.duplicateWorkspace(workspace.id))
 
 		#expect(model.workspaces.count == 2)
-		#expect(model.selectedWorkspace?.id == model.workspaces[1].id)
+		#expect(duplicatedWorkspaceID == model.workspaces[1].id)
 		#expect(model.workspaces[1].title == "Workspace 1 Copy")
 
 		let originalLeaves = Set(workspace.paneLeaves.map(\.id))
@@ -62,29 +60,22 @@ struct WorkspaceLifecycleTests {
 	@Test func deleteWorkspaceRemovesItAndSelectsTheNeighbor() {
 		let firstWorkspace = TestSupport.makeWorkspace(title: "Workspace 1")
 		let secondWorkspace = TestSupport.makeWorkspace(title: "Workspace 2")
-		let model = ShellModel(
-			workspaces: [firstWorkspace, secondWorkspace],
-			selectedWorkspaceID: firstWorkspace.id
-		)
+		let model = ShellModel(workspaces: [firstWorkspace, secondWorkspace])
 
 		model.deleteWorkspace(firstWorkspace.id)
 
 		#expect(model.workspaces.count == 1)
 		#expect(model.workspaces[0].id == secondWorkspace.id)
-		#expect(model.selectedWorkspace?.id == secondWorkspace.id)
 	}
 
 	@Test func deleteWorkspaceDoesNothingWhenItIsTheLastWorkspace() {
 		let workspace = TestSupport.makeWorkspace(title: "Workspace 1")
-		let model = ShellModel(
-			workspaces: [workspace],
-			selectedWorkspaceID: workspace.id
-		)
+		let model = ShellModel(workspaces: [workspace])
 
 		model.deleteWorkspace(workspace.id)
 
 		#expect(model.workspaces.count == 1)
-		#expect(model.selectedWorkspace?.id == workspace.id)
+		#expect(model.workspaces[0].id == workspace.id)
 	}
 
 	@Test func undoCloseWorkspaceRestoresTheWorkspaceAndItsLaunchDirectory() throws {
@@ -94,7 +85,6 @@ struct WorkspaceLifecycleTests {
 		let launchContextBuilder = TestSupport.makeLaunchContextBuilder(defaultCurrentDirectory: "/tmp/gmax-tests")
 		let model = ShellModel(
 			workspaces: [firstWorkspace, secondWorkspace],
-			selectedWorkspaceID: firstWorkspace.id,
 			persistence: persistence,
 			launchContextBuilder: launchContextBuilder
 		)
@@ -108,7 +98,6 @@ struct WorkspaceLifecycleTests {
 
 		#expect(model.workspaces.count == 2)
 		#expect(reopenedWorkspaceID == firstWorkspace.id)
-		#expect(model.selectedWorkspace?.id == firstWorkspace.id)
 
 		let reopenedWorkspace = try #require(model.workspace(for: firstWorkspace.id))
 		let reopenedPane = try #require(reopenedWorkspace.root?.firstLeaf())

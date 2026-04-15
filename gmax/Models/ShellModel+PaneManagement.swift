@@ -14,15 +14,6 @@ import SwiftUI
 
 extension ShellModel {
 	@discardableResult
-	func createPane() -> WorkspaceID? {
-		guard let workspaceID = selectedWorkspace?.id else {
-			return createWorkspace()
-		}
-
-		return createPane(in: workspaceID)
-	}
-
-	@discardableResult
 	func createPane(in workspaceID: WorkspaceID) -> WorkspaceID? {
 		guard let workspace = workspace(for: workspaceID) else {
 			return nil
@@ -52,14 +43,6 @@ extension ShellModel {
 		session.prepareForRelaunch()
 		paneLogger.notice("Requested a shell relaunch for the focused pane in a live workspace. Workspace title: \(workspace.title, privacy: .public). Workspace ID: \(workspaceID.rawValue.uuidString, privacy: .public). Pane ID: \(paneID.rawValue.uuidString, privacy: .public). Session ID: \(session.id.rawValue.uuidString, privacy: .public)")
 		focusPane(paneID, in: workspaceID)
-	}
-
-	func relaunchFocusedPane() {
-		guard let workspaceID = selectedWorkspace?.id else {
-			return
-		}
-
-		relaunchFocusedPane(in: workspaceID)
 	}
 
 	func relaunchFocusedPane(in workspaceID: WorkspaceID) {
@@ -123,17 +106,6 @@ extension ShellModel {
 		schedulePersistenceSave()
 	}
 
-	func splitFocusedPane(_ direction: SplitDirection) {
-		guard
-			let workspace = selectedWorkspace,
-			let paneID = workspace.focusedPaneID
-		else {
-			return
-		}
-
-		splitPane(paneID, in: workspace.id, direction: direction)
-	}
-
 	func splitFocusedPane(in workspaceID: WorkspaceID, _ direction: SplitDirection) {
 		guard
 			let workspace = workspace(for: workspaceID),
@@ -180,11 +152,6 @@ extension ShellModel {
 	}
 
 	@discardableResult
-	func closeFocusedPane() -> CloseCommandOutcome {
-		performCloseCommand()
-	}
-
-	@discardableResult
 	func closeFocusedPane(in workspaceID: WorkspaceID) -> CloseCommandOutcome {
 		guard let workspace = workspace(for: workspaceID) else {
 			return CloseCommandOutcome(result: .noAction, nextSelectedWorkspaceID: normalizedWorkspaceSelection(workspaceID))
@@ -200,14 +167,6 @@ extension ShellModel {
 
 		closePane(focusedPaneID, in: workspace.id)
 		return CloseCommandOutcome(result: .closedPane, nextSelectedWorkspaceID: normalizedWorkspaceSelection(workspaceID))
-	}
-
-	func movePaneFocus(_ direction: PaneFocusDirection) {
-		guard let workspaceID = selectedWorkspace?.id else {
-			return
-		}
-
-		movePaneFocus(direction, in: workspaceID)
 	}
 
 	func movePaneFocus(_ direction: PaneFocusDirection, in workspaceID: WorkspaceID) {

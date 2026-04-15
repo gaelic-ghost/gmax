@@ -5,12 +5,12 @@
 //  Created by Gale Williams on 4/6/26.
 //
 
-import AppKit
 import SwiftUI
 
 struct ContentPane: View {
 	@ObservedObject var model: ShellModel
 	@Binding var selectedWorkspaceID: WorkspaceID?
+	@Environment(\.dismiss) private var dismiss
 
 	var body: some View {
 		if let workspace = selectedWorkspaceID.flatMap(model.workspace(for:)) {
@@ -42,7 +42,7 @@ struct ContentPane: View {
 								let outcome = model.closeFocusedPane(in: workspace.id)
 								selectedWorkspaceID = outcome.nextSelectedWorkspaceID
 								if outcome.result == .closeWindow {
-									NSApp.keyWindow?.performClose(nil)
+									dismiss()
 								}
 							}
 						)

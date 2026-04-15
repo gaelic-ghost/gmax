@@ -7,11 +7,6 @@
 
 import SwiftUI
 
-enum AppWindowRole: String {
-	case mainShell
-	case settings
-}
-
 @main
 struct gmaxApp: App {
 	@StateObject var shellModel: ShellModel
@@ -36,11 +31,6 @@ struct gmaxApp: App {
 
 		Settings {
 			SettingsUtilityWindow(model: shellModel)
-				.windowRole(.settings)
 		}
 	}
-}
-
-extension Notification.Name {
-	static let presentWorkspaceRenameSheet = Notification.Name("gmax.presentWorkspaceRenameSheet")
 }

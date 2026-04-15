@@ -15,7 +15,6 @@ struct PaneManagementTests {
 		let workspace = TestSupport.makeWorkspace(title: "Workspace 1")
 		let model = ShellModel(
 			workspaces: [workspace],
-			selectedWorkspaceID: workspace.id,
 			persistence: .inMemoryForTesting(),
 			launchContextBuilder: TestSupport.makeLaunchContextBuilder(defaultCurrentDirectory: "/tmp/gmax-tests")
 		)
@@ -24,11 +23,11 @@ struct PaneManagementTests {
 		let originalSession = model.sessions.ensureSession(id: originalPane.sessionID)
 		originalSession.currentDirectory = "/tmp/nested-split"
 
-		model.splitFocusedPane(.right)
-		let firstInsertedPaneID = try #require(model.selectedWorkspace?.focusedPaneID)
-		model.splitFocusedPane(.down)
+		model.splitFocusedPane(in: workspace.id, .right)
+		let firstInsertedPaneID = try #require(model.workspace(for: workspace.id)?.focusedPaneID)
+		model.splitFocusedPane(in: workspace.id, .down)
 
-		let updatedWorkspace = try #require(model.selectedWorkspace)
+		let updatedWorkspace = try #require(model.workspace(for: workspace.id))
 		let root = try #require(updatedWorkspace.root)
 		let outerSplit = try #require(extractRootSplit(from: root))
 		let nestedSplit = try #require(extractRootSplit(from: outerSplit.second))
@@ -51,7 +50,6 @@ struct PaneManagementTests {
 		let launchContextBuilder = TestSupport.makeLaunchContextBuilder(defaultCurrentDirectory: "/tmp/gmax-tests")
 		let model = ShellModel(
 			workspaces: [workspace],
-			selectedWorkspaceID: workspace.id,
 			persistence: .inMemoryForTesting(),
 			launchContextBuilder: launchContextBuilder
 		)
@@ -60,9 +58,9 @@ struct PaneManagementTests {
 		let originalSession = model.sessions.ensureSession(id: originalPane.sessionID)
 		originalSession.currentDirectory = "/tmp/inherited-pane"
 
-		model.splitFocusedPane(.down)
+		model.splitFocusedPane(in: workspace.id, .down)
 
-		let updatedWorkspace = try #require(model.selectedWorkspace)
+		let updatedWorkspace = try #require(model.workspace(for: workspace.id))
 		let root = try #require(updatedWorkspace.root)
 		let split = try #require(extractRootSplit(from: root))
 		let firstLeaf = try #require(extractRootLeaf(from: split.first))
@@ -101,7 +99,6 @@ struct PaneManagementTests {
 		)
 		let model = ShellModel(
 			workspaces: [workspace],
-			selectedWorkspaceID: workspace.id,
 			persistence: .inMemoryForTesting(),
 			launchContextBuilder: TestSupport.makeLaunchContextBuilder(defaultCurrentDirectory: "/tmp/gmax-tests")
 		)
@@ -136,18 +133,17 @@ struct PaneManagementTests {
 		let workspace = TestSupport.makeWorkspace(title: "Workspace 1")
 		let model = ShellModel(
 			workspaces: [workspace],
-			selectedWorkspaceID: workspace.id,
 			persistence: .inMemoryForTesting(),
 			launchContextBuilder: TestSupport.makeLaunchContextBuilder(defaultCurrentDirectory: "/tmp/gmax-tests")
 		)
 
 		let originalPane = try #require(workspace.root?.firstLeaf())
-		model.splitFocusedPane(.right)
-		let rightPaneID = try #require(model.selectedWorkspace?.focusedPaneID)
-		model.splitFocusedPane(.down)
-		let bottomRightPaneID = try #require(model.selectedWorkspace?.focusedPaneID)
+		model.splitFocusedPane(in: workspace.id, .right)
+		let rightPaneID = try #require(model.workspace(for: workspace.id)?.focusedPaneID)
+		model.splitFocusedPane(in: workspace.id, .down)
+		let bottomRightPaneID = try #require(model.workspace(for: workspace.id)?.focusedPaneID)
 		let bottomRightSessionID = try #require(
-			model.selectedWorkspace?.paneLeaves.first(where: { $0.id == bottomRightPaneID })?.sessionID
+			model.workspace(for: workspace.id)?.paneLeaves.first(where: { $0.id == bottomRightPaneID })?.sessionID
 		)
 
 		model.focusPane(originalPane.id, in: workspace.id)
@@ -164,7 +160,7 @@ struct PaneManagementTests {
 
 		model.closePane(bottomRightPaneID, in: workspace.id)
 
-		let updatedWorkspace = try #require(model.selectedWorkspace)
+		let updatedWorkspace = try #require(model.workspace(for: workspace.id))
 		let survivingLeaves = updatedWorkspace.paneLeaves
 		let framePaneIDs = Set(model.paneFramesByWorkspace[workspace.id]?.map(\.key) ?? [])
 
@@ -191,7 +187,6 @@ struct PaneManagementTests {
 		)
 		let model = ShellModel(
 			workspaces: [workspace],
-			selectedWorkspaceID: workspace.id,
 			persistence: .inMemoryForTesting(),
 			launchContextBuilder: TestSupport.makeLaunchContextBuilder(defaultCurrentDirectory: "/tmp/gmax-tests")
 		)
@@ -220,7 +215,6 @@ struct PaneManagementTests {
 		)
 		let model = ShellModel(
 			workspaces: [workspace],
-			selectedWorkspaceID: workspace.id,
 			persistence: .inMemoryForTesting(),
 			launchContextBuilder: TestSupport.makeLaunchContextBuilder(defaultCurrentDirectory: "/tmp/gmax-tests")
 		)
@@ -233,11 +227,11 @@ struct PaneManagementTests {
 			in: workspace.id
 		)
 
-		model.movePaneFocus(.right)
-		#expect(model.selectedWorkspace?.focusedPaneID == rightPane.id)
+		model.movePaneFocus(.right, in: workspace.id)
+		#expect(model.workspace(for: workspace.id)?.focusedPaneID == rightPane.id)
 
-		model.movePaneFocus(.left)
-		#expect(model.selectedWorkspace?.focusedPaneID == leftPane.id)
+		model.movePaneFocus(.left, in: workspace.id)
+		#expect(model.workspace(for: workspace.id)?.focusedPaneID == leftPane.id)
 	}
 
 	@Test func movePaneFocusChoosesTheClosestCandidateInTheRequestedDirection() throws {
@@ -265,7 +259,6 @@ struct PaneManagementTests {
 		)
 		let model = ShellModel(
 			workspaces: [workspace],
-			selectedWorkspaceID: workspace.id,
 			persistence: .inMemoryForTesting(),
 			launchContextBuilder: TestSupport.makeLaunchContextBuilder(defaultCurrentDirectory: "/tmp/gmax-tests")
 		)
@@ -279,11 +272,11 @@ struct PaneManagementTests {
 			in: workspace.id
 		)
 
-		model.movePaneFocus(.right)
-		#expect(model.selectedWorkspace?.focusedPaneID == bottomRightPane.id)
+		model.movePaneFocus(.right, in: workspace.id)
+		#expect(model.workspace(for: workspace.id)?.focusedPaneID == bottomRightPane.id)
 
-		model.movePaneFocus(.up)
-		#expect(model.selectedWorkspace?.focusedPaneID == topRightPane.id)
+		model.movePaneFocus(.up, in: workspace.id)
+		#expect(model.workspace(for: workspace.id)?.focusedPaneID == topRightPane.id)
 	}
 }
 

@@ -10,9 +10,8 @@ import SwiftUI
 struct SidebarPane: View {
 	@ObservedObject var model: ShellModel
 	@Binding var selection: WorkspaceID?
+	let requestRenameWorkspace: (WorkspaceID) -> Void
 	let requestDeleteWorkspace: (WorkspaceID) -> Void
-	@State private var workspacePendingRename: Workspace?
-	@State private var workspaceTitleDraft = ""
 
 	var body: some View {
 		List(selection: $selection) {
@@ -43,36 +42,10 @@ struct SidebarPane: View {
 				}
 			}
 		}
-			.sheet(item: $workspacePendingRename) { workspace in
-				WorkspaceRenameSheet(
-					title: $workspaceTitleDraft,
-				onCancel: {
-					workspacePendingRename = nil
-					},
-					onSave: {
-						model.renameWorkspace(workspace.id, to: workspaceTitleDraft)
-						selection = workspace.id
-						workspacePendingRename = nil
-					}
-			)
-		}
-		.onReceive(NotificationCenter.default.publisher(for: .presentWorkspaceRenameSheet)) { notification in
-			guard
-				let workspaceID = notification.object as? WorkspaceID,
-				let workspace = model.workspace(for: workspaceID)
-			else {
-				return
-			}
-
-			workspaceTitleDraft = workspace.title
-			workspacePendingRename = workspace
-			selection = workspace.id
-		}
 	}
 
 	private var selectedWorkspace: Workspace? {
 		selection.flatMap(model.workspace(for:))
-			?? model.workspaces.first
 	}
 
 	@ViewBuilder
@@ -90,8 +63,7 @@ struct SidebarPane: View {
 	@ViewBuilder
 	private func workspaceActions(for workspace: Workspace) -> some View {
 		Button("Rename Workspace") {
-			workspaceTitleDraft = workspace.title
-			workspacePendingRename = workspace
+			requestRenameWorkspace(workspace.id)
 		}
 
 			Button("Duplicate Workspace Layout") {
@@ -137,8 +109,7 @@ struct SidebarPane: View {
 	@ViewBuilder
 	private func sidebarWorkspaceActions(for workspace: Workspace) -> some View {
 		Button("Rename Workspace") {
-			workspaceTitleDraft = workspace.title
-			workspacePendingRename = workspace
+			requestRenameWorkspace(workspace.id)
 		}
 
 		Button("Duplicate Workspace Layout") {
@@ -177,7 +148,7 @@ struct SidebarPane: View {
 
 }
 
-private struct WorkspaceRenameSheet: View {
+struct WorkspaceRenameSheet: View {
 	@Binding var title: String
 	let onCancel: () -> Void
 	let onSave: () -> Void
@@ -222,5 +193,10 @@ private struct WorkspaceRenameSheet: View {
 }
 
 #Preview {
-	SidebarPane(model: ShellModel(), selection: .constant(nil), requestDeleteWorkspace: { _ in })
+	SidebarPane(
+		model: ShellModel(),
+		selection: .constant(nil),
+		requestRenameWorkspace: { _ in },
+		requestDeleteWorkspace: { _ in }
+	)
 }

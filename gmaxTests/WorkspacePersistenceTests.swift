@@ -54,7 +54,6 @@ struct WorkspacePersistenceTests {
 		let persistence = ShellPersistenceController.inMemoryForTesting()
 		let model = ShellModel(
 			workspaces: [workspace],
-			selectedWorkspaceID: workspace.id,
 			persistence: persistence,
 			launchContextBuilder: TestSupport.makeLaunchContextBuilder(defaultCurrentDirectory: "/tmp/gmax-tests")
 		)
@@ -138,7 +137,6 @@ struct WorkspacePersistenceTests {
 		let persistence = ShellPersistenceController.inMemoryForTesting()
 		let model = ShellModel(
 			workspaces: [workspace],
-			selectedWorkspaceID: workspace.id,
 			persistence: persistence,
 			launchContextBuilder: TestSupport.makeLaunchContextBuilder(defaultCurrentDirectory: "/tmp/gmax-tests")
 		)
@@ -201,7 +199,6 @@ struct WorkspacePersistenceTests {
 		let launchContextBuilder = TestSupport.makeLaunchContextBuilder(defaultCurrentDirectory: "/tmp/gmax-tests")
 		let model = ShellModel(
 			workspaces: [workspace],
-			selectedWorkspaceID: workspace.id,
 			persistence: persistence,
 			launchContextBuilder: launchContextBuilder
 		)
@@ -256,7 +253,6 @@ struct WorkspacePersistenceTests {
 		let persistence = ShellPersistenceController.inMemoryForTesting()
 		let model = ShellModel(
 			workspaces: [workspace],
-			selectedWorkspaceID: workspace.id,
 			persistence: persistence,
 			launchContextBuilder: TestSupport.makeLaunchContextBuilder(defaultCurrentDirectory: "/tmp/gmax-tests")
 		)
@@ -277,8 +273,7 @@ struct WorkspacePersistenceTests {
 
 		let firstReopenedWorkspaceID = try #require(model.openSavedWorkspace(summary.id))
 		_ = try #require(model.workspace(for: firstReopenedWorkspaceID))
-		model.setCurrentWorkspaceID(firstReopenedWorkspaceID)
-		model.splitFocusedPane(.right)
+		model.splitFocusedPane(in: firstReopenedWorkspaceID, .right)
 		let mutatedFirstWorkspace = try #require(model.workspace(for: firstReopenedWorkspaceID))
 		#expect(mutatedFirstWorkspace.paneCount == 4)
 
@@ -317,7 +312,6 @@ struct WorkspacePersistenceTests {
 		let persistence = ShellPersistenceController.inMemoryForTesting()
 		let model = ShellModel(
 			workspaces: [workspace],
-			selectedWorkspaceID: workspace.id,
 			persistence: persistence,
 			launchContextBuilder: TestSupport.makeLaunchContextBuilder(defaultCurrentDirectory: "/tmp/gmax-tests")
 		)
@@ -356,7 +350,6 @@ struct WorkspacePersistenceTests {
 		let launchContextBuilder = TestSupport.makeLaunchContextBuilder(defaultCurrentDirectory: "/tmp/default-fallback")
 		let model = ShellModel(
 			workspaces: [workspace],
-			selectedWorkspaceID: workspace.id,
 			persistence: persistence,
 			launchContextBuilder: launchContextBuilder
 		)
@@ -410,7 +403,6 @@ struct WorkspacePersistenceTests {
 		let launchContextBuilder = TestSupport.makeLaunchContextBuilder(defaultCurrentDirectory: "/tmp/gmax-tests")
 		let model = ShellModel(
 			workspaces: [firstWorkspace, secondWorkspace],
-			selectedWorkspaceID: firstWorkspace.id,
 			persistence: persistence,
 			launchContextBuilder: launchContextBuilder
 		)
@@ -428,7 +420,6 @@ struct WorkspacePersistenceTests {
 		#expect(outcome.result == .closedWorkspace)
 		#expect(outcome.nextSelectedWorkspaceID == secondWorkspace.id)
 		#expect(model.workspaces.count == 2)
-		#expect(model.selectedWorkspace?.id == reopenedWorkspaceID)
 		#expect(reopenedWorkspace.title == "Workspace 1")
 	}
 

@@ -19,7 +19,6 @@ final class ShellModel: ObservableObject {
 	let launchContextBuilder: TerminalLaunchContextBuilder
 	let sessions: TerminalSessionRegistry
 	let paneControllers: TerminalPaneControllerStore
-	var currentWorkspaceID: WorkspaceID?
 	var paneFramesByWorkspace: [WorkspaceID: [PaneID: CGRect]]
 	var paneFocusHistoryByWorkspace: [WorkspaceID: [PaneID]]
 	var pendingPersistenceTask: Task<Void, Never>?
@@ -46,7 +45,6 @@ final class ShellModel: ObservableObject {
 		)
 		self.paneControllers = TerminalPaneControllerStore()
 		self.workspaces = workspaces
-		self.currentWorkspaceID = workspaces.first?.id
 		self.paneFramesByWorkspace = [:]
 		self.paneFocusHistoryByWorkspace = Self.initialFocusHistory(for: workspaces)
 		if shouldRestorePersistedWorkspaces, !persistedWorkspaces.isEmpty {
@@ -59,12 +57,10 @@ final class ShellModel: ObservableObject {
 	}
 
 	convenience init(
-		workspaces: [Workspace],
-		selectedWorkspaceID: WorkspaceID?
+		workspaces: [Workspace]
 	) {
 		self.init(
 			workspaces: workspaces,
-			selectedWorkspaceID: selectedWorkspaceID,
 			persistence: .shared,
 			launchContextBuilder: .live()
 		)
@@ -72,7 +68,6 @@ final class ShellModel: ObservableObject {
 
 	init(
 		workspaces: [Workspace],
-		selectedWorkspaceID: WorkspaceID?,
 		persistence: ShellPersistenceController,
 		launchContextBuilder: TerminalLaunchContextBuilder
 	) {
@@ -84,34 +79,8 @@ final class ShellModel: ObservableObject {
 		)
 		self.paneControllers = TerminalPaneControllerStore()
 		self.workspaces = workspaces
-		self.currentWorkspaceID = selectedWorkspaceID
 		self.paneFramesByWorkspace = [:]
 		self.paneFocusHistoryByWorkspace = Self.initialFocusHistory(for: workspaces)
-	}
-
-	var selectedWorkspaceIndex: Int? {
-		guard let currentWorkspaceID else {
-			return nil
-		}
-		return workspaces.firstIndex { $0.id == currentWorkspaceID }
-	}
-
-	var selectedWorkspace: Workspace? {
-		guard let selectedWorkspaceIndex else {
-			return nil
-		}
-		return workspaces[selectedWorkspaceIndex]
-	}
-
-	var focusedPane: PaneLeaf? {
-		guard
-			let workspace = selectedWorkspace,
-			let root = workspace.root,
-			let focusedPaneID = workspace.focusedPaneID
-		else {
-			return nil
-		}
-		return root.findPane(id: focusedPaneID)
 	}
 
 	var requiresLastPaneCloseConfirmation: Bool {
@@ -119,10 +88,6 @@ final class ShellModel: ObservableObject {
 			return false
 		}
 		return workspace.paneCount == 1
-	}
-
-	func setCurrentWorkspaceID(_ workspaceID: WorkspaceID?) {
-		currentWorkspaceID = normalizedWorkspaceSelection(workspaceID)
 	}
 
 	func normalizedWorkspaceSelection(_ workspaceID: WorkspaceID?) -> WorkspaceID? {
