@@ -15,7 +15,6 @@ enum PaneNodeKind: String {
 
 enum SnapshotPersistenceError: Error {
 	case missingSessionSnapshot(sessionID: UUID)
-	case missingEncodedPayload(typeName: String)
 }
 
 @objc(WorkspaceEntity)
@@ -25,12 +24,6 @@ final class WorkspaceEntity: NSManagedObject {
 	@NSManaged var focusedPaneID: UUID?
 	@NSManaged var sortOrder: Int64
 	@NSManaged var rootNode: PaneNodeEntity?
-}
-
-extension WorkspaceEntity {
-	@nonobjc static func fetchRequest() -> NSFetchRequest<WorkspaceEntity> {
-		NSFetchRequest<WorkspaceEntity>(entityName: "WorkspaceEntity")
-	}
 }
 
 @objc(PaneNodeEntity)
@@ -45,12 +38,6 @@ final class PaneNodeEntity: NSManagedObject {
 	@NSManaged var firstParent: PaneNodeEntity?
 	@NSManaged var secondChild: PaneNodeEntity?
 	@NSManaged var secondParent: PaneNodeEntity?
-}
-
-extension PaneNodeEntity {
-	@nonobjc static func fetchRequest() -> NSFetchRequest<PaneNodeEntity> {
-		NSFetchRequest<PaneNodeEntity>(entityName: "PaneNodeEntity")
-	}
 }
 
 @objc(WorkspaceSnapshotEntity)
@@ -70,12 +57,6 @@ final class WorkspaceSnapshotEntity: NSManagedObject {
 	@NSManaged var sessionSnapshots: NSSet?
 }
 
-extension WorkspaceSnapshotEntity {
-	@nonobjc static func fetchRequest() -> NSFetchRequest<WorkspaceSnapshotEntity> {
-		NSFetchRequest<WorkspaceSnapshotEntity>(entityName: "WorkspaceSnapshotEntity")
-	}
-}
-
 @objc(PaneSnapshotNodeEntity)
 final class PaneSnapshotNodeEntity: NSManagedObject {
 	@NSManaged var id: UUID
@@ -88,12 +69,6 @@ final class PaneSnapshotNodeEntity: NSManagedObject {
 	@NSManaged var firstParent: PaneSnapshotNodeEntity?
 	@NSManaged var secondChild: PaneSnapshotNodeEntity?
 	@NSManaged var secondParent: PaneSnapshotNodeEntity?
-}
-
-extension PaneSnapshotNodeEntity {
-	@nonobjc static func fetchRequest() -> NSFetchRequest<PaneSnapshotNodeEntity> {
-		NSFetchRequest<PaneSnapshotNodeEntity>(entityName: "PaneSnapshotNodeEntity")
-	}
 }
 
 @objc(PaneSessionSnapshotEntity)
@@ -109,10 +84,4 @@ final class PaneSessionSnapshotEntity: NSManagedObject {
 	@NSManaged var transcriptLineCount: Int64
 	@NSManaged var previewText: String?
 	@NSManaged var snapshot: WorkspaceSnapshotEntity?
-}
-
-extension PaneSessionSnapshotEntity {
-	@nonobjc static func fetchRequest() -> NSFetchRequest<PaneSessionSnapshotEntity> {
-		NSFetchRequest<PaneSessionSnapshotEntity>(entityName: "PaneSessionSnapshotEntity")
-	}
 }

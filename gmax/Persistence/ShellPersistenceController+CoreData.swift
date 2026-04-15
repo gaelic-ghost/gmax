@@ -12,8 +12,8 @@ import OSLog
 extension ShellPersistenceController {
 	static func storeURL() -> URL {
 		let fileManager = FileManager.default
-		let appSupportURL = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-		let directoryURL = appSupportURL.appendingPathComponent("gmax-exploration", isDirectory: true)
+		let directoryURL = URL.applicationSupportDirectory
+			.appending(path: "gmax-exploration", directoryHint: .isDirectory)
 		do {
 			try fileManager.createDirectory(at: directoryURL, withIntermediateDirectories: true)
 		} catch {
@@ -27,7 +27,12 @@ extension ShellPersistenceController {
 		let model = makeManagedObjectModel()
 		let primaryContainer = makeContainer(
 			model: model,
-			description: persistentStoreDescription(),
+			description: {
+				let description = NSPersistentStoreDescription(url: storeURL())
+				description.shouldMigrateStoreAutomatically = true
+				description.shouldInferMappingModelAutomatically = true
+				return description
+			}(),
 			contextName: "ShellPersistence.viewContext"
 		)
 
@@ -39,7 +44,11 @@ extension ShellPersistenceController {
 
 		let fallbackContainer = makeContainer(
 			model: model,
-			description: inMemoryStoreDescription(),
+			description: {
+				let description = NSPersistentStoreDescription()
+				description.type = NSInMemoryStoreType
+				return description
+			}(),
 			contextName: "ShellPersistence.inMemoryViewContext"
 		)
 
@@ -49,20 +58,6 @@ extension ShellPersistenceController {
 
 		return fallbackContainer
 	}
-
-	static func persistentStoreDescription() -> NSPersistentStoreDescription {
-		let description = NSPersistentStoreDescription(url: storeURL())
-		description.shouldMigrateStoreAutomatically = true
-		description.shouldInferMappingModelAutomatically = true
-		return description
-	}
-
-	static func inMemoryStoreDescription() -> NSPersistentStoreDescription {
-		let description = NSPersistentStoreDescription()
-		description.type = NSInMemoryStoreType
-		return description
-	}
-
 	static func makeContainer(
 		model: NSManagedObjectModel,
 		description: NSPersistentStoreDescription,

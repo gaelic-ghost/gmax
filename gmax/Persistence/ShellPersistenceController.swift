@@ -31,7 +31,11 @@ final class ShellPersistenceController {
 		let logger = Logger.gmax(.persistence)
 		let container = makeContainer(
 			model: makeManagedObjectModel(),
-			description: inMemoryStoreDescription(),
+			description: {
+				let description = NSPersistentStoreDescription()
+				description.type = NSInMemoryStoreType
+				return description
+			}(),
 			contextName: "ShellPersistence.testInMemoryViewContext"
 		)
 
@@ -45,7 +49,7 @@ final class ShellPersistenceController {
 
 	func loadWorkspaces() -> [Workspace] {
 		let context = container.viewContext
-		let request = WorkspaceEntity.fetchRequest()
+		let request = NSFetchRequest<WorkspaceEntity>(entityName: "WorkspaceEntity")
 		request.sortDescriptors = [NSSortDescriptor(key: #keyPath(WorkspaceEntity.sortOrder), ascending: true)]
 
 		do {
@@ -69,8 +73,8 @@ final class ShellPersistenceController {
 		let context = container.viewContext
 		context.performAndWait {
 			do {
-				let existingWorkspaces = try context.fetch(WorkspaceEntity.fetchRequest())
-				let existingNodes = try context.fetch(PaneNodeEntity.fetchRequest())
+				let existingWorkspaces = try context.fetch(NSFetchRequest<WorkspaceEntity>(entityName: "WorkspaceEntity"))
+				let existingNodes = try context.fetch(NSFetchRequest<PaneNodeEntity>(entityName: "PaneNodeEntity"))
 
 				var workspacesByID = Dictionary(uniqueKeysWithValues: existingWorkspaces.map { ($0.id, $0) })
 				var nodesByID = Dictionary(uniqueKeysWithValues: existingNodes.map { ($0.id, $0) })
@@ -121,20 +125,38 @@ final class ShellPersistenceController {
 		let context = container.viewContext
 		var createdSummary: SavedWorkspaceSnapshotSummary?
 		let now = Date()
-		let pendingPaneSnapshots: [PendingPaneSessionSnapshot] = workspace.paneLeaves.map { leaf in
+		let paneSnapshots = workspace.paneLeaves.map { leaf in
 			let session = sessions.ensureSession(id: leaf.sessionID)
-			let launchConfiguration = launchConfigurationForSnapshot(from: session)
+			let launchConfiguration = TerminalLaunchConfiguration(
+				executable: session.launchConfiguration.executable,
+				arguments: session.launchConfiguration.arguments,
+				environment: session.launchConfiguration.environment,
+				currentDirectory: session.currentDirectory ?? session.launchConfiguration.currentDirectory
+			)
 			let transcript = transcriptsBySessionID[leaf.sessionID]
-			let previewText = Self.previewText(for: transcript)
-			return PendingPaneSessionSnapshot(
+			let previewText = transcript.flatMap { transcript in
+				transcript
+					.split(whereSeparator: \.isNewline)
+					.map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
+					.first(where: { !$0.isEmpty })
+					.map { String($0.prefix(160)) }
+			}
+			let transcriptLineCount = transcript.map { transcript in
+				transcript.isEmpty ? 0 : transcript.reduce(into: 1) { count, character in
+					if character == "\n" {
+						count += 1
+					}
+				}
+			} ?? 0
+			return (
 				sessionID: leaf.sessionID,
 				title: session.title,
 				launchConfiguration: launchConfiguration,
-				argumentsData: try? Self.encode(launchConfiguration.arguments),
-				environmentData: try? Self.encode(launchConfiguration.environment),
+				argumentsData: try? JSONEncoder().encode(launchConfiguration.arguments),
+				environmentData: try? JSONEncoder().encode(launchConfiguration.environment),
 				transcript: transcript,
 				transcriptByteCount: transcript?.utf8.count ?? 0,
-				transcriptLineCount: Self.lineCount(for: transcript),
+				transcriptLineCount: transcriptLineCount,
 				previewText: previewText
 			)
 		}
@@ -143,7 +165,7 @@ final class ShellPersistenceController {
 		if let notes, !notes.isEmpty {
 			searchComponents.append(notes)
 		}
-		for snapshot in pendingPaneSnapshots {
+		for snapshot in paneSnapshots {
 			if let previewText = snapshot.previewText, !previewText.isEmpty {
 				searchComponents.append(previewText)
 			}
@@ -152,15 +174,18 @@ final class ShellPersistenceController {
 			}
 		}
 
-		let flattenedSearchText = normalizedSearchText(from: searchComponents)
-		let previewText = pendingPaneSnapshots.lazy.compactMap(\.previewText).first
+		let flattenedSearchText = searchComponents
+			.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+			.filter { !$0.isEmpty }
+			.joined(separator: "\n")
+		let previewText = paneSnapshots.lazy.compactMap { $0.previewText }.first
 
 		context.performAndWait {
 			do {
-				let snapshotEntity = try Self.existingSnapshotEntity(
-					forSourceWorkspaceID: workspace.id,
-					in: context
-				) ?? WorkspaceSnapshotEntity(context: context)
+				let request = NSFetchRequest<WorkspaceSnapshotEntity>(entityName: "WorkspaceSnapshotEntity")
+				request.fetchLimit = 1
+				request.predicate = NSPredicate(format: "sourceWorkspaceID == %@", workspace.id.rawValue as CVarArg)
+				let snapshotEntity = try context.fetch(request).first ?? WorkspaceSnapshotEntity(context: context)
 				let snapshotID = snapshotEntity.sourceWorkspaceID == workspace.id.rawValue
 					? WorkspaceSnapshotID(rawValue: snapshotEntity.id)
 					: WorkspaceSnapshotID()
@@ -170,7 +195,14 @@ final class ShellPersistenceController {
 					snapshotEntity.lastOpenedAt = nil
 					snapshotEntity.isPinned = false
 				} else {
-					Self.deleteExistingSnapshotContents(from: snapshotEntity, in: context)
+					if let existingRootNode = snapshotEntity.rootNode {
+						context.delete(existingRootNode)
+					}
+					for sessionSnapshot in (snapshotEntity.sessionSnapshots as? Set<PaneSessionSnapshotEntity>) ?? [] {
+						context.delete(sessionSnapshot)
+					}
+					snapshotEntity.rootNode = nil
+					snapshotEntity.sessionSnapshots = nil
 				}
 
 				snapshotEntity.sourceWorkspaceID = workspace.id.rawValue
@@ -185,7 +217,7 @@ final class ShellPersistenceController {
 				snapshotEntity.focusedPaneID = workspace.focusedPaneID?.rawValue
 
 				var sessionSnapshotsByID: [UUID: PaneSessionSnapshotEntity] = [:]
-				for pendingPaneSnapshot in pendingPaneSnapshots {
+				for pendingPaneSnapshot in paneSnapshots {
 					let sessionSnapshotEntity = PaneSessionSnapshotEntity(context: context)
 					sessionSnapshotEntity.id = pendingPaneSnapshot.sessionID.rawValue
 					sessionSnapshotEntity.executable = pendingPaneSnapshot.launchConfiguration.executable
@@ -231,7 +263,7 @@ final class ShellPersistenceController {
 
 	func listWorkspaceSnapshots(matching query: String? = nil) -> [SavedWorkspaceSnapshotSummary] {
 		let context = container.viewContext
-		let request = WorkspaceSnapshotEntity.fetchRequest()
+		let request = NSFetchRequest<WorkspaceSnapshotEntity>(entityName: "WorkspaceSnapshotEntity")
 		request.sortDescriptors = [
 			NSSortDescriptor(key: #keyPath(WorkspaceSnapshotEntity.isPinned), ascending: false),
 			NSSortDescriptor(key: #keyPath(WorkspaceSnapshotEntity.updatedAt), ascending: false)
@@ -246,7 +278,31 @@ final class ShellPersistenceController {
 
 		do {
 			return try context.fetch(request).map { entity in
-				Self.makeSnapshotSummary(from: entity, paneCount: Self.snapshotPaneCount(from: entity.rootNode))
+				func snapshotPaneCount(from rootNode: PaneSnapshotNodeEntity?) -> Int {
+					guard let rootNode else {
+						return 0
+					}
+
+					switch PaneNodeKind(rawValue: rootNode.kind) {
+						case .leaf:
+							return 1
+						case .split:
+							return snapshotPaneCount(from: rootNode.firstChild) + snapshotPaneCount(from: rootNode.secondChild)
+						case .none:
+							return 0
+					}
+				}
+
+				return SavedWorkspaceSnapshotSummary(
+					id: WorkspaceSnapshotID(rawValue: entity.id),
+					title: entity.title,
+					createdAt: entity.createdAt,
+					updatedAt: entity.updatedAt,
+					lastOpenedAt: entity.lastOpenedAt,
+					isPinned: entity.isPinned,
+					previewText: entity.previewText,
+					paneCount: snapshotPaneCount(from: entity.rootNode)
+				)
 			}
 		} catch {
 			logger.error("Core Data failed to list saved workspace snapshots. The app will continue, but the saved-workspace index could not be read. Error: \(String(describing: error), privacy: .public)")
@@ -256,7 +312,7 @@ final class ShellPersistenceController {
 
 	func loadWorkspaceSnapshot(id: WorkspaceSnapshotID) -> SavedWorkspaceSnapshot? {
 		let context = container.viewContext
-		let request = WorkspaceSnapshotEntity.fetchRequest()
+		let request = NSFetchRequest<WorkspaceSnapshotEntity>(entityName: "WorkspaceSnapshotEntity")
 		request.fetchLimit = 1
 		request.predicate = NSPredicate(format: "id == %@", id.rawValue as CVarArg)
 
@@ -280,10 +336,34 @@ final class ShellPersistenceController {
 			let paneSnapshots = entity.sessionSnapshots as? Set<PaneSessionSnapshotEntity> ?? []
 			let paneSnapshotsBySessionID: [TerminalSessionID: SavedPaneSessionSnapshot] = Dictionary(
 				uniqueKeysWithValues: paneSnapshots.compactMap { sessionSnapshot in
-					guard let paneSnapshot = Self.decodePaneSessionSnapshot(sessionSnapshot, logger: logger) else {
+					guard let argumentsData = sessionSnapshot.argumentsData else {
+						logger.error("A saved workspace pane session snapshot is missing its encoded argument list. That pane history will be skipped during restore. Session snapshot ID: \(sessionSnapshot.id.uuidString, privacy: .public)")
 						return nil
 					}
-					return (paneSnapshot.id, paneSnapshot)
+					do {
+						let arguments = try JSONDecoder().decode([String].self, from: argumentsData)
+						let environment = try sessionSnapshot.environmentData.map {
+							try JSONDecoder().decode([String]?.self, from: $0)
+						} ?? nil
+						let paneSnapshot = SavedPaneSessionSnapshot(
+							id: TerminalSessionID(rawValue: sessionSnapshot.id),
+							title: sessionSnapshot.title,
+							launchConfiguration: TerminalLaunchConfiguration(
+								executable: sessionSnapshot.executable,
+								arguments: arguments,
+								environment: environment,
+								currentDirectory: sessionSnapshot.currentDirectory
+							),
+							transcript: sessionSnapshot.transcript,
+							transcriptByteCount: Int(sessionSnapshot.transcriptByteCount),
+							transcriptLineCount: Int(sessionSnapshot.transcriptLineCount),
+							previewText: sessionSnapshot.previewText
+						)
+						return (paneSnapshot.id, paneSnapshot)
+					} catch {
+						logger.error("A saved workspace pane session snapshot could not be decoded. That pane history will be skipped during restore. Session snapshot ID: \(sessionSnapshot.id.uuidString, privacy: .public). Error: \(String(describing: error), privacy: .public)")
+						return nil
+					}
 				}
 			)
 
@@ -311,7 +391,7 @@ final class ShellPersistenceController {
 		var didDeleteSnapshot = false
 		context.performAndWait {
 			do {
-				let request = WorkspaceSnapshotEntity.fetchRequest()
+				let request = NSFetchRequest<WorkspaceSnapshotEntity>(entityName: "WorkspaceSnapshotEntity")
 				request.fetchLimit = 1
 				request.predicate = NSPredicate(format: "id == %@", id.rawValue as CVarArg)
 				guard let entity = try context.fetch(request).first else {
@@ -335,7 +415,7 @@ final class ShellPersistenceController {
 		let context = container.viewContext
 		context.performAndWait {
 			do {
-				let request = WorkspaceSnapshotEntity.fetchRequest()
+				let request = NSFetchRequest<WorkspaceSnapshotEntity>(entityName: "WorkspaceSnapshotEntity")
 				request.fetchLimit = 1
 				request.predicate = NSPredicate(format: "id == %@", id.rawValue as CVarArg)
 				guard let entity = try context.fetch(request).first else {

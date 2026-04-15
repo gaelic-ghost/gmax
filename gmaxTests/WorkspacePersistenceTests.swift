@@ -488,7 +488,7 @@ private func fetchSnapshotEntity(
 	id: WorkspaceSnapshotID,
 	in context: NSManagedObjectContext
 ) throws -> WorkspaceSnapshotEntity? {
-	let request = WorkspaceSnapshotEntity.fetchRequest()
+	let request = NSFetchRequest<WorkspaceSnapshotEntity>(entityName: "WorkspaceSnapshotEntity")
 	request.fetchLimit = 1
 	request.predicate = NSPredicate(format: "id == %@", id.rawValue as CVarArg)
 	return try context.fetch(request).first
@@ -498,7 +498,7 @@ private func fetchPaneSessionSnapshotEntity(
 	id: TerminalSessionID,
 	in context: NSManagedObjectContext
 ) throws -> PaneSessionSnapshotEntity? {
-	let request = PaneSessionSnapshotEntity.fetchRequest()
+	let request = NSFetchRequest<PaneSessionSnapshotEntity>(entityName: "PaneSessionSnapshotEntity")
 	request.fetchLimit = 1
 	request.predicate = NSPredicate(format: "id == %@", id.rawValue as CVarArg)
 	return try context.fetch(request).first
@@ -508,7 +508,7 @@ private func fetchWorkspaceEntity(
 	id: WorkspaceID,
 	in context: NSManagedObjectContext
 ) throws -> WorkspaceEntity? {
-	let request = WorkspaceEntity.fetchRequest()
+	let request = NSFetchRequest<WorkspaceEntity>(entityName: "WorkspaceEntity")
 	request.fetchLimit = 1
 	request.predicate = NSPredicate(format: "id == %@", id.rawValue as CVarArg)
 	return try context.fetch(request).first
