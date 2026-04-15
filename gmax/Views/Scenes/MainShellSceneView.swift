@@ -9,7 +9,7 @@ import OSLog
 import SwiftUI
 
 struct MainShellSceneView: View {
-	@ObservedObject var shellModel: ShellModel
+	@StateObject private var shellModel: ShellModel
 	@State private var sceneContext: MainShellSceneContext
 	@State private var selectedWorkspaceID: WorkspaceID?
 	@SceneStorage("mainShell.selectedWorkspaceID") private var restoredSelectedWorkspaceID: String?
@@ -24,8 +24,9 @@ struct MainShellSceneView: View {
 	private let inspectorColumnIdealWidth: CGFloat = 260
 	private let inspectorColumnMaximumWidth: CGFloat = 340
 
-	init(shellModel: ShellModel) {
-		self.shellModel = shellModel
+	init() {
+		let shellModel = ShellModel()
+		_shellModel = StateObject(wrappedValue: shellModel)
 		_selectedWorkspaceID = State(initialValue: shellModel.normalizedWorkspaceSelection(nil))
 		_sceneContext = State(
 			initialValue: MainShellSceneContext(

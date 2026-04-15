@@ -9,18 +9,14 @@ import SwiftUI
 
 @main
 struct gmaxApp: App {
-	@StateObject var shellModel: ShellModel
-
 	init() {
 		UITestLaunchBehavior.applyIfNeeded()
 		WorkspacePersistenceDefaults.registerDefaults()
-		let shellModel = ShellModel()
-		_shellModel = StateObject(wrappedValue: shellModel)
 	}
 
 	var body: some Scene {
 		WindowGroup("gmax exploration", id: "main-window") {
-			MainShellSceneView(shellModel: shellModel)
+			MainShellSceneView()
 		}
 		.defaultLaunchBehavior(.presented)
 		.restorationBehavior(UITestLaunchBehavior.isEnabled ? .disabled : .automatic)
@@ -30,7 +26,7 @@ struct gmaxApp: App {
 		}
 
 		Settings {
-			SettingsUtilityWindow(model: shellModel)
+			SettingsUtilityWindow()
 		}
 	}
 }

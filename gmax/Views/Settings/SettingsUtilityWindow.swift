@@ -10,7 +10,6 @@ import OSLog
 import SwiftUI
 
 struct SettingsUtilityWindow: View {
-	@ObservedObject var model: ShellModel
 	private let diagnosticsLogger = Logger.gmax(.diagnostics)
 
 	@AppStorage(TerminalAppearanceDefaults.fontNameKey)
@@ -71,12 +70,6 @@ struct SettingsUtilityWindow: View {
 
 	private func handleKeepRecentlyClosedWorkspacesChanged(_ isEnabled: Bool) {
 		diagnosticsLogger.notice("Updated the recently-closed workspace retention preference from Settings. Keep recently closed workspaces is now \(isEnabled ? "enabled" : "disabled", privacy: .public).")
-		if !isEnabled {
-			Task { @MainActor in
-				await Task.yield()
-				model.clearRecentlyClosedWorkspaces()
-			}
-		}
 	}
 
 	private func handleAutoSaveClosedWorkspacesChanged(_ isEnabled: Bool) {
@@ -85,5 +78,5 @@ struct SettingsUtilityWindow: View {
 }
 
 #Preview {
-	SettingsUtilityWindow(model: ShellModel())
+	SettingsUtilityWindow()
 }
