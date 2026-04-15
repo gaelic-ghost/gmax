@@ -19,6 +19,29 @@ struct MainShellWindowView: View {
 		let openSavedWorkspaceLibrary = {
 			isSavedWorkspaceLibraryPresented = true
 		}
+		let normalizeSelection = {
+			selectedWorkspaceID = if let selectedWorkspaceID, shellModel.workspaces.contains(where: { $0.id == selectedWorkspaceID }) {
+				selectedWorkspaceID
+			} else {
+				shellModel.workspaces.first?.id
+			}
+		}
+		let dismissWorkspaceDeletion = {
+			if let workspacePendingDeletionID {
+				Logger.diagnostics.notice(
+					"Dismissed workspace deletion confirmation without deleting the workspace. Workspace ID: \(workspacePendingDeletionID.rawValue.uuidString, privacy: .public)"
+				)
+			}
+			self.workspacePendingDeletionID = nil
+		}
+		let dismissWorkspaceRename = {
+			if let workspacePendingRenameID {
+				Logger.diagnostics.notice(
+					"Dismissed the workspace rename sheet without saving changes. Workspace ID: \(workspacePendingRenameID.rawValue.uuidString, privacy: .public)"
+				)
+			}
+			workspacePendingRenameID = nil
+		}
 		let presentWorkspaceRename: (WorkspaceID) -> Void = { workspaceID in
 			guard let workspace = shellModel.workspaces.first(where: { $0.id == workspaceID }) else {
 				Logger.diagnostics.notice(
@@ -80,12 +103,7 @@ struct MainShellWindowView: View {
 				get: { pendingDeletionWorkspace != nil },
 				set: { isPresented in
 					if !isPresented {
-						if let workspacePendingDeletionID {
-							Logger.diagnostics.notice(
-								"Dismissed workspace deletion confirmation without deleting the workspace. Workspace ID: \(workspacePendingDeletionID.rawValue.uuidString, privacy: .public)"
-							)
-						}
-						self.workspacePendingDeletionID = nil
+						dismissWorkspaceDeletion()
 					}
 				}
 			),
@@ -105,22 +123,12 @@ struct MainShellWindowView: View {
 					"Deleted a workspace after the active shell window confirmed the destructive action. Workspace ID: \(deletedWorkspaceID, privacy: .public)"
 				)
 				self.workspacePendingDeletionID = nil
-				selectedWorkspaceID = if let selectedWorkspaceID,
-					shellModel.workspaces.contains(where: { $0.id == selectedWorkspaceID }) {
-					selectedWorkspaceID
-				} else {
-					shellModel.workspaces.first?.id
-				}
+				normalizeSelection()
 			}
 			.accessibilityIdentifier("sidebar.deleteWorkspaceConfirmButton")
 
 			Button("Cancel", role: .cancel) {
-				if let workspacePendingDeletionID {
-					Logger.diagnostics.notice(
-						"Dismissed workspace deletion confirmation without deleting the workspace. Workspace ID: \(workspacePendingDeletionID.rawValue.uuidString, privacy: .public)"
-					)
-				}
-				self.workspacePendingDeletionID = nil
+				dismissWorkspaceDeletion()
 			}
 			.accessibilityIdentifier("sidebar.deleteWorkspaceCancelButton")
 		} message: { workspace in
@@ -130,24 +138,14 @@ struct MainShellWindowView: View {
 			get: { pendingRenameWorkspace != nil },
 			set: { isPresented in
 				if !isPresented {
-					if let workspacePendingRenameID {
-						Logger.diagnostics.notice(
-							"Dismissed the workspace rename sheet without saving changes. Workspace ID: \(workspacePendingRenameID.rawValue.uuidString, privacy: .public)"
-						)
-					}
-					workspacePendingRenameID = nil
+					dismissWorkspaceRename()
 				}
 			}
 		)) {
 			WorkspaceRenameSheet(
 				title: $workspaceRenameTitleDraft,
 				onCancel: {
-					if let workspacePendingRenameID {
-						Logger.diagnostics.notice(
-							"Dismissed the workspace rename sheet without saving changes. Workspace ID: \(workspacePendingRenameID.rawValue.uuidString, privacy: .public)"
-						)
-					}
-					workspacePendingRenameID = nil
+					dismissWorkspaceRename()
 				},
 				onSave: {
 					guard let workspacePendingRenameID else {
@@ -234,12 +232,8 @@ struct MainShellWindowView: View {
 			let restoredSelection = restoredSelectedWorkspaceID
 				.flatMap(UUID.init(uuidString:))
 				.map { WorkspaceID(rawValue: $0) }
-			selectedWorkspaceID = if let restoredSelection = restoredSelection ?? shellModel.workspaces.first?.id,
-				shellModel.workspaces.contains(where: { $0.id == restoredSelection }) {
-				restoredSelection
-			} else {
-				shellModel.workspaces.first?.id
-			}
+			selectedWorkspaceID = restoredSelection ?? shellModel.workspaces.first?.id
+			normalizeSelection()
 			columnVisibility = restoredSidebarVisible ? .all : .doubleColumn
 			isInspectorVisible = restoredInspectorVisible
 			Logger.diagnostics.notice(
@@ -255,12 +249,7 @@ struct MainShellWindowView: View {
 			restoredSelectedWorkspaceID = newValue
 		}
 		.onChange(of: shellModel.workspaces.map(\.id.rawValue)) { _, _ in
-			selectedWorkspaceID = if let selectedWorkspaceID,
-				shellModel.workspaces.contains(where: { $0.id == selectedWorkspaceID }) {
-				selectedWorkspaceID
-			} else {
-				shellModel.workspaces.first?.id
-			}
+			normalizeSelection()
 		}
 		.onChange(of: isInspectorVisible) { _, newValue in
 			restoredInspectorVisible = newValue

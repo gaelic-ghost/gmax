@@ -33,10 +33,10 @@ struct SettingsUtilityWindow: View {
 				terminalFontSize: $terminalFontSize,
 				terminalThemeName: $terminalThemeName,
 				availableFonts: TerminalAppearance.availableFontOptions(),
-				currentAppearance: .persisted(
+				currentAppearance: .init(
 					fontName: terminalFontName,
-					fontSize: terminalFontSize,
-					themeName: terminalThemeName
+					fontSize: max(10, min(terminalFontSize, 28)),
+					theme: TerminalTheme(rawValue: terminalThemeName) ?? .defaultTerminal
 				)
 			)
 
