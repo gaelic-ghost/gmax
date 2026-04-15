@@ -15,6 +15,7 @@ It starts from the framework model first:
 Use this together with:
 
 - [`workspace-focus-removal-and-redesign-notes.md`](./workspace-focus-removal-and-redesign-notes.md)
+- [`swiftterm-surface-investigation.md`](./swiftterm-surface-investigation.md)
 - [`workspace-window-scene-command-focus-map.md`](./workspace-window-scene-command-focus-map.md)
 - [`swiftui-command-and-focus-architecture.md`](./swiftui-command-and-focus-architecture.md)
 
