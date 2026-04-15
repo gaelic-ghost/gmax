@@ -5,33 +5,11 @@
 //  Created by Codex on 4/14/26.
 //
 
-import Observation
 import SwiftUI
 
-@MainActor
-@Observable
-final class MainShellSceneContext {
-	let shellModel: ShellModel
-
-	var workspacePendingDeletionID: WorkspaceID?
-	var workspacePendingRenameID: WorkspaceID?
-	var workspaceRenameTitleDraft = ""
-	var isSavedWorkspaceLibraryPresented = false
-	var columnVisibility: NavigationSplitViewVisibility
-	var isInspectorVisible: Bool
-
-	init(
-		shellModel: ShellModel,
-		isSidebarVisible: Bool = true,
-		isInspectorVisible: Bool = true
-	) {
-		self.shellModel = shellModel
-		self.columnVisibility = isSidebarVisible ? .all : .doubleColumn
-		self.isInspectorVisible = isInspectorVisible
-	}
-}
-
 extension FocusedValues {
-	@Entry var mainShellSceneContext: MainShellSceneContext?
 	@Entry var selectedWorkspaceSelection: Binding<WorkspaceID?>?
+	@Entry var openSavedWorkspaceLibraryAction: (() -> Void)?
+	@Entry var presentWorkspaceRenameAction: ((WorkspaceID) -> Void)?
+	@Entry var presentWorkspaceDeletionAction: ((WorkspaceID) -> Void)?
 }

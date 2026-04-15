@@ -34,8 +34,13 @@ struct gmaxApp: App {
 
 private struct MainShellWindowView: View {
 	@StateObject private var shellModel: ShellModel
-	@State private var sceneContext: MainShellSceneContext
 	@State private var selectedWorkspaceID: WorkspaceID?
+	@State private var workspacePendingDeletionID: WorkspaceID?
+	@State private var workspacePendingRenameID: WorkspaceID?
+	@State private var workspaceRenameTitleDraft = ""
+	@State private var isSavedWorkspaceLibraryPresented = false
+	@State private var columnVisibility: NavigationSplitViewVisibility = .all
+	@State private var isInspectorVisible = true
 	@SceneStorage("mainShell.selectedWorkspaceID") private var restoredSelectedWorkspaceID: String?
 	@SceneStorage("mainShell.isInspectorVisible") private var restoredInspectorVisible = true
 	@SceneStorage("mainShell.isSidebarVisible") private var restoredSidebarVisible = true
@@ -52,13 +57,10 @@ private struct MainShellWindowView: View {
 		let shellModel = ShellModel()
 		_shellModel = StateObject(wrappedValue: shellModel)
 		_selectedWorkspaceID = State(initialValue: shellModel.normalizedWorkspaceSelection(nil))
-		_sceneContext = State(initialValue: MainShellSceneContext(shellModel: shellModel))
 	}
 
 	var body: some View {
-		@Bindable var bindableSceneContext = sceneContext
-
-		NavigationSplitView(columnVisibility: $bindableSceneContext.columnVisibility) {
+		NavigationSplitView(columnVisibility: $columnVisibility) {
 			SidebarPane(
 				model: shellModel,
 				selection: workspaceSelection,
@@ -74,7 +76,7 @@ private struct MainShellWindowView: View {
 			ContentPane(model: shellModel, selectedWorkspaceID: workspaceSelection)
 				.navigationSplitViewColumnWidth(min: 640, ideal: contentColumnIdealWidth)
 		}
-		.inspector(isPresented: $bindableSceneContext.isInspectorVisible) {
+		.inspector(isPresented: $isInspectorVisible) {
 			DetailPane(model: shellModel, selectedWorkspaceID: workspaceSelection)
 				.inspectorColumnWidth(
 					min: inspectorColumnMinimumWidth,
@@ -82,7 +84,7 @@ private struct MainShellWindowView: View {
 					max: inspectorColumnMaximumWidth
 				)
 		}
-		.sheet(isPresented: $bindableSceneContext.isSavedWorkspaceLibraryPresented) {
+		.sheet(isPresented: $isSavedWorkspaceLibraryPresented) {
 			SavedWorkspaceLibrarySheet(
 				model: shellModel,
 				selectedWorkspaceID: workspaceSelection
@@ -107,7 +109,7 @@ private struct MainShellWindowView: View {
 		}
 		.sheet(isPresented: renameWorkspaceSheetBinding) {
 			WorkspaceRenameSheet(
-				title: $bindableSceneContext.workspaceRenameTitleDraft,
+				title: $workspaceRenameTitleDraft,
 				onCancel: {
 					cancelWorkspaceRename()
 				},
@@ -116,12 +118,21 @@ private struct MainShellWindowView: View {
 				}
 			)
 		}
-		.focusedSceneValue(\.mainShellSceneContext, sceneContext)
+		.focusedSceneObject(shellModel)
 		.focusedSceneValue(\.selectedWorkspaceSelection, workspaceSelection)
+		.focusedSceneValue(\.openSavedWorkspaceLibraryAction) {
+			isSavedWorkspaceLibraryPresented = true
+		}
+		.focusedSceneValue(\.presentWorkspaceRenameAction) { workspaceID in
+			presentWorkspaceRename(for: workspaceID)
+		}
+		.focusedSceneValue(\.presentWorkspaceDeletionAction) { workspaceID in
+			presentWorkspaceDeletionConfirmation(for: workspaceID)
+		}
 		.toolbar {
 			ToolbarItem(placement: .navigation) {
 				Button("Open Saved Workspaces", systemImage: "folder") {
-					sceneContext.isSavedWorkspaceLibraryPresented = true
+					isSavedWorkspaceLibraryPresented = true
 				}
 				.labelStyle(.iconOnly)
 				.help("Open saved workspaces (\u{2318}O)")
@@ -157,13 +168,13 @@ private struct MainShellWindowView: View {
 
 			ToolbarItem(placement: .primaryAction) {
 				Button(
-					sceneContext.isInspectorVisible ? "Hide Inspector" : "Show Inspector",
+					isInspectorVisible ? "Hide Inspector" : "Show Inspector",
 					systemImage: "sidebar.right"
 				) {
 					toggleInspector()
 				}
 				.labelStyle(.iconOnly)
-				.help(sceneContext.isInspectorVisible ? "Hide the inspector (\u{21E7}\u{2318}B)" : "Show the inspector (\u{21E7}\u{2318}B)")
+				.help(isInspectorVisible ? "Hide the inspector (\u{21E7}\u{2318}B)" : "Show the inspector (\u{21E7}\u{2318}B)")
 				.accessibilityIdentifier("mainShell.toggleInspectorButton")
 			}
 		}
@@ -176,23 +187,23 @@ private struct MainShellWindowView: View {
 		.onChange(of: shellModel.workspaces.map(\.id.rawValue)) { _, _ in
 			normalizeSelectionAfterWorkspaceMutation()
 		}
-		.onChange(of: sceneContext.isInspectorVisible) { _, newValue in
+		.onChange(of: isInspectorVisible) { _, newValue in
 			restoredInspectorVisible = newValue
 		}
-		.onChange(of: sceneContext.columnVisibility) { _, newValue in
+		.onChange(of: columnVisibility) { _, newValue in
 			restoredSidebarVisible = newValue == .all
 		}
 	}
 
 	private var pendingDeletionWorkspace: Workspace? {
-		guard let workspacePendingDeletionID = sceneContext.workspacePendingDeletionID else {
+		guard let workspacePendingDeletionID else {
 			return nil
 		}
 		return shellModel.workspace(for: workspacePendingDeletionID)
 	}
 
 	private var pendingRenameWorkspace: Workspace? {
-		guard let workspacePendingRenameID = sceneContext.workspacePendingRenameID else {
+		guard let workspacePendingRenameID else {
 			return nil
 		}
 		return shellModel.workspace(for: workspacePendingRenameID)
@@ -226,8 +237,8 @@ private struct MainShellWindowView: View {
 		selectedWorkspaceID = shellModel.normalizedWorkspaceSelection(
 			restoredSelection ?? selectedWorkspaceID
 		)
-		sceneContext.columnVisibility = restoredSidebarVisible ? .all : .doubleColumn
-		sceneContext.isInspectorVisible = restoredInspectorVisible
+		columnVisibility = restoredSidebarVisible ? .all : .doubleColumn
+		isInspectorVisible = restoredInspectorVisible
 		diagnosticsLogger.notice(
 			"""
 			Applied per-window shell scene restoration. Restored workspace selection: \(restoredSelection?.rawValue.uuidString ?? "(none)", privacy: .public). \
@@ -257,25 +268,25 @@ private struct MainShellWindowView: View {
 			return
 		}
 
-		sceneContext.workspacePendingDeletionID = workspaceID
+		workspacePendingDeletionID = workspaceID
 		diagnosticsLogger.notice(
 			"Presented workspace deletion confirmation for the active shell window. Workspace ID: \(workspaceID.rawValue.uuidString, privacy: .public)"
 		)
 	}
 
 	private func cancelWorkspaceDeletion() {
-		guard let workspacePendingDeletionID = sceneContext.workspacePendingDeletionID else {
+		guard let workspacePendingDeletionID else {
 			return
 		}
 
 		diagnosticsLogger.notice(
 			"Dismissed workspace deletion confirmation without deleting the workspace. Workspace ID: \(workspacePendingDeletionID.rawValue.uuidString, privacy: .public)"
 		)
-		sceneContext.workspacePendingDeletionID = nil
+		self.workspacePendingDeletionID = nil
 	}
 
 	private func confirmWorkspaceDeletion() {
-		guard let workspacePendingDeletionID = sceneContext.workspacePendingDeletionID else {
+		guard let workspacePendingDeletionID else {
 			diagnosticsLogger.error(
 				"The app attempted to confirm workspace deletion in the active shell window, but no workspace was pending destructive confirmation."
 			)
@@ -286,7 +297,7 @@ private struct MainShellWindowView: View {
 		diagnosticsLogger.notice(
 			"Deleted a workspace after the active shell window confirmed the destructive action. Workspace ID: \(workspacePendingDeletionID.rawValue.uuidString, privacy: .public)"
 		)
-		sceneContext.workspacePendingDeletionID = nil
+		self.workspacePendingDeletionID = nil
 		normalizeSelectionAfterWorkspaceMutation()
 	}
 
@@ -298,8 +309,8 @@ private struct MainShellWindowView: View {
 			return
 		}
 
-		sceneContext.workspaceRenameTitleDraft = workspace.title
-		sceneContext.workspacePendingRenameID = workspace.id
+		workspaceRenameTitleDraft = workspace.title
+		workspacePendingRenameID = workspace.id
 		selectedWorkspaceID = workspace.id
 		diagnosticsLogger.notice(
 			"Presented the workspace rename sheet for the active shell window. Workspace title: \(workspace.title, privacy: .public). Workspace ID: \(workspace.id.rawValue.uuidString, privacy: .public)"
@@ -307,35 +318,35 @@ private struct MainShellWindowView: View {
 	}
 
 	private func cancelWorkspaceRename() {
-		guard let pendingWorkspaceID = sceneContext.workspacePendingRenameID else {
+		guard let pendingWorkspaceID = workspacePendingRenameID else {
 			return
 		}
 
 		diagnosticsLogger.notice(
 			"Dismissed the workspace rename sheet without saving changes. Workspace ID: \(pendingWorkspaceID.rawValue.uuidString, privacy: .public)"
 		)
-		sceneContext.workspacePendingRenameID = nil
+		workspacePendingRenameID = nil
 	}
 
 	private func confirmWorkspaceRename() {
-		guard let pendingWorkspaceID = sceneContext.workspacePendingRenameID else {
+		guard let pendingWorkspaceID = workspacePendingRenameID else {
 			diagnosticsLogger.error(
 				"The app attempted to save a workspace rename from the active shell window, but no workspace rename sheet was currently presented."
 			)
 			return
 		}
 
-		shellModel.renameWorkspace(pendingWorkspaceID, to: sceneContext.workspaceRenameTitleDraft)
+		shellModel.renameWorkspace(pendingWorkspaceID, to: workspaceRenameTitleDraft)
 		selectedWorkspaceID = pendingWorkspaceID
 		diagnosticsLogger.notice(
-			"Saved a workspace rename from the active shell window. Workspace ID: \(pendingWorkspaceID.rawValue.uuidString, privacy: .public). New title: \(sceneContext.workspaceRenameTitleDraft, privacy: .public)"
+			"Saved a workspace rename from the active shell window. Workspace ID: \(pendingWorkspaceID.rawValue.uuidString, privacy: .public). New title: \(workspaceRenameTitleDraft, privacy: .public)"
 		)
-		sceneContext.workspacePendingRenameID = nil
+		workspacePendingRenameID = nil
 	}
 
 	private func toggleInspector() {
-		sceneContext.isInspectorVisible.toggle()
-		let inspectorVisibilityDescription = sceneContext.isInspectorVisible ? "visible" : "hidden"
+		isInspectorVisible.toggle()
+		let inspectorVisibilityDescription = isInspectorVisible ? "visible" : "hidden"
 		diagnosticsLogger.notice(
 			"Toggled inspector visibility in the active shell window. Inspector is now \(inspectorVisibilityDescription, privacy: .public)."
 		)
