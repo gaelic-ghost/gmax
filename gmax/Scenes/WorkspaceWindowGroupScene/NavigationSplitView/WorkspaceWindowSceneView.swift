@@ -1,7 +1,7 @@
 import OSLog
 import SwiftUI
 
-struct MainShellWindowView: View {
+struct WorkspaceWindowSceneView: View {
 	@StateObject private var shellModel = ShellModel()
 	@State private var selectedWorkspaceID: WorkspaceID?
 	@State private var workspacePendingDeletionID: WorkspaceID?

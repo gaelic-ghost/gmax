@@ -10,7 +10,7 @@ extension FocusedValues {
 	@Entry var closeEmptyWorkspace: (() -> Void)?
 }
 
-struct MainShellCommands: Commands {
+struct WorkspaceWindowSceneCommands: Commands {
 	@Environment(\.dismiss) private var dismiss
 	@FocusedObject private var shellModel: ShellModel?
 	@FocusedValue(\.selectedWorkspaceSelection) private var selectedWorkspaceSelection

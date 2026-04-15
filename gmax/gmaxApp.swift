@@ -8,13 +8,13 @@ struct gmaxApp: App {
 
 	var body: some Scene {
 		WindowGroup("gmax exploration", id: "main-window") {
-			MainShellWindowView()
+			WorkspaceWindowSceneView()
 		}
 		.defaultLaunchBehavior(.presented)
 		.restorationBehavior(UITestLaunchBehavior.isEnabled ? .disabled : .automatic)
 		.defaultSize(width: 1_440, height: 900)
 		.commands {
-			MainShellCommands()
+			WorkspaceWindowSceneCommands()
 		}
 
 		Settings {
