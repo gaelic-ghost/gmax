@@ -9,6 +9,7 @@ Use this alongside:
 - [`swiftui-command-and-focus-architecture.md`](./swiftui-command-and-focus-architecture.md) for the preferred default model
 - [`workspace-window-scene-command-focus-map.md`](./workspace-window-scene-command-focus-map.md) for the current command and focused-value flow
 - [`framework-command-audit.md`](./framework-command-audit.md) for the broader redesign gaps and priorities
+- [`workspace-focus-target-plan.md`](./workspace-focus-target-plan.md) for the proposed logical focus targets and the next design pass
 
 ## Current Custom Focus Surface
 
