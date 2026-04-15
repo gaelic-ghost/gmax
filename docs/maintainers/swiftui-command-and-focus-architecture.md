@@ -6,6 +6,8 @@ This note captures the current preferred command, focus, selection, and close-be
 
 Use it as a strong repo-local default, not as a substitute for current Apple documentation. If this note and the SwiftUI or AppKit docs appear to disagree, re-check the Apple docs first and update this note instead of treating it as infallible law.
 
+For a detailed map of what the current workspace window implementation is actually doing today, including the context-sensitive close flow and the concrete focused-value surface, also read [`workspace-window-scene-command-focus-map.md`](./workspace-window-scene-command-focus-map.md). For the current findings and redesign priorities, read [`framework-command-audit.md`](./framework-command-audit.md).
+
 The main lesson from earlier cleanup work is simple: `gmax` got into trouble when it duplicated built-in scene, focus, and window behavior with custom routing layers. The goal of this note is to preserve that lesson without overstating what SwiftUI guarantees.
 
 ## Research Workflow

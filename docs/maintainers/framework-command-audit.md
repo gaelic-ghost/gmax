@@ -1,470 +1,423 @@
-# SwiftUI and AppKit Command Audit
+# Workspace Window Command and Focus Gap Audit
 
 ## Purpose
 
-This note is the reset point for `gmax` command, selection, window, sheet, toolbar, and inspector behavior.
+This document is the current gap audit for the workspace-window scene, command, focus, and dismissal architecture in `gmax`.
 
-The rule going forward is simple:
+It is intentionally different from the two related maintainer notes:
 
-- use built-in SwiftUI behavior when SwiftUI already models the job cleanly
-- use built-in AppKit behavior when the job belongs to the responder chain, menu validation, window lifecycle, or window delegate model
-- only keep custom infrastructure when the built-in surfaces leave a real product gap
+- [`swiftui-command-and-focus-architecture.md`](./swiftui-command-and-focus-architecture.md) records the repo's preferred default model.
+- [`workspace-window-scene-command-focus-map.md`](./workspace-window-scene-command-focus-map.md) maps what the code is doing today.
 
-This document is intentionally specific. It lists the relevant Apple surfaces, what they already provide, where the repo currently shadows them, and what should be kept, collapsed into the framework, or removed.
+This file answers the next question: where the current implementation is solid, where it is merely awkward, where it is risky, and what deserves redesign attention first.
 
-## Scope
+## Audit Basis
 
-This audit covers the current main-shell architecture in:
+This audit is based on the current implementation in:
 
-- `gmax/gmaxApp.swift`
-- `gmax/Scenes/WorkspaceWindowGroup/NavigationSplitView/WorkspaceWindowSceneCommands.swift`
-- `gmax/Scenes/WorkspaceWindowGroup/NavigationSplitView/WorkspaceWindowSceneView.swift`
-- `gmax/Workspace/WorkspaceStore.swift`
-- `gmax/Workspace/WorkspaceStore+WorkspaceActions.swift`
-- `gmax/Workspace/WorkspaceStore+PaneActions.swift`
+- [`gmax/gmaxApp.swift`](../../gmax/gmaxApp.swift)
+- [`gmax/Scenes/WorkspaceWindowGroup/NavigationSplitView/WorkspaceWindowSceneView.swift`](../../gmax/Scenes/WorkspaceWindowGroup/NavigationSplitView/WorkspaceWindowSceneView.swift)
+- [`gmax/Scenes/WorkspaceWindowGroup/NavigationSplitView/WorkspaceWindowSceneCommands.swift`](../../gmax/Scenes/WorkspaceWindowGroup/NavigationSplitView/WorkspaceWindowSceneCommands.swift)
+- [`gmax/Scenes/WorkspaceWindowGroup/NavigationSplitView/SidebarPanel/SidebarPane.swift`](../../gmax/Scenes/WorkspaceWindowGroup/NavigationSplitView/SidebarPanel/SidebarPane.swift)
+- [`gmax/Scenes/WorkspaceWindowGroup/NavigationSplitView/ContentPanel/ContentPane.swift`](../../gmax/Scenes/WorkspaceWindowGroup/NavigationSplitView/ContentPanel/ContentPane.swift)
+- [`gmax/Scenes/WorkspaceWindowGroup/NavigationSplitView/ContentPanel/ContentPaneLeafView.swift`](../../gmax/Scenes/WorkspaceWindowGroup/NavigationSplitView/ContentPanel/ContentPaneLeafView.swift)
+- [`gmax/Workspace/WorkspaceStore.swift`](../../gmax/Workspace/WorkspaceStore.swift)
+- [`gmax/Workspace/WorkspaceStore+PaneActions.swift`](../../gmax/Workspace/WorkspaceStore+PaneActions.swift)
+- [`gmax/Workspace/WorkspaceStore+WorkspaceActions.swift`](../../gmax/Workspace/WorkspaceStore+WorkspaceActions.swift)
+- [`gmax/Views/Sheets/SavedWorkspaceLibrarySheet.swift`](../../gmax/Views/Sheets/SavedWorkspaceLibrarySheet.swift)
+- [`gmaxUITests/WorkspaceSidebarUITests.swift`](../../gmaxUITests/WorkspaceSidebarUITests.swift)
+- [`gmaxUITests/SavedWorkspaceLibraryUITests.swift`](../../gmaxUITests/SavedWorkspaceLibraryUITests.swift)
+- [`gmaxUITests/UITestSupport.swift`](../../gmaxUITests/UITestSupport.swift)
 
-## Apple Built-In Inventory
+It was also checked against the Apple APIs the implementation is relying on:
 
-### 1. Scene-local selection and restoration
+- [`Scene.commands(content:)`](https://developer.apple.com/documentation/swiftui/scene/commands(content:))
+- [`Commands`](https://developer.apple.com/documentation/swiftui/commands)
+- [`CommandGroup`](https://developer.apple.com/documentation/swiftui/commandgroup)
+- [`Building and customizing the menu bar with SwiftUI`](https://developer.apple.com/documentation/swiftui/building-and-customizing-the-menu-bar-with-swiftui)
+- [`focusedSceneObject(_:)`](https://developer.apple.com/documentation/swiftui/view/focusedsceneobject(_:))
+- [`focusedSceneValue(_:_:)`](https://developer.apple.com/documentation/swiftui/view/focusedscenevalue(_:_:))
+- [`focusedObject(_:)`](https://developer.apple.com/documentation/swiftui/view/focusedobject(_:))
+- [`focusedValue(_:_:)`](https://developer.apple.com/documentation/swiftui/view/focusedvalue(_:_:))
+- [`DismissAction`](https://developer.apple.com/documentation/swiftui/dismissaction)
+- [`WindowGroup`](https://developer.apple.com/documentation/swiftui/windowgroup)
+- [`Settings`](https://developer.apple.com/documentation/swiftui/settings)
+- [`PreferenceKey`](https://developer.apple.com/documentation/swiftui/preferencekey)
+- [`NSWindow.performClose(_:)`](https://developer.apple.com/documentation/appkit/nswindow/performclose(_:))
 
-SwiftUI already provides built-in scene-scoped state and selection coordination:
+## Executive Read
 
-- `NavigationSplitView`
-  - Apple says selections in leading columns control presentations in later columns.
-  - Programmatic changes to the bound selection update both the list appearance and the detail presentation.
-- `List(selection:)`
-  - SwiftUI already models selected rows and coordinates that with split-view navigation.
-- `@SceneStorage`
-  - Apple describes this as lightweight state scoped to a scene.
-  - Each scene has its own scene storage.
-  - Apple explicitly says to use scene storage with the data model, not as a replacement for the data model.
-- `WindowGroup(..., for:content:)`
-  - SwiftUI can present value-based windows.
-  - SwiftUI automatically persists and restores the presented value binding as part of state restoration.
-- `restorationBehavior(_:)`
-  - SwiftUI already owns whether scene instances restore at launch.
+The current workspace-window architecture is mostly on the right side of the SwiftUI and AppKit boundary.
 
-What this means for `gmax`:
+The good news:
 
-- per-window selected workspace is a normal scene-local concern
-- per-window inspector visibility is a normal scene-local concern
-- per-window sidebar visibility is a normal scene-local concern
-- app-global workspace selection is not a requirement imposed by SwiftUI
+- scene commands live on the scene
+- scene-wide context is published with `focusedSceneObject` and `focusedSceneValue`
+- pane-specific context is published with `focusedValue`
+- pane geometry uses `PreferenceKey` as a real child-to-container signal instead of a command backchannel
+- ordinary window content is still mostly driven by straightforward parent-child state ownership rather than a custom routing layer
 
-### 2. Scene-local command routing
+The bigger problems are not "the whole model is wrong." The bigger problems are:
 
-SwiftUI already provides built-in scene-aware command context:
+- one overloaded close command slot now carries too much context-sensitive behavior
+- naming drift still leaks shell-era vocabulary into live implementation and tests
+- the command surface mixes scene-owned closures and direct store mutation in a way that is coherent but not yet explicit enough
+- test coverage around command and focus behavior is thin compared with the importance of this surface
 
-- `commands(content:)`
-  - scenes can attach commands directly
-- `CommandMenu`
-  - top-level app-specific menus
-- `CommandGroup`
-  - inserts, replaces, or augments standard menu groups
-- `focusedSceneValue(_:_:)`
-  - Apple explicitly recommends this when commands should depend on the active scene, regardless of which focused subview is active
-- `focusedValue(_:_:)`
-  - Apple explicitly recommends this when commands should only depend on focus within a specific part of a scene
-- `focusedSceneObject(_:)`
-  - built-in scene-scoped observable-object publication for command consumers
-- `@FocusedValue`
-  - command readers can consume contextual values from the active scene
+So the overall assessment is:
 
-Apple’s menu-bar guidance explicitly shows:
+- foundation: mostly sound
+- implementation clarity: mixed
+- behavioral risk: moderate and concentrated in close behavior and command coverage
+- redesign need: real, but not because the entire scene model needs to be thrown away
 
-- publishing the active scene’s model or selected item ID
-- reading it in `Commands`
-- disabling commands when the focused scene does not provide the needed value
-
-What this means for `gmax`:
-
-- frontmost-window command routing is supposed to come from SwiftUI scene focus
-- we do not need an app-global selection model to decide which window owns a command
-- if a command is acting on the wrong window, the first question is whether our focused-scene data is too custom or too indirect, not whether SwiftUI lacks a routing model
+## What Is Actually Working Well
 
-### 3. Built-in command groups
-
-SwiftUI already provides built-in command groups for common window chrome:
+### 1. Scene ownership is mostly correct
 
-- `SidebarCommands`
-  - built-in show/hide sidebar commands
-- `InspectorCommands`
-  - built-in inspector toggle commands
-  - Apple documents the built-in keyboard shortcut as Control-Command-I
-- `ToolbarCommands`
-  - built-in toolbar manipulation commands
+`WorkspaceWindowSceneView` owns:
 
-SwiftUI also provides standard command placements like:
+- selected workspace
+- scene presentation state
+- sidebar and inspector visibility
+- the per-window `WorkspaceStore`
 
-- `.sidebar`
-- `.toolbar`
+That is the correct side of the boundary for a multi-window SwiftUI app. The app is no longer depending on a global "current workspace" backchannel to decide which window owns the current command target.
 
-What this means for `gmax`:
+### 2. Scene and focused-view context are separated in the right direction
 
-- we should prefer built-in sidebar and inspector command sets unless we have a concrete product reason to replace them
-- if we override or replace built-in command behavior, that should be an explicit product decision, not just habit
+The current architecture uses:
 
-### 4. Sheets, inspectors, and dismiss behavior
+- `focusedSceneObject(workspaceStore)`
+- `focusedSceneValue` for scene-wide command context
+- `focusedValue` for the focused pane close action
 
-SwiftUI already provides built-in presentation and dismissal rules:
+That matches Apple's intended distinction between:
 
-- `.sheet(isPresented:)`
-  - standard modal presentation
-- `.inspector(isPresented:content:)`
-  - standard inspector presentation
-- `@Environment(\.dismiss)`
-  - dismisses the current presentation
-  - if called inside a sheet, it dismisses the sheet
-  - if called from the root view of a window, it can close the window instead
-- `DismissWindowAction`
-  - dismisses the current window, a window by ID, or a specific value-based `WindowGroup` instance
-- `DismissBehavior`
-  - controls whether programmatic window dismissal acts interactively or destructively
+- scene-wide active window context
+- focused-subtree context
 
-Apple is explicit about one important rule:
+This is one of the healthiest parts of the current architecture.
 
-- if a sheet is open, dismissing from the sheet environment should dismiss the sheet first
-- if you instead call a close action from the wrong environment, you can close the window rather than the sheet
+### 3. Preferences are being used for layout metadata, not command routing
 
-What this means for `gmax`:
+`ContentPaneFramePreferenceKey` is used to push pane frame rectangles upward so the container and store can reason about pane geometry.
 
-- `⌘W` should not skip over a presented library sheet and mutate workspace state underneath it
-- sheet dismissal precedence is something SwiftUI already models
-- custom close logic should not outrank sheet dismissal without a very specific reason
+That is a legitimate use of `PreferenceKey`, and it avoids one of the main mistakes from the earlier architecture work.
 
-### 5. Window closing and window lifecycle
+## Findings
 
-AppKit already provides the correct close model:
+## 1. The current `Command-W` slot is doing too many jobs
 
-- `NSWindow.performClose(_:)`
-  - simulates the user clicking the close button
-  - consults `windowShouldClose(_:)`
-- `NSWindow.close()`
-  - closes immediately
-  - does not consult `windowShouldClose(_:)`
-- `NSWindowDelegate.windowShouldClose(_:)`
-  - standard close-veto hook
-- `NSApplication.keyWindow`
-  - the window currently receiving keyboard events
-- `NSApplication.mainWindow`
-  - the app’s main window
+Severity: high
 
-Apple is explicit that:
+Evidence:
 
-- `performClose(_:)` is the correct path when honoring normal close behavior matters
-- `close()` is not the right substitute when you want delegate-driven confirmation
+- [`WorkspaceWindowSceneCommands.swift`](../../gmax/Scenes/WorkspaceWindowGroup/NavigationSplitView/WorkspaceWindowSceneCommands.swift)
+- [`ContentPane.swift`](../../gmax/Scenes/WorkspaceWindowGroup/NavigationSplitView/ContentPanel/ContentPane.swift)
+- [`ContentPaneLeafView.swift`](../../gmax/Scenes/WorkspaceWindowGroup/NavigationSplitView/ContentPanel/ContentPaneLeafView.swift)
 
-What this means for `gmax`:
+Current behavior:
 
-- using `performClose(_:)` for real window-close behavior is correct
-- the custom AppKit bridge for last-pane close confirmation may be justified, because SwiftUI does not provide a generic built-in “confirm before closing a non-document window” modifier
-- even so, that custom AppKit bridge should stay narrow and should not become a general command-routing layer
+- if a pane leaf publishes `closeFocusedPane`, `Command-W` becomes `Close Pane`
+- else if the selected workspace is empty and publishes `closeEmptyWorkspace`, `Command-W` becomes `Close Workspace`
+- else it falls back to `dismiss()` and becomes `Close Window`
 
-### 6. Responder chain action dispatch and validation
+Why this is a gap:
 
-AppKit already provides the native action and validation model:
+- three different ownership layers are being multiplexed through one command slot
+- the resulting behavior is not obvious from the UI unless someone already understands the focus model
+- the command implementation must infer what "close" means from a combination of scene activity, pane focus, and workspace emptiness
 
-- `NSApplication.sendAction(_:to:from:)`
-  - when target is `nil`, AppKit routes through the responder chain
-- `NSWindow.tryToPerform(_:with:)`
-  - window-level responder dispatch
-- `NSUserInterfaceValidations`
-  - protocol for enabling or disabling UI based on current state
-- `NSMenuItemValidation`
-  - menu item validation hook
-- `NSToolbarItemValidation`
-  - toolbar item validation hook
-- `NSToolbarItem.validate()`
-  - standard items auto-validate
-  - custom-view toolbar items need custom validation
+Why it matters:
 
-What this means for `gmax`:
+- close behavior is one of the most user-visible and least forgiving menu and keyboard surfaces
+- command ambiguity here will be hard to reason about during future refactors
+- this is exactly the kind of surface where a small regression can feel like an architectural bug
 
-- AppKit already knows how to ask the active responder chain whether a command is valid
-- if we need true window-first enablement and disablement, AppKit validation is a better native escape hatch than inventing our own pseudo-responder layer
-- if we continue using fully SwiftUI-defined toolbar buttons, some enablement may still live in view state, but that is different from creating a second application-level command framework
+Recommendation:
 
-### 7. Event handling boundaries
+- keep the current behavior only if this adaptive `Command-W` model is an explicit product decision
+- otherwise separate the questions more clearly:
+  - should pane close be the standard `Command-W` behavior only when a pane terminal truly has focus?
+  - should empty-workspace close be an explicit workspace command instead of sharing the same slot?
+  - should window close defer more aggressively to the native window close path?
 
-AppKit already warns against overreaching low-level event overrides:
+## 2. The command surface is coherent, but not yet explicit enough about ownership
 
-- Apple documents subclassing or overriding application-level event dispatch as critical and complex work
+Severity: medium-high
 
-What this means for `gmax`:
+Evidence:
 
-- hand-built event-routing infrastructure should be treated as a last resort
-- if SwiftUI or AppKit already has a model for the job, we should not invent an event path first
+- [`WorkspaceWindowSceneCommands.swift`](../../gmax/Scenes/WorkspaceWindowGroup/NavigationSplitView/WorkspaceWindowSceneCommands.swift)
+- [`WorkspaceWindowSceneView.swift`](../../gmax/Scenes/WorkspaceWindowGroup/NavigationSplitView/WorkspaceWindowSceneView.swift)
 
-## Current Repo Overlays
+Current behavior:
 
-### A. `MainShellSceneContext`
+- some commands mutate `WorkspaceStore` directly
+- some commands call scene-owned closures published through focused scene values
 
-Current role:
+Direct store examples:
 
-- owns selected workspace ID
-- owns inspector visibility
-- owns sidebar visibility
-- owns library-sheet presentation
-- owns pending delete confirmation state
-- owns a number of imperative command methods
+- create workspace
+- duplicate workspace
+- close workspace
+- move pane focus
+- split pane
 
-Good part:
+Scene-owned closure examples:
 
-- scene-local selection and scene-local presentation state are real needs
+- open saved workspace library
+- present rename flow
+- present deletion flow
 
-Overbuilt part:
+Why this is a gap:
 
-- it acts like a private command framework
-- it duplicates framework-owned responsibilities for close routing, presentation precedence, and command dispatch
-- it exposes too many imperative wrappers around model mutations
+- the split is rational, but the code does not document it as a deliberate boundary
+- without that explanation, the implementation can look arbitrary
+- future cleanup work may "normalize" this in the wrong direction by pushing scene presentation into the store or by pushing store mutations into scene glue
 
-### B. The removed `WorkspaceStore.currentWorkspaceID` backchannel
+Recommendation:
 
-Current role:
+- document this boundary as intentional:
+  - store owns workspace graph and mutations
+  - scene owns presentation and per-window UI state
+- if a redesign happens later, preserve that distinction unless there is a strong reason to collapse it
 
-- app-global selected workspace state
-- drives convenience accessors like `selectedWorkspaceIndex`, `selectedWorkspace`, and `focusedPane`
-- still gets mutated by workspace create, duplicate, reopen, and navigation flows
+## 3. The focused-value key registry and command implementation are coupled more tightly than they need to be
 
-Why this is a problem:
+Severity: medium
 
-- it is a global backchannel under a scene-local app
-- it can cause window A to mutate window B’s apparent selection state
-- it recreates exactly the kind of cross-window ambiguity SwiftUI scene scoping is supposed to remove
+Evidence:
 
-### C. No-argument model command helpers
+- [`WorkspaceWindowSceneCommands.swift`](../../gmax/Scenes/WorkspaceWindowGroup/NavigationSplitView/WorkspaceWindowSceneCommands.swift)
 
-Examples:
+Current behavior:
 
-- `createPane()`
-- `relaunchFocusedPane()`
-- `splitFocusedPane(_:)`
-- `closeFocusedPane()`
-- `movePaneFocus(_:)`
-- `performCloseCommand()`
+- the file declares the `FocusedValues` entries
+- the same file also implements the full menu and keyboard command surface
 
-Why these are risky:
+Why this is a gap:
 
-- they silently consult app-global selection
-- they are easy to call from the wrong context
-- they keep the old global-selection architecture alive even after scene-local command routing was introduced
+- this makes one file the owner of both command vocabulary and command rendering
+- if the command context surface grows, this file will become an awkward mixed boundary
+- it also makes reusing or testing the focused-value contract harder than it needs to be
 
-### D. Manual close routing in `MainShellSceneContext`
+Recommendation:
 
-Examples:
+- this does not require immediate change
+- if the command surface expands or becomes more test-driven, consider splitting:
+  - one file for workspace window command-context keys
+  - one file for the `Commands` implementation
 
-- `performContextualClose()`
-- `performWorkspaceClose()`
-- `performWindowClose()`
-- direct `NSApp.keyWindow?.performClose(nil)` calls
+## 4. Shell-era naming still leaks into live scene state and test-facing identifiers
 
-What is legitimate:
+Severity: medium
 
-- using `performClose(_:)` instead of `close()` is correct when normal window-close behavior matters
+Evidence:
 
-What is not healthy:
+- [`WorkspaceWindowSceneView.swift`](../../gmax/Scenes/WorkspaceWindowGroup/NavigationSplitView/WorkspaceWindowSceneView.swift)
+- [`gmaxUITests/UITestSupport.swift`](../../gmaxUITests/UITestSupport.swift)
+- [`gmaxUITests/SavedWorkspaceLibraryUITests.swift`](../../gmaxUITests/SavedWorkspaceLibraryUITests.swift)
 
-- using a scene-owned helper object as a general close router
-- mixing pane-close rules, workspace-close rules, settings-window routing, and raw key-window closing into one custom command surface
-- letting that custom surface bypass normal sheet dismissal precedence
+Current examples:
 
-### E. `WindowSceneInterop.swift`
+- `@SceneStorage("mainShell.selectedWorkspaceID")`
+- `@SceneStorage("mainShell.isInspectorVisible")`
+- `@SceneStorage("mainShell.isSidebarVisible")`
+- toolbar accessibility identifiers like:
+  - `mainShell.openSavedWorkspacesButton`
+  - `mainShell.newWorkspaceButton`
+  - `mainShell.toggleInspectorButton`
+- UI-test helper names like:
+  - `assertMainShellIsVisible`
+  - `attemptToPresentMainShellWindow`
 
-Current role:
+Why this is a gap:
 
-- tags windows with a role identifier
-- installs an `NSWindowDelegate` to show a last-pane close confirmation
+- the repo has already renamed the scene and model vocabulary toward `Workspace...`
+- these older names now make the code feel more transitional than it really is
+- test and accessibility naming drift makes future audits noisier and weakens conceptual clarity
 
-Audit result:
+Recommendation:
 
-- `WindowRoleAccessor` is a light AppKit interop shim, not obviously a problem on its own
-- `WindowCloseConfirmationAccessor` may be justified because a generic “confirm app-defined close of a non-document window” flow is not something SwiftUI models directly
-- this file should stay extremely narrow and should not absorb broader command logic
+- plan a single naming-alignment cleanup pass rather than a piecemeal rename
+- include:
+  - scene storage keys
+  - accessibility identifiers
+  - UI-test helper names
+  - maintainer-doc wording where the old names still survive
 
-## Keep, Collapse, Remove
+## 5. The command audit and implementation map were drifting before this pass
 
-### Keep
+Severity: medium
 
-- `NavigationSplitView` plus `List(selection:)` as the primary workspace selection model
-- `@SceneStorage` for lightweight per-window state like selected workspace ID, inspector visibility, and sidebar visibility
-- `focusedSceneValue` or `focusedSceneObject` for scene-local command context
-- `.sheet` and `.inspector` for presentation
-- `NSWindow.performClose(_:)` for real window-close behavior
-- a narrow AppKit bridge for last-pane close confirmation, if SwiftUI still does not provide a cleaner built-in equivalent
+Evidence:
 
-### Collapse into framework behavior
+- older versions of repo docs were still describing earlier paths and earlier "main shell" vocabulary
 
-- scene command enablement should lean harder on SwiftUI scene focus and, where necessary, AppKit validation
-- close behavior should respect SwiftUI dismissal precedence before running custom workspace-close logic
-- inspector and sidebar command behavior should use built-in command groups unless we are intentionally replacing them
-- window targeting should come from scene focus and the responder chain, not from a parallel app-global selection path
+Why this matters:
 
-### Remove
+- this surface is subtle enough that stale docs quickly become worse than no docs
+- future redesign work needs a map, not just a style note
 
-- the removed `WorkspaceStore.currentWorkspaceID` backchannel as the source of truth for normal shell selection
-- `selectedWorkspaceIndex`, `selectedWorkspace`, and `focusedPane` when they derive from app-global selection instead of explicit workspace IDs
-- no-argument pane and workspace command helpers that silently depend on global selection
-- custom command helpers whose only job is compensating for the global-selection model
-- any command path that closes or mutates workspace state while a frontmost sheet should have handled dismissal first
+Current status:
 
-## File-by-File Recommendations
+- the preferred-default note has been softened and corrected
+- the current-state implementation map now exists
+- this gap audit now reflects the live implementation rather than the pre-rename architecture
 
-### `gmax/Scenes/WorkspaceWindowGroup/NavigationSplitView/WorkspaceWindowSceneView.swift`
+Recommendation:
 
-Keep:
+- keep these three documents distinct:
+  - default model
+  - current implementation map
+  - current gap audit
 
-- `NavigationSplitView`
-- `.inspector`
-- `.sheet`
-- `@SceneStorage`
-- `focusedSceneValue`
+## 6. Command and focus behavior is under-tested relative to its importance
 
-Change:
+Severity: high
 
-- prefer SwiftUI-owned selection and presentation rules over imperative scene-context methods where possible
-- consider whether the command-state snapshot should become a smaller scene value or a focused scene object instead of a paired custom value type plus context object
+Evidence:
 
-### `gmax/Scenes/WorkspaceWindowGroup/NavigationSplitView/WorkspaceWindowSceneCommands.swift`
+- unit tests have no direct scene/focus/command coverage for this surface
+- UI tests currently cover only a subset of behaviors through:
+  - [`WorkspaceSidebarUITests.swift`](../../gmaxUITests/WorkspaceSidebarUITests.swift)
+  - [`SavedWorkspaceLibraryUITests.swift`](../../gmaxUITests/SavedWorkspaceLibraryUITests.swift)
 
-Keep:
+What is covered today:
 
-- `Commands`
-- `CommandMenu`
-- `CommandGroup`
-- scene-focused command consumption
+- workspace deletion confirmation through the menu
+- opening the saved workspace library
+- closing a workspace to the library and reopening it
+- deleting a saved snapshot
+- toolbar new-workspace action
+- inspector toggle keyboard path
+- pane split actions and one contextual pane-close path
 
-Change:
+What is not clearly covered:
 
-- stop replacing built-in behavior unless the product intentionally diverges from it
-- use `InspectorCommands` and `SidebarCommands` where they match the actual UI
-- reduce custom close routing and let built-in dismissal behavior handle frontmost sheet and window semantics first
+- the full three-way `Command-W` behavior across:
+  - focused pane close
+  - empty workspace close
+  - window close fallback
+- rename presentation through the command layer
+- command enablement and disablement state when scene focus changes
+- behavior when focus is in sidebar versus content versus inspector
+- whether scene-focused values behave correctly across multiple windows
+- whether the command layer keeps targeting the frontmost active scene
 
-### `gmax/gmaxApp.swift`
+Why this is a gap:
 
-Keep:
+- the architecture now depends on focused scene context doing the right thing
+- that is exactly the area where there is the least direct regression protection
 
-- only the minimum app bootstrap and scene declarations that SwiftUI does not already own directly and that are truly app-specific
+Recommendation:
 
-Remove or shrink aggressively:
+- treat behavioral coverage as one of the next real engineering tasks here
+- the highest-value UI-test cases would be:
+  1. verify `Command-W` in all three modes
+  2. verify rename and delete command availability by selection state
+  3. verify pane commands disable when pane focus is absent
+  4. verify command routing across two workspace windows
 
-- any leftover command-router shape embedded in app-level bootstrap surfaces
-- imperative wrappers that only forward to model methods
-- close-routing methods that duplicate framework behavior
+## 7. The current scene root is justified, but still carrying a lot of responsibility
 
-### `gmax/Workspace/WorkspaceStore.swift`
+Severity: medium
 
-Keep:
+Evidence:
 
-- shared workspace and pane data
-- persistence, session registry, and pane controller ownership
-- explicit methods that act on explicit workspace IDs and pane IDs
+- [`WorkspaceWindowSceneView.swift`](../../gmax/Scenes/WorkspaceWindowGroup/NavigationSplitView/WorkspaceWindowSceneView.swift)
 
-Remove:
+Current responsibilities include:
 
-- app-global selection ownership
-- convenience selection accessors that depend on `currentWorkspaceID`
+- owning the store
+- owning selection
+- owning scene restoration
+- owning inspector and sidebar visibility
+- owning saved-library presentation
+- owning rename and delete presentation
+- publishing scene command context
+- defining toolbar behavior
 
-### `gmax/Workspace/WorkspaceStore+WorkspaceActions.swift`
+Why this is not automatically a bug:
 
-Keep:
+- these are mostly scene-root concerns
+- this view really is the scene root, not a thin wrapper
 
-- explicit workspace lifecycle methods that accept a workspace ID
+Why it is still a gap:
 
-Remove:
+- this file is now the densest ownership point in the scene architecture
+- future additions could turn it into the next hard-to-refactor choke point
 
-- implicit selection side effects inside create, duplicate, reopen, and workspace navigation flows unless the caller explicitly wants that result
-- global-selection-only helpers like `closeSelectedWorkspace()` and workspace cycling helpers that mutate `currentWorkspaceID`
+Recommendation:
 
-### `gmax/Workspace/WorkspaceStore+PaneActions.swift`
+- do not split it reactively just to reduce file length
+- but if new scene behavior gets added, organize by responsibility inside the file or by narrow scene-owned surfaces rather than by generic helper extraction
 
-Keep:
+## 8. The settings surface is cleanly separate, but not integrated into command discussion yet
 
-- explicit pane lifecycle operations that accept a workspace ID and pane ID
+Severity: low
 
-Remove:
+Evidence:
 
-- no-argument helpers that infer the target workspace from app-global selection
+- [`SettingsUtilityWindow.swift`](../../gmax/Scenes/Settings/SettingsUtilityWindow.swift)
 
-## Immediate Audit Conclusions
+Current behavior:
 
-### 1. The app should not have an app-global selected workspace source of truth anymore
+- settings use `@AppStorage` directly
+- settings are isolated in a `Settings` scene
 
-That responsibility belongs to the active scene.
+Why this is mostly fine:
 
-### 2. The model should operate on explicit IDs, not on “whatever the app currently thinks is selected”
+- settings do not currently need the command-and-focus architecture used by the workspace window
 
-That means explicit workspace- and pane-targeting methods are the durable core API.
+Residual gap:
 
-### 3. The command layer should publish context, not invent a parallel command runtime
+- the maintainer notes talk extensively about command and scene behavior, but barely mention the settings scene as a consciously separate surface
 
-SwiftUI already provides scene-scoped command context.
+Recommendation:
 
-### 4. Close behavior should defer to built-in dismissal semantics before custom workspace mutation
+- no urgent code change required
+- just keep the docs explicit that settings are intentionally outside the workspace-window command model
 
-If a sheet is open, the sheet should be the first thing that closes.
+## Risk Ranking
 
-### 5. AppKit interop should stay narrow and justified
+Highest-priority gaps:
 
-Using AppKit for a missing native close-confirmation hook is different from replacing the responder chain with custom infrastructure.
+1. overloaded `Command-W` semantics
+2. weak command/focus behavioral test coverage
+3. implicit ownership split between scene closures and direct store mutations
 
-## Next Refactor Order
+Second-order cleanup gaps:
 
-1. Remove `WorkspaceStore.currentWorkspaceID` and the accessors and helpers that depend on it.
-2. Convert model command APIs so the durable public surface is explicit-ID-based.
-3. Shrink `MainShellSceneContext` down to true scene-local view and presentation state.
-4. Rework close handling so sheet dismissal and window dismissal use built-in SwiftUI/AppKit precedence first.
-5. Re-introduce only the custom command logic that still has a documented, approved framework gap after the above cleanup.
+4. shell-era naming drift in scene storage, accessibility IDs, and UI tests
+5. tight coupling between focused-value key declarations and command implementation
+6. scene-root density in `WorkspaceWindowSceneView`
 
-## Apple Documentation Relied On
+Lower-priority documentation and surface-shape gaps:
 
-### SwiftUI
+7. keeping the three maintainer docs synchronized
+8. keeping settings explicitly outside the workspace-window command model
 
-- `NavigationSplitView`
-  - <https://developer.apple.com/documentation/swiftui/navigationsplitview>
-- `SceneStorage`
-  - <https://developer.apple.com/documentation/swiftui/scenestorage>
-- `Restoring your app’s state with SwiftUI`
-  - <https://developer.apple.com/documentation/swiftui/restoring-your-app-s-state-with-swiftui>
-- `focusedSceneValue(_:_:)`
-  - <https://developer.apple.com/documentation/swiftui/view/focusedscenevalue(_:_:)> 
-- `focusedValue(_:_:)`
-  - <https://developer.apple.com/documentation/swiftui/view/focusedvalue(_:_:)> 
-- `focusedSceneObject(_:)`
-  - <https://developer.apple.com/documentation/swiftui/view/focusedsceneobject(_:)> 
-- `Building and customizing the menu bar with SwiftUI`
-  - <https://developer.apple.com/documentation/swiftui/building-and-customizing-the-menu-bar-with-swiftui>
-- `SidebarCommands`
-  - <https://developer.apple.com/documentation/swiftui/sidebarcommands>
-- `InspectorCommands`
-  - <https://developer.apple.com/documentation/swiftui/inspectorcommands>
-- `ToolbarCommands`
-  - <https://developer.apple.com/documentation/swiftui/toolbarcommands>
-- `dismiss`
-  - <https://developer.apple.com/documentation/swiftui/environmentvalues/dismiss>
-- `DismissWindowAction`
-  - <https://developer.apple.com/documentation/swiftui/dismisswindowaction>
-- `WindowGroup`
-  - <https://developer.apple.com/documentation/swiftui/windowgroup>
-- `Windows`
-  - <https://developer.apple.com/documentation/swiftui/windows>
+## Recommended Next Sequence
 
-### AppKit
+If this area gets a real redesign pass, the safest order is:
 
-- `NSApplication.sendAction(_:to:from:)`
-  - <https://developer.apple.com/documentation/appkit/nsapplication/sendaction(_:to:from:)>
-- `NSUserInterfaceValidations`
-  - <https://developer.apple.com/documentation/appkit/nsuserinterfacevalidations>
-- `NSMenuItemValidation`
-  - <https://developer.apple.com/documentation/appkit/nsmenuitemvalidation>
-- `NSToolbarItemValidation`
-  - <https://developer.apple.com/documentation/appkit/nstoolbaritemvalidation>
-- `NSToolbarItem.validate()`
-  - <https://developer.apple.com/documentation/appkit/nstoolbaritem/validate()>
-- `NSWindow.performClose(_:)`
-  - <https://developer.apple.com/documentation/appkit/nswindow/performclose(_:)> 
-- `NSWindow.close()`
-  - <https://developer.apple.com/documentation/appkit/nswindow/close()> 
-- `NSWindowDelegate.windowShouldClose(_:)`
-  - <https://developer.apple.com/documentation/appkit/nswindowdelegate/windowshouldclose(_:)> 
-- `NSWindow.endSheet(_:returnCode:)`
-  - <https://developer.apple.com/documentation/appkit/nswindow/endsheet(_:returncode:)> 
+1. Decide whether the adaptive `Command-W` model is a product requirement or an accidental implementation artifact.
+2. Add behavioral tests for the current command and focus model before changing it.
+3. Align the remaining shell-era naming so the code and tests read like the architecture they now represent.
+4. Revisit whether the command-context key declarations should stay co-located with the menu implementation.
+5. Only after those steps, consider any larger structural simplification of the scene root.
+
+## Bottom Line
+
+The current architecture does not look like it needs a total reset.
+
+It does look like it needs:
+
+- explicit decisions about close semantics
+- stronger behavioral protection around scene and focus routing
+- one more terminology cleanup pass
+
+That is a much more manageable problem than "SwiftUI command and focus architecture is fundamentally broken here," and it gives future work a clearer target: make the current model more explicit, better tested, and less ambiguous before reaching for a deeper rewrite.

@@ -7,6 +7,7 @@
 - Use `scripts/repo-maintenance/validate-all.sh` for local maintainer validation, `scripts/repo-maintenance/sync-shared.sh` for repo-local sync steps, and `scripts/repo-maintenance/release.sh` for releases.
 - Read relevant Apple documentation before proposing or making Xcode, SwiftUI, lifecycle, architecture, or build-configuration changes.
 - Before doing any SwiftUI work in this repository, read `docs/maintainers/swiftui-command-and-focus-architecture.md` first. Treat that maintainer doc as the repo's current default guidance, then re-check the relevant Apple documentation when a design decision or tradeoff is unclear.
+- When the task needs the current implementation shape rather than just the preferred default model, also read `docs/maintainers/workspace-window-scene-command-focus-map.md` before proposing scene, command, focus, or close-behavior changes.
 - For SwiftUI command, focus, menu, window, and scene research in this repo, prefer the Xcode MCP `DocumentationSearch` tool first. Use Dash as a fallback or cross-check, and on this machine expect the most relevant installed Apple docsets to be the generic Swift API reference (`ntiaiyxj-swift`), Objective-C API reference (`ntiaiyxj-objc`), and offline macOS set (`jtswqsfb`) rather than a dedicated SwiftUI docset.
 - Prefer Dash or local Apple docs first, then official Apple docs when local docs are insufficient.
 - Prefer the simplest correct Swift that is easiest to read and reason about.
