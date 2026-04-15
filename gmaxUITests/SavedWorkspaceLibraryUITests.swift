@@ -30,13 +30,18 @@ final class SavedWorkspaceLibraryUITests: GmaxUITestCase {
 	func testPaneSplitButtonsAndContextualCloseUpdateInspectorPaneCount() throws {
 		let app = launchApp()
 		let workspaceRow = sidebarWorkspaceRow(titled: "Workspace 1", in: app)
+		let paneCountLabel = sidebarWorkspacePaneCount(titled: "Workspace 1", in: app)
 
 		XCTAssertTrue(
 			workspaceRow.waitForExistence(timeout: 5),
 			"The selected workspace should be visible in the sidebar before pane lifecycle actions are tested."
 		)
+		XCTAssertTrue(
+			paneCountLabel.waitForExistence(timeout: 5),
+			"The selected workspace row should expose its pane-count label in the sidebar."
+		)
 		XCTAssertEqual(
-			workspaceRow.value as? String,
+			paneCountLabel.label,
 			"1 pane",
 			"A fresh workspace row should report that it begins with one pane."
 		)
@@ -47,7 +52,7 @@ final class SavedWorkspaceLibraryUITests: GmaxUITestCase {
 			in: app
 		)
 		XCTAssertEqual(
-			workspaceRow.value as? String,
+			paneCountLabel.label,
 			"2 panes",
 			"Splitting right should add a second pane and update the selected workspace count."
 		)
@@ -58,14 +63,14 @@ final class SavedWorkspaceLibraryUITests: GmaxUITestCase {
 			in: app
 		)
 		XCTAssertEqual(
-			workspaceRow.value as? String,
+			paneCountLabel.label,
 			"3 panes",
 			"Splitting down should add a third pane and update the selected workspace count."
 		)
 
 		app.typeKey("w", modifierFlags: .command)
 		XCTAssertEqual(
-			workspaceRow.value as? String,
+			paneCountLabel.label,
 			"2 panes",
 			"The contextual close command should close only the focused pane when the workspace still has multiple panes."
 		)
@@ -81,7 +86,7 @@ final class SavedWorkspaceLibraryUITests: GmaxUITestCase {
 			"The toolbar should start in the visible-inspector state for a fresh shell window."
 		)
 
-		app.typeKey("b", modifierFlags: [.command, .shift])
+		toggleInspectorButton(in: app).click()
 		XCTAssertTrue(
 			toggleInspectorButton(in: app).waitForExistence(timeout: 5),
 			"The inspector toggle should remain available after hiding the inspector."
@@ -92,7 +97,7 @@ final class SavedWorkspaceLibraryUITests: GmaxUITestCase {
 			"Hiding the inspector from the toolbar should flip the control into the show-inspector state."
 		)
 
-		app.typeKey("b", modifierFlags: [.command, .shift])
+		toggleInspectorButton(in: app).click()
 		XCTAssertEqual(
 			toggleInspectorButton(in: app).label,
 			"Hide Inspector",
@@ -153,7 +158,9 @@ final class SavedWorkspaceLibraryUITests: GmaxUITestCase {
 			"The saved-workspace library should return to its empty state after deleting the only snapshot."
 		)
 		XCTAssertFalse(
-			snapshotTitle.waitForExistence(timeout: 1),
+			waitForNonExistence(timeout: 2) {
+				self.savedWorkspaceLibraryRow(titled: "Workspace 2", in: app)
+			},
 			"The deleted saved-workspace snapshot should no longer appear in the library list."
 		)
 	}
@@ -170,7 +177,9 @@ final class SavedWorkspaceLibraryUITests: GmaxUITestCase {
 
 		savedWorkspaceLibraryCancelButton(in: app).click()
 		XCTAssertFalse(
-			savedWorkspaceLibraryCancelButton(in: app).waitForExistence(timeout: 1),
+			waitForNonExistence(timeout: 2) {
+				self.savedWorkspaceLibraryCancelButton(in: app)
+			},
 			"The saved-workspace library sheet should dismiss after the cancel action."
 		)
 	}

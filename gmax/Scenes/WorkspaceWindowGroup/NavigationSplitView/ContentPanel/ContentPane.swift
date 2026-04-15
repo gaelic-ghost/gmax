@@ -10,6 +10,12 @@ import SwiftUI
 struct ContentPane: View {
 	@ObservedObject var model: WorkspaceStore
 	@Binding var selectedWorkspaceID: WorkspaceID?
+	let focusedTarget: FocusState<WorkspaceFocusTarget?>.Binding
+	let onCreatePane: (WorkspaceID) -> Void
+	let onSplitPane: (WorkspaceID, PaneID, SplitDirection) -> Void
+	let onClosePane: (WorkspaceID, PaneID) -> Void
+	let onUpdatePaneFrames: ([PaneID: CGRect]) -> Void
+	let onMovePaneFocus: (PaneFocusDirection) -> Void
 
 	var body: some View {
 		let workspace = selectedWorkspaceID.flatMap { workspaceID in model.workspaces.first { $0.id == workspaceID } }
@@ -18,7 +24,7 @@ struct ContentPane: View {
 				if let root = workspace.root {
 					ContentPaneNodeView(
 						node: root,
-						focusedPaneID: workspace.focusedPaneID,
+						focusedTarget: focusedTarget,
 						controllerForPane: { pane in
 							model.paneControllers.controller(
 								for: pane,
@@ -28,14 +34,12 @@ struct ContentPane: View {
 						onUpdateSplitFraction: { splitID, fraction in
 							model.setSplitFraction(fraction, for: splitID, in: workspace.id)
 						},
-						onFocusPane: { paneID in
-							model.focusPane(paneID, in: workspace.id)
-						},
+						onMovePaneFocus: onMovePaneFocus,
 						onSplitPane: { paneID, direction in
-							model.splitPane(paneID, in: workspace.id, direction: direction)
+							onSplitPane(workspace.id, paneID, direction)
 						},
 						onClosePane: { paneID in
-							model.closePane(paneID, in: workspace.id)
+							onClosePane(workspace.id, paneID)
 						}
 					)
 					.coordinateSpace(name: "workspace-pane-tree")
@@ -43,13 +47,13 @@ struct ContentPane: View {
 					.accessibilityElement(children: .contain)
 					.accessibilityLabel("Workspace pane area")
 					.onPreferenceChange(ContentPaneFramePreferenceKey.self) { paneFrames in
-						model.updatePaneFrames(paneFrames, in: workspace.id)
+						onUpdatePaneFrames(paneFrames)
 					}
 				} else {
 					ContentPaneEmptyWorkspaceView(
 						workspaceTitle: workspace.title,
 						onStartShell: {
-							selectedWorkspaceID = model.createPane(in: workspace.id)
+							onCreatePane(workspace.id)
 						}
 					)
 				}
@@ -75,10 +79,10 @@ struct ContentPane: View {
 
 private struct ContentPaneNodeView: View {
 	let node: PaneNode
-	let focusedPaneID: PaneID?
+	let focusedTarget: FocusState<WorkspaceFocusTarget?>.Binding
 	let controllerForPane: (PaneLeaf) -> TerminalPaneController
 	let onUpdateSplitFraction: (SplitID, CGFloat) -> Void
-	let onFocusPane: (PaneID) -> Void
+	let onMovePaneFocus: (PaneFocusDirection) -> Void
 	let onSplitPane: (PaneID, SplitDirection) -> Void
 	let onClosePane: (PaneID) -> Void
 
@@ -90,8 +94,8 @@ private struct ContentPaneNodeView: View {
 					pane: leaf,
 					controller: controller,
 					session: controller.session,
-					isFocused: leaf.id == focusedPaneID,
-					onFocus: { onFocusPane(leaf.id) },
+					focusedTarget: focusedTarget,
+					onMovePaneFocus: onMovePaneFocus,
 					onSplitRight: {
 						onSplitPane(leaf.id, .right)
 					},
@@ -111,20 +115,20 @@ private struct ContentPaneNodeView: View {
 				) {
 					ContentPaneNodeView(
 						node: split.first,
-						focusedPaneID: focusedPaneID,
+						focusedTarget: focusedTarget,
 						controllerForPane: controllerForPane,
 						onUpdateSplitFraction: onUpdateSplitFraction,
-						onFocusPane: onFocusPane,
+						onMovePaneFocus: onMovePaneFocus,
 						onSplitPane: onSplitPane,
 						onClosePane: onClosePane
 					)
 				} second: {
 					ContentPaneNodeView(
 						node: split.second,
-						focusedPaneID: focusedPaneID,
+						focusedTarget: focusedTarget,
 						controllerForPane: controllerForPane,
 						onUpdateSplitFraction: onUpdateSplitFraction,
-						onFocusPane: onFocusPane,
+						onMovePaneFocus: onMovePaneFocus,
 						onSplitPane: onSplitPane,
 						onClosePane: onClosePane
 					)
@@ -158,5 +162,22 @@ private struct ContentPaneEmptyWorkspaceView: View {
 }
 
 #Preview {
-	ContentPane(model: WorkspaceStore(), selectedWorkspaceID: .constant(nil))
+	ContentPanePreview()
+}
+
+private struct ContentPanePreview: View {
+	@FocusState private var focusedTarget: WorkspaceFocusTarget?
+
+	var body: some View {
+		ContentPane(
+			model: WorkspaceStore(),
+			selectedWorkspaceID: .constant(nil),
+			focusedTarget: $focusedTarget,
+			onCreatePane: { _ in },
+			onSplitPane: { _, _, _ in },
+			onClosePane: { _, _ in },
+			onUpdatePaneFrames: { _ in },
+			onMovePaneFocus: { _ in }
+		)
+	}
 }

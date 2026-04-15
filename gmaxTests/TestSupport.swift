@@ -14,8 +14,7 @@ enum TestSupport {
 		let pane = PaneLeaf()
 		return Workspace(
 			title: title,
-			root: .leaf(pane),
-			focusedPaneID: pane.id
+			root: .leaf(pane)
 		)
 	}
 

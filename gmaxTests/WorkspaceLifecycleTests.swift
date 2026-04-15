@@ -34,8 +34,7 @@ struct WorkspaceLifecycleTests {
 					first: .leaf(leftPane),
 					second: .leaf(rightPane)
 				)
-			),
-			focusedPaneID: rightPane.id
+			)
 		)
 		let model = WorkspaceStore(
 			workspaces: [workspace]

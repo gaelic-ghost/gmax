@@ -21,7 +21,6 @@ enum SnapshotPersistenceError: Error {
 final class WorkspaceEntity: NSManagedObject {
 	@NSManaged var id: UUID
 	@NSManaged var title: String
-	@NSManaged var focusedPaneID: UUID?
 	@NSManaged var sortOrder: Int64
 	@NSManaged var rootNode: PaneNodeEntity?
 }
@@ -52,7 +51,6 @@ final class WorkspaceSnapshotEntity: NSManagedObject {
 	@NSManaged var notes: String?
 	@NSManaged var previewText: String?
 	@NSManaged var searchText: String?
-	@NSManaged var focusedPaneID: UUID?
 	@NSManaged var rootNode: PaneSnapshotNodeEntity?
 	@NSManaged var sessionSnapshots: NSSet?
 }

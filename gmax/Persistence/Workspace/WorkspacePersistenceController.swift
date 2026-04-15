@@ -55,8 +55,7 @@ final class WorkspacePersistenceController {
 				let workspace = Workspace(
 					id: WorkspaceID(rawValue: workspaceEntity.id),
 					title: workspaceEntity.title,
-					root: Self.decodeNode(workspaceEntity.rootNode),
-					focusedPaneID: workspaceEntity.focusedPaneID.map(PaneID.init(rawValue:))
+					root: Self.decodeNode(workspaceEntity.rootNode)
 				)
 				guard let root = workspace.root else {
 					Logger.persistence.error("A persisted workspace has no root pane tree. That empty workspace will be discarded during restore. Workspace ID: \(workspace.id.rawValue.uuidString, privacy: .public)")
@@ -69,12 +68,7 @@ final class WorkspacePersistenceController {
 					return nil
 				}
 
-				return Workspace(
-					id: workspace.id,
-					title: workspace.title,
-					root: root,
-					focusedPaneID: leaves.contains { $0.id == workspace.focusedPaneID } ? workspace.focusedPaneID : leaves[0].id
-				)
+				return Workspace(id: workspace.id, title: workspace.title, root: root)
 			}
 		} catch {
 			Logger.persistence.error("Core Data could not read the saved-workspace list from the workspace store. The app will continue with default workspace state for this launch. Error: \(String(describing: error), privacy: .public)")
@@ -99,7 +93,6 @@ final class WorkspacePersistenceController {
 						?? WorkspaceEntity(context: context)
 					workspaceEntity.id = workspace.id.rawValue
 					workspaceEntity.title = workspace.title
-					workspaceEntity.focusedPaneID = workspace.focusedPaneID?.rawValue
 					workspaceEntity.sortOrder = Int64(sortOrder)
 					workspaceEntity.rootNode = Self.syncNode(
 						workspace.root,
@@ -227,8 +220,6 @@ final class WorkspacePersistenceController {
 				if let notes {
 					snapshotEntity.notes = notes
 				}
-				snapshotEntity.focusedPaneID = workspace.focusedPaneID?.rawValue
-
 				var sessionSnapshotsByID: [UUID: PaneSessionSnapshotEntity] = [:]
 				for pendingPaneSnapshot in paneSnapshots {
 					let sessionSnapshotEntity = PaneSessionSnapshotEntity(context: context)
@@ -322,8 +313,7 @@ final class WorkspacePersistenceController {
 
 			let workspace = Workspace(
 				title: entity.title,
-				root: Self.decodeSnapshotNode(entity.rootNode),
-				focusedPaneID: entity.focusedPaneID.map(PaneID.init(rawValue:))
+				root: Self.decodeSnapshotNode(entity.rootNode)
 			)
 
 				guard let root = workspace.root else {
@@ -337,11 +327,7 @@ final class WorkspacePersistenceController {
 					return nil
 				}
 
-				let normalizedWorkspace = Workspace(
-					title: workspace.title,
-					root: root,
-					focusedPaneID: leaves.contains { $0.id == workspace.focusedPaneID } ? workspace.focusedPaneID : leaves[0].id
-				)
+				let normalizedWorkspace = Workspace(title: workspace.title, root: root)
 
 				let paneSnapshots = entity.sessionSnapshots as? Set<PaneSessionSnapshotEntity> ?? []
 			let paneSnapshotsBySessionID: [TerminalSessionID: SavedPaneSessionSnapshot] = Dictionary(

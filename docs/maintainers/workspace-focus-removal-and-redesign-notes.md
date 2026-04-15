@@ -2,7 +2,9 @@
 
 ## Purpose
 
-This note maps the current custom workspace-pane focus machinery in `gmax`, marks the parts that should be removed or replaced, and outlines a more SwiftUI-native focus model to discuss before implementation.
+This note maps the current custom workspace-pane focus machinery in `gmax`,
+marks the parts that should be removed or replaced, and outlines the remaining
+SwiftUI-native cleanup after the first structural pass landed.
 
 Use this alongside:
 
@@ -10,30 +12,34 @@ Use this alongside:
 - [`workspace-window-scene-command-focus-map.md`](./workspace-window-scene-command-focus-map.md) for the current command and focused-value flow
 - [`framework-command-audit.md`](./framework-command-audit.md) for the broader redesign gaps and priorities
 - [`workspace-focus-target-plan.md`](./workspace-focus-target-plan.md) for the proposed logical focus targets and the next design pass
+- [`workspace-focus-implementation-boundary.md`](./workspace-focus-implementation-boundary.md) for the current implementation ownership split we want to move toward
 
 ## Current Custom Focus Surface
 
-The current pane focus system is not primarily driven by SwiftUI focus placement. It is driven by `WorkspaceStore` state and then mirrored into SwiftUI and AppKit.
+The pane focus system used to be primarily driven by `WorkspaceStore` state and
+then mirrored into SwiftUI and AppKit. The first cleanup pass has already
+removed the store-owned runtime focus engine, and the remaining cleanup is now
+mostly about narrowing terminal-bridge behavior and clarifying scene-local
+window restoration.
 
-The main custom pieces are:
+The main custom pieces were:
 
 - `Workspace.focusedPaneID` in [`gmax/Workspace/WorkspaceLayout.swift`](../../gmax/Workspace/WorkspaceLayout.swift)
-  - The model stores which pane is considered focused.
-  - This focus state is persisted and restored through workspace persistence.
-- `WorkspaceStore.focusPane`, `movePaneFocus`, `recordPaneFocus`, and related helpers in [`gmax/Workspace/WorkspaceStore+PaneActions.swift`](../../gmax/Workspace/WorkspaceStore+PaneActions.swift)
-  - Clicks, splits, closes, relaunches, and directional navigation all mutate model focus directly.
-- `paneFocusHistoryByWorkspace` in [`gmax/Workspace/WorkspaceStore.swift`](../../gmax/Workspace/WorkspaceStore.swift)
-  - The model keeps its own fallback history for which pane should become focused next.
-- `paneFramesByWorkspace` and `updatePaneFrames` in [`gmax/Workspace/WorkspaceStore.swift`](../../gmax/Workspace/WorkspaceStore.swift) and [`gmax/Workspace/WorkspaceStore+PaneActions.swift`](../../gmax/Workspace/WorkspaceStore+PaneActions.swift)
-  - Pane geometry is captured and stored so directional focus can be resolved manually.
+  - Removed in the first cleanup pass.
+  - Live pane focus and persisted pane focus no longer live in the workspace
+    model.
+- `WorkspaceStore.focusPane`, `movePaneFocus`, `recordPaneFocus`, `paneFocusHistoryByWorkspace`, `paneFramesByWorkspace`, and `updatePaneFrames`
+  - Removed in the first cleanup pass.
+  - Live pane focus and directional pane navigation are now scene-local concerns in [`WorkspaceWindowSceneView.swift`](../../gmax/Scenes/WorkspaceWindowGroup/NavigationSplitView/WorkspaceWindowSceneView.swift), not store-owned runtime state.
 - `ContentPaneFramePreferenceKey` and `.onPreferenceChange(...)` in [`gmax/Scenes/WorkspaceWindowGroup/NavigationSplitView/ContentPanel/ContentPane.swift`](../../gmax/Scenes/WorkspaceWindowGroup/NavigationSplitView/ContentPanel/ContentPane.swift)
-  - Descendants report pane frames upward so the model can compute directional pane focus.
+  - Descendants still report pane frames upward, but that geometry now feeds scene-local pane navigation instead of model-owned navigation state.
 - `isFocused` plumbing through [`ContentPane.swift`](../../gmax/Scenes/WorkspaceWindowGroup/NavigationSplitView/ContentPanel/ContentPane.swift), [`ContentPaneLeafView.swift`](../../gmax/Scenes/WorkspaceWindowGroup/NavigationSplitView/ContentPanel/ContentPaneLeafView.swift), and [`TerminalPaneView.swift`](../../gmax/Terminal/Panes/TerminalPaneView.swift)
-  - The view tree receives model-derived focus rather than determining focus natively.
+  - Partially redesigned.
+  - Pane views now bind against scene-owned `@FocusState`, but the terminal bridge still consumes a derived `isFocused` flag while the SwiftTerm/AppKit boundary is being narrowed.
 - `onFocus` closures from [`ContentPaneLeafView.swift`](../../gmax/Scenes/WorkspaceWindowGroup/NavigationSplitView/ContentPanel/ContentPaneLeafView.swift) into [`TerminalPaneView+Coordinator.swift`](../../gmax/Terminal/Panes/TerminalPaneView+Coordinator.swift)
-  - Pointer and accessibility interactions explicitly push focus back into the model.
+  - Pointer and accessibility interactions still explicitly push focus back into the scene-owned focus state.
 - `window?.makeFirstResponder(...)` calls in [`TerminalPaneView+Coordinator.swift`](../../gmax/Terminal/Panes/TerminalPaneView+Coordinator.swift)
-  - The AppKit bridge force-aligns the terminal view's first responder with model focus.
+  - The AppKit bridge still force-aligns the terminal view's first responder with pane focus transitions.
 
 ## Removal Or Replacement Map
 
@@ -42,18 +48,21 @@ The goal here is not “delete focus.” The goal is to stop owning custom focus
 ### Remove or redesign first
 
 - `Workspace.focusedPaneID`
-  - Marked for removal as the primary live focus source of truth.
-  - It may survive only as a persistence or restoration hint if product requirements justify it, but it should stop being the authoritative runtime focus state.
+  - Removed in the first cleanup pass.
+  - The next pass should not reintroduce it as either live focus truth or
+    workspace persistence metadata unless a concrete restoration requirement
+    proves that necessary.
 - `WorkspaceStore.focusPane(...)`
-  - Marked for removal as a general focus-entry API.
-  - Focus should not normally be pushed into the model from arbitrary click handlers.
+  - Removed in the first cleanup pass.
+  - Focus is no longer pushed into the store from arbitrary click handlers.
 - `movePaneFocus(...)`
-  - Marked for redesign.
-  - The command intent likely remains, but the implementation should target SwiftUI/AppKit focus movement rather than a geometry-driven model field.
+  - Removed from the store in the first cleanup pass.
+  - The command intent remains, but the implementation now targets scene-local SwiftUI focus movement plus scene-local geometry ranking.
 - `paneFocusHistoryByWorkspace`
-  - Marked for removal unless a concrete product behavior still needs history-aware fallback beyond framework focus restoration.
+  - Removed in the first cleanup pass.
 - `paneFramesByWorkspace`, `updatePaneFrames(...)`, and directional geometry ranking
-  - Marked for removal if pane-to-pane navigation can be expressed through native focus movement or a simpler explicit focus graph.
+  - Store-owned frame storage and frame updates are removed.
+  - Directional geometry ranking still exists, but now lives alongside scene-local focus state rather than inside `WorkspaceStore`.
 - `onFocus` closure chains and `.onTapGesture(perform: onFocus)`
   - Marked for removal as the normal way panes become focused.
   - Native focus movement should do this work.
@@ -133,7 +142,7 @@ One plausible direction is:
 - `@FocusState private var focusedTarget: WorkspaceFocusTarget?` owned by `WorkspaceWindowSceneView`
 - pane leafs bind with `.focused($focusedTarget, equals: .pane(pane.id))`
 - scene-level commands read command context from `focusedValue` and `focusedSceneValue`
-- explicit “move focus left/right/up/down” commands mutate `focusedTarget` or call a narrow responder/focus coordinator, rather than mutating `Workspace.focusedPaneID`
+- explicit “move focus left/right/up/down” commands mutate scene-local `focusedTarget`, rather than mutating `Workspace.focusedPaneID`
 
 That would let the model stop pretending to be the live keyboard focus engine.
 
@@ -155,15 +164,26 @@ That reduces custom coordination, but it does not remove responsibility. The app
 
 ## Open Design Questions
 
-- Should the app persist the last focused pane for workspace restoration, or should that become best-effort only?
-- Should pane-to-pane directional movement stay spatial, or become a simpler next/previous graph with optional spatial refinement later?
-- Should the inspector ever become a command target for pane-oriented commands, or should those commands disable whenever focus leaves content?
-- Does the embedded terminal need a dedicated AppKit focus adapter object, or can the pane wrapper own that translation directly?
-- Should pane focus and workspace selection always move together, or can they diverge temporarily?
+- Should pane-to-pane directional movement stay spatial, or become a simpler
+  next/previous graph with optional spatial refinement later?
+- Should the inspector ever become a command target for pane-oriented commands,
+  or should those commands disable whenever focus leaves content?
+- Does the embedded terminal need a dedicated AppKit focus adapter object, or
+  can the pane wrapper own that translation directly?
+- How should per-window open-workspace state and recent-close state restore
+  independently without turning live window contents back into app-global state?
+- Should pane focus and workspace selection always move together, or can they
+  diverge temporarily?
+
+Prompt-versus-scrollback is intentionally no longer an open question here.
+SwiftTerm owns that internal terminal interaction behavior, and `gmax` should
+keep treating the enclosing pane as the workspace-level focus and command
+target.
 
 ## Recommended Next Step
 
-Before implementation, define one explicit target model for these three example slices:
+Before the next implementation pass, define one explicit target model for these
+three example slices:
 
 1. user clicks a pane terminal
 2. user presses `Command-W` with focus in a pane terminal

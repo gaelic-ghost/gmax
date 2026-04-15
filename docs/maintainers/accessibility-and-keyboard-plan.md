@@ -165,7 +165,7 @@ The pane tree is a custom SwiftUI composition:
 - Use SwiftUI focus helpers intentionally around the pane tree.
 - Apply `focusSection()` to the pane-tree region so sequential keyboard movement stays within the pane cohort in a predictable order before escaping to adjacent shell chrome.
 - Evaluate `focusable(interactions: .activate)` or a similar constrained focus interaction on pane cards so they participate in keyboard navigation without pretending to be generic button rows.
-- Keep pane focus changes routed back into `WorkspaceStore.focusPane(_:in:)` so the visual highlight, inspector, and model selection remain synchronized.
+- Keep pane focus changes routed through scene-owned SwiftUI focus state so the visual highlight, inspector, and command context remain synchronized without restoring store-owned runtime focus.
 - Status:
   - `focusable(interactions: .activate)` is already applied to pane cards
   - the remaining work is to validate how that behaves against the embedded terminal host and decide whether additional focus shaping is still needed
@@ -317,6 +317,8 @@ Automated tests can confirm only part of the story:
 - the saved-workspace library still opens, reopens, and deletes snapshots predictably
 
 They will not prove VoiceOver or Full Keyboard Access quality by themselves.
+
+For shell-driven XCUITest runs, avoid treating the full accessibility hierarchy as normal persisted test output. In this repository, routine UI-test failures should prefer XCTest-supported attachments such as screenshots plus stable accessibility identifiers and human-readable failure messages. Capture the full `XCUIApplication.debugDescription` tree only as an explicit opt-in diagnostic step, because requesting that tree can trigger macOS accessibility or file-access prompts that destabilize automated runs. When deeper structure inspection is needed, prefer a manual Accessibility Inspector pass over making the AX tree a default test artifact.
 
 ## Manual Accessibility Pass
 

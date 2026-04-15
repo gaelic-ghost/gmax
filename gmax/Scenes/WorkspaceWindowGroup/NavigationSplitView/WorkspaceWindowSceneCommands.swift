@@ -6,6 +6,8 @@ extension FocusedValues {
 	@Entry var openSavedWorkspaceLibrary: (() -> Void)?
 	@Entry var presentWorkspaceRename: ((WorkspaceID) -> Void)?
 	@Entry var presentWorkspaceDeletion: ((WorkspaceID) -> Void)?
+	@Entry var moveFocusedPaneFocus: ((PaneFocusDirection) -> Void)?
+	@Entry var splitFocusedPane: ((SplitDirection) -> Void)?
 	@Entry var closeFocusedPane: (() -> Void)?
 	@Entry var closeEmptyWorkspace: (() -> Void)?
 }
@@ -17,6 +19,8 @@ struct WorkspaceWindowSceneCommands: Commands {
 	@FocusedValue(\.openSavedWorkspaceLibrary) private var openSavedWorkspaceLibrary
 	@FocusedValue(\.presentWorkspaceRename) private var presentWorkspaceRename
 	@FocusedValue(\.presentWorkspaceDeletion) private var presentWorkspaceDeletion
+	@FocusedValue(\.moveFocusedPaneFocus) private var moveFocusedPaneFocus
+	@FocusedValue(\.splitFocusedPane) private var splitFocusedPane
 	@FocusedValue(\.closeFocusedPane) private var closeFocusedPane
 	@FocusedValue(\.closeEmptyWorkspace) private var closeEmptyWorkspace
 
@@ -24,9 +28,7 @@ struct WorkspaceWindowSceneCommands: Commands {
 		let workspaces = workspaceStore?.workspaces ?? []
 		let selectedWorkspaceID = selectedWorkspaceSelection?.wrappedValue
 		let selectedWorkspace = selectedWorkspaceID.flatMap { selectedWorkspaceID in workspaces.first { $0.id == selectedWorkspaceID } }
-		let canSplitFocusedPane = selectedWorkspace?.focusedPaneID.flatMap {
-			selectedWorkspace?.root?.findPane(id: $0)
-		} != nil
+		let canSplitFocusedPane = splitFocusedPane != nil
 		let canDeleteSelectedWorkspace = selectedWorkspace != nil && workspaces.count > 1
 		let canCycleWorkspaces = workspaces.count > 1
 
@@ -178,62 +180,52 @@ struct WorkspaceWindowSceneCommands: Commands {
 
 		CommandMenu("Pane") {
 			Button("Move Focus Left") {
-				if let workspaceStore, let selectedWorkspaceID {
-					workspaceStore.movePaneFocus(.left, in: selectedWorkspaceID)
-				}
+				moveFocusedPaneFocus?(.left)
 			}
 			.keyboardShortcut(.leftArrow, modifiers: [.command, .option])
+			.disabled(moveFocusedPaneFocus == nil)
 
 			Button("Move Focus Right") {
-				if let workspaceStore, let selectedWorkspaceID {
-					workspaceStore.movePaneFocus(.right, in: selectedWorkspaceID)
-				}
+				moveFocusedPaneFocus?(.right)
 			}
 			.keyboardShortcut(.rightArrow, modifiers: [.command, .option])
+			.disabled(moveFocusedPaneFocus == nil)
 
 			Button("Move Focus Up") {
-				if let workspaceStore, let selectedWorkspaceID {
-					workspaceStore.movePaneFocus(.up, in: selectedWorkspaceID)
-				}
+				moveFocusedPaneFocus?(.up)
 			}
 			.keyboardShortcut(.upArrow, modifiers: [.command, .option])
+			.disabled(moveFocusedPaneFocus == nil)
 
 			Button("Move Focus Down") {
-				if let workspaceStore, let selectedWorkspaceID {
-					workspaceStore.movePaneFocus(.down, in: selectedWorkspaceID)
-				}
+				moveFocusedPaneFocus?(.down)
 			}
 			.keyboardShortcut(.downArrow, modifiers: [.command, .option])
+			.disabled(moveFocusedPaneFocus == nil)
 
 			Divider()
 
 			Button("Focus Next Pane") {
-				if let workspaceStore, let selectedWorkspaceID {
-					workspaceStore.movePaneFocus(.next, in: selectedWorkspaceID)
-				}
+				moveFocusedPaneFocus?(.next)
 			}
 			.keyboardShortcut("]", modifiers: [.command, .option])
+			.disabled(moveFocusedPaneFocus == nil)
 
 			Button("Focus Previous Pane") {
-				if let workspaceStore, let selectedWorkspaceID {
-					workspaceStore.movePaneFocus(.previous, in: selectedWorkspaceID)
-				}
+				moveFocusedPaneFocus?(.previous)
 			}
 			.keyboardShortcut("[", modifiers: [.command, .option])
+			.disabled(moveFocusedPaneFocus == nil)
 
 			Section("New Pane") {
 				Button("Split Right") {
-					if let workspaceStore, let selectedWorkspaceID {
-						workspaceStore.splitFocusedPane(in: selectedWorkspaceID, .right)
-					}
+					splitFocusedPane?(.right)
 				}
 				.keyboardShortcut("d", modifiers: [.command])
 				.disabled(!canSplitFocusedPane)
 
 				Button("Split Down") {
-					if let workspaceStore, let selectedWorkspaceID {
-						workspaceStore.splitFocusedPane(in: selectedWorkspaceID, .down)
-					}
+					splitFocusedPane?(.down)
 				}
 				.keyboardShortcut("d", modifiers: [.command, .shift])
 				.disabled(!canSplitFocusedPane)

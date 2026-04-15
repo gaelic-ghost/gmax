@@ -2,7 +2,8 @@
 
 ## Purpose
 
-This note proposes the next design pass for workspace focus in `gmax` before any implementation changes land.
+This note proposes the next design pass for workspace focus in `gmax` after the
+first structural implementation pass landed.
 
 It starts from the framework model first:
 
@@ -15,6 +16,8 @@ It starts from the framework model first:
 Use this together with:
 
 - [`workspace-focus-removal-and-redesign-notes.md`](./workspace-focus-removal-and-redesign-notes.md)
+- [`workspace-focus-implementation-boundary.md`](./workspace-focus-implementation-boundary.md)
+- [`workspace-focus-first-pass-plan.md`](./workspace-focus-first-pass-plan.md)
 - [`swiftterm-surface-investigation.md`](./swiftterm-surface-investigation.md)
 - [`workspace-window-scene-command-focus-map.md`](./workspace-window-scene-command-focus-map.md)
 - [`swiftui-command-and-focus-architecture.md`](./swiftui-command-and-focus-architecture.md)
@@ -79,34 +82,21 @@ The likely long-term identity shape is something like:
 
 The pane should be the semantic command target even if some lower AppKit control inside it owns text input.
 
-### 4. Terminal prompt input
+### 4. Terminal prompt and scrollback behavior
 
-This should be treated as a text-input target, not just “the whole pane again.”
+Prompt input and scrollback selection should not be modeled as separate
+scene-level or command-level focus targets in `gmax`.
 
-Your distinction here is important. The terminal pane likely contains at least two different interaction surfaces:
+This is now considered settled:
 
-- prompt / active text input
-- scrollback / transcript surface
+- the pane is the workspace-level focus and command target
+- SwiftTerm owns prompt input, scrollback selection, find, copy, and other
+  internal terminal interaction behavior
+- `gmax` should not layer a second prompt-versus-scrollback focus model on top
+  unless a future product requirement proves SwiftTerm's existing surface
+  insufficient
 
-If the embedded terminal implementation can expose those separately in a useful way, they may need distinct runtime focus behavior even while belonging to the same higher-level pane command target.
-
-That means the command layer may still think in terms of “focused pane,” while the lower input layer may distinguish:
-
-- pane owns pane-level commands
-- prompt owns text entry
-- scrollback owns selection, copy, and navigation behavior
-
-### 5. Terminal scrollback
-
-This should likely behave more like selectable static or semi-static content than like an editing field.
-
-That means it may deserve its own interaction rules even if it remains inside the same pane target. In particular:
-
-- copy and selection behavior may apply here
-- prompt-specific commands should probably not treat scrollback as an editing target
-- pane-level commands should still resolve through the enclosing pane
-
-### 6. Inspector region
+### 5. Inspector region
 
 The inspector likely deserves to be a real focus region, but not a pane command target.
 
@@ -116,7 +106,7 @@ That means:
 - pane-targeted commands should usually disable when focus leaves content and moves here
 - scene-wide commands can still remain available
 
-### 7. Modal surfaces
+### 6. Modal surfaces
 
 Modal surfaces should use native modal focus and presentation rules rather than joining the workspace pane focus graph.
 
@@ -216,7 +206,7 @@ It may need to split into something more like:
   - visual selected/focused styling
 - `PaneTerminalSurfaceView`
   - terminal host bridge
-  - prompt versus scrollback interaction concerns
+  - SwiftTerm-owned internal terminal interaction behavior
 
 That is not a guarantee, but it is a likely consequence of the design you described.
 
@@ -286,23 +276,21 @@ This is intentionally small. Modal surfaces should not join this enum unless a c
 
 ### Pane-local lower-level interaction
 
-Within a focused pane, the terminal bridge may still need to manage lower-level distinctions like:
+Within a focused pane, SwiftTerm may still manage lower-level internal terminal
+states like prompt input versus scrollback selection.
 
-- prompt input active
-- scrollback selection active
-
-That lower-level distinction may belong in the AppKit bridge or a pane-local focus adapter rather than in the scene-wide focus enum.
-
-The higher-level command system should not need to care unless command meaning truly changes between prompt and scrollback.
+That distinction belongs below the scene-wide focus enum. The higher-level
+command system should not need to care.
 
 ## Recommended Sequencing
 
-### Phase 1: define target ownership
+### Phase 1: define next-pass ownership boundaries
 
 Decide:
 
 - whether sidebar, pane, and inspector are the only logical window focus targets
-- whether prompt versus scrollback is a lower-level pane concern or a first-class command concern
+- whether any future product requirement truly needs more than SwiftTerm's
+  existing internal prompt-versus-scrollback behavior
 - whether modals remain scene-owned
 - whether the set of open workspaces belongs to scene-local state rather than global persistence
 - whether the active workspace is defined entirely by scene selection, or by some more local panel-specific rule
@@ -317,24 +305,24 @@ Adjust view structure so each logical focus target has a clean owning view:
 - terminal surface
 - optional inspector region wrapper
 
-### Phase 3: replace custom runtime focus
+### Phase 3: narrow remaining terminal-side glue
 
-Move from model-owned `focusedPaneID` runtime focus toward scene-owned SwiftUI focus state.
+Keep scene-owned native focus as the source of truth, then remove or narrow the
+remaining terminal bridge behavior that still follows derived pane focus.
 
-### Phase 4: re-anchor command context
+### Phase 4: re-evaluate scene-local restoration and persistence
 
-Make pane-local command exports derive from native focus truth rather than a model-maintained `isFocused` projection.
+Now that runtime focus is no longer model-owned, decide how per-window open
+workspace state, recent-close behavior, and any restoration metadata should be
+persisted without collapsing window-local state back into app-global state.
 
-### Phase 5: re-evaluate persistence
+## Immediate Next-Pass Questions
 
-After runtime focus is no longer model-owned, decide whether any “last focused pane” data remains worth persisting as restoration metadata.
-
-## Immediate Discussion Questions
-
-These are the decisions worth making before code changes:
+These are the decisions worth making before the next implementation pass:
 
 1. Is the pane, not the embedded terminal control, the main command target?
-2. Does prompt-versus-scrollback change command meaning, or only lower-level text interaction behavior?
+2. Does any product requirement actually need `gmax` to distinguish more than
+   SwiftTerm already distinguishes internally?
 3. Should pane commands disable whenever focus moves to the sidebar or inspector?
 4. Should modal presentations remain scene-owned at the workspace window root?
 5. Is the smallest useful logical target set just `sidebar`, `pane(PaneID)`, and `inspector`?
@@ -344,7 +332,9 @@ These are the decisions worth making before code changes:
 
 ## Provisional Design Decisions
 
-This section records the current intended direction before implementation. These decisions should be treated as the working target model unless a later investigation, especially around the embedded terminal surface, shows a concrete framework constraint.
+This section records the current intended direction before implementation. These
+decisions should be treated as the working target model unless a later
+investigation shows a concrete framework constraint.
 
 ### 1. Pane versus embedded terminal as the main command target
 
@@ -353,18 +343,24 @@ Current decision:
 - the pane remains the main command target
 - the embedded terminal surface is still important enough to investigate as its own extension or integration point
 
-The current understanding is that prompt-versus-scrollback behavior belongs below the pane-level command surface. Closing, splitting, relaunching, and pane navigation should still target the enclosing pane.
+The current design decision is that prompt-versus-scrollback behavior belongs
+below the pane-level command surface, inside SwiftTerm. Closing, splitting,
+relaunching, and pane navigation should still target the enclosing pane.
 
 Follow-up required:
 
 - inspect what SwiftTerm’s view surface can expose or support directly
-- decide whether extending that surface is cleaner than wrapping more behavior around it externally
+- avoid promoting prompt-versus-scrollback into a scene-level focus taxonomy
+  unless a future command surface proves SwiftTerm's existing behavior
+  insufficient
 
 ### 2. Prompt versus scrollback
 
 Current decision:
 
-- prompt versus scrollback changes text interaction behavior, not pane command meaning
+- prompt versus scrollback changes terminal-native text interaction behavior,
+  not pane command meaning
+- SwiftTerm, not `gmax`, owns that distinction
 
 That means:
 
@@ -480,7 +476,9 @@ That means:
 
 One meaningful technical question remains open:
 
-- should the embedded SwiftTerm view be extended directly so the prompt and scrollback interaction model fits this architecture more naturally?
+- should the embedded SwiftTerm view need any extension at all beyond letting
+  SwiftTerm continue owning its internal prompt and scrollback interaction
+  model?
 
 This needs investigation before finalizing the pane-level implementation shape.
 

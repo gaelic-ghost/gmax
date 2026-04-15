@@ -21,14 +21,14 @@ struct TerminalPaneView: NSViewRepresentable {
 	let controller: TerminalPaneController
 	let session: TerminalSession
 	let isFocused: Bool
-	let onFocus: () -> Void
+	let onActivatePane: () -> Void
 	let onRestart: () -> Void
 	let onSplitRight: () -> Void
 	let onSplitDown: () -> Void
 	let onClose: () -> Void
 
 	func makeCoordinator() -> Coordinator {
-		Coordinator(controller: controller, onFocus: onFocus)
+		Coordinator(controller: controller)
 	}
 
 	func makeNSView(context: Context) -> TerminalPaneHostView {
@@ -36,7 +36,7 @@ struct TerminalPaneView: NSViewRepresentable {
 		applyCurrentAppearance(to: hostingView)
 		hostingView.updateAccessibility(
 			snapshot: accessibilitySnapshot,
-			onFocus: onFocus,
+			onFocus: onActivatePane,
 			onRestart: onRestart,
 			onSplitRight: onSplitRight,
 			onSplitDown: onSplitDown,
@@ -50,7 +50,7 @@ struct TerminalPaneView: NSViewRepresentable {
 		context.coordinator.update(hostingView: nsView, isFocused: isFocused)
 		nsView.updateAccessibility(
 			snapshot: accessibilitySnapshot,
-			onFocus: onFocus,
+			onFocus: onActivatePane,
 			onRestart: onRestart,
 			onSplitRight: onSplitRight,
 			onSplitDown: onSplitDown,

@@ -10,14 +10,32 @@ import SwiftUI
 struct DetailPane: View {
 	@ObservedObject var model: WorkspaceStore
 	@Binding var selectedWorkspaceID: WorkspaceID?
+	let inspectedPaneID: PaneID?
+	let focusedTarget: FocusState<WorkspaceFocusTarget?>.Binding
 
 	var body: some View {
 		let workspace = selectedWorkspaceID.flatMap { workspaceID in
 			model.workspaces.first { $0.id == workspaceID }
 		}
+		detailContent(workspace: workspace)
+			.focusable(interactions: .activate)
+			.focused(focusedTarget, equals: .inspector)
+			.contentShape(Rectangle())
+			.onTapGesture {
+				focusedTarget.wrappedValue = .inspector
+			}
+			.accessibilityRespondsToUserInteraction(true)
+			.accessibilityAddTraits(focusedTarget.wrappedValue == .inspector ? .isSelected : [])
+			.accessibilityAction(.default) {
+				focusedTarget.wrappedValue = .inspector
+			}
+	}
+
+	@ViewBuilder
+	private func detailContent(workspace: Workspace?) -> some View {
 		if let workspace,
-		   let focusedPaneID = workspace.focusedPaneID,
-		   let pane = workspace.root?.findPane(id: focusedPaneID),
+		   let inspectedPaneID,
+		   let pane = workspace.root?.findPane(id: inspectedPaneID),
 		   let session = model.sessions.session(for: pane.sessionID) {
 			ActivePaneDetails(
 				workspaceTitle: workspace.title,
@@ -119,5 +137,18 @@ private struct DetailValue: View {
 }
 
 #Preview {
-	DetailPane(model: WorkspaceStore(), selectedWorkspaceID: .constant(nil))
+	DetailPanePreview()
+}
+
+private struct DetailPanePreview: View {
+	@FocusState private var focusedTarget: WorkspaceFocusTarget?
+
+	var body: some View {
+		DetailPane(
+			model: WorkspaceStore(),
+			selectedWorkspaceID: .constant(nil),
+			inspectedPaneID: nil,
+			focusedTarget: $focusedTarget
+		)
+	}
 }

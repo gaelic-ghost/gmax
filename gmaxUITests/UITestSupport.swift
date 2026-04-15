@@ -9,6 +9,7 @@ import XCTest
 
 class GmaxUITestCase: XCTestCase {
 	private enum UIProbe {
+		static let captureAccessibilityHierarchyEnvironmentKey = "GMAX_UI_TEST_CAPTURE_AX_DEBUG"
 		static let initialWorkspaceTitle = "Workspace 1"
 		static let sidebarWorkspaceListIdentifier = "sidebar.workspaceList"
 	}
@@ -39,16 +40,46 @@ class GmaxUITestCase: XCTestCase {
 		attemptToPresentMainShellWindow(in: app)
 
 		guard workspaceList.waitForExistence(timeout: 5) else {
+			recordMainShellLaunchDiagnostics(in: app)
+
+			let hierarchyDetails = accessibilityHierarchyFailureDetails(in: app)
 			XCTFail(
 				"""
 				The main shell should expose the workspace sidebar after launch.
-
-				Current accessibility hierarchy:
-				\(app.debugDescription)
+				\(hierarchyDetails)
 				"""
 			)
 			return
 		}
+	}
+
+	private func recordMainShellLaunchDiagnostics(in app: XCUIApplication) {
+		let appScreenshot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+		appScreenshot.name = "Main shell launch failure screenshot"
+		appScreenshot.lifetime = .keepAlways
+		add(appScreenshot)
+	}
+
+	private func accessibilityHierarchyFailureDetails(in app: XCUIApplication) -> String {
+		guard shouldCaptureAccessibilityHierarchy else {
+			return """
+			
+			Accessibility hierarchy capture is disabled for normal shell-driven UI tests because \
+			requesting the full hierarchy can trigger macOS permission prompts and destabilize XCUITest.
+			Use XCTest attachments and manual Accessibility Inspector checks for ordinary diagnosis.
+			Set \(UIProbe.captureAccessibilityHierarchyEnvironmentKey)=1 when you explicitly want the full hierarchy dump.
+			"""
+		}
+
+		return """
+		
+		Current accessibility hierarchy:
+		\(app.debugDescription)
+		"""
+	}
+
+	private var shouldCaptureAccessibilityHierarchy: Bool {
+		ProcessInfo.processInfo.environment[UIProbe.captureAccessibilityHierarchyEnvironmentKey] == "1"
 	}
 
 	func attemptToPresentMainShellWindow(in app: XCUIApplication) {
@@ -69,9 +100,10 @@ class GmaxUITestCase: XCTestCase {
 	}
 
 	func assertWorkspaceDoesNotExist(_ title: String, in app: XCUIApplication) {
-		let workspaceLabel = sidebarWorkspaceRow(titled: title, in: app)
 		XCTAssertFalse(
-			workspaceLabel.waitForExistence(timeout: 1),
+			waitForNonExistence(timeout: 2) {
+				self.sidebarWorkspaceRow(titled: title, in: app)
+			},
 			"The workspace titled \(title) should not remain visible in the sidebar."
 		)
 	}
@@ -167,6 +199,11 @@ class GmaxUITestCase: XCTestCase {
 		return workspaceList.descendants(matching: .any)["sidebar.workspaceRow.\(title)"]
 	}
 
+	func sidebarWorkspacePaneCount(titled title: String, in scope: XCUIElement) -> XCUIElement {
+		let workspaceList = scope.descendants(matching: .any)[UIProbe.sidebarWorkspaceListIdentifier]
+		return workspaceList.staticTexts["sidebar.workspacePaneCount.\(title)"]
+	}
+
 	func savedWorkspaceLibraryRow(titled title: String, in app: XCUIApplication) -> XCUIElement {
 		let libraryList = app.descendants(matching: .any)["savedWorkspaceLibrary.list"]
 		let identifiedTitle = libraryList.staticTexts["savedWorkspaceLibrary.title.\(title)"]
@@ -198,4 +235,24 @@ class GmaxUITestCase: XCTestCase {
 	func newWorkspaceButton(in app: XCUIApplication) -> XCUIElement {
 		app.buttons["mainShell.newWorkspaceButton"]
 	}
+
+	@discardableResult
+	func waitForNonExistence(
+		timeout: TimeInterval,
+		pollInterval: TimeInterval = 0.1,
+		element: () -> XCUIElement
+	) -> Bool {
+		let deadline = Date().addingTimeInterval(timeout)
+		while Date() < deadline {
+			let currentElement = element()
+			if !currentElement.exists || !currentElement.isHittable {
+				return true
+			}
+			RunLoop.current.run(until: Date().addingTimeInterval(pollInterval))
+		}
+
+		let currentElement = element()
+		return !currentElement.exists || !currentElement.isHittable
+	}
+
 }

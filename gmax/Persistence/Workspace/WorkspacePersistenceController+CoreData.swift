@@ -143,7 +143,6 @@ extension WorkspacePersistenceController {
 
 		let workspaceID = attribute(name: "id", type: .UUIDAttributeType)
 		let workspaceTitle = attribute(name: "title", type: .stringAttributeType)
-		let focusedPaneID = attribute(name: "focusedPaneID", type: .UUIDAttributeType, isOptional: true)
 		let sortOrder = attribute(name: "sortOrder", type: .integer64AttributeType)
 
 		let nodeID = attribute(name: "id", type: .UUIDAttributeType)
@@ -162,7 +161,6 @@ extension WorkspacePersistenceController {
 		let workspaceSnapshotNotes = attribute(name: "notes", type: .stringAttributeType, isOptional: true)
 		let workspaceSnapshotPreviewText = attribute(name: "previewText", type: .stringAttributeType, isOptional: true)
 		let workspaceSnapshotSearchText = attribute(name: "searchText", type: .stringAttributeType, isOptional: true)
-		let workspaceSnapshotFocusedPaneID = attribute(name: "focusedPaneID", type: .UUIDAttributeType, isOptional: true)
 
 		let snapshotNodeID = attribute(name: "id", type: .UUIDAttributeType)
 		let snapshotNodeKind = attribute(name: "kind", type: .stringAttributeType)
@@ -302,7 +300,7 @@ extension WorkspacePersistenceController {
 		workspaceSnapshotSessionSnapshots.inverseRelationship = paneSessionSnapshotWorkspaceSnapshot
 		paneSessionSnapshotWorkspaceSnapshot.inverseRelationship = workspaceSnapshotSessionSnapshots
 
-		workspaceEntity.properties = [workspaceID, workspaceTitle, focusedPaneID, sortOrder, workspaceRootNode]
+		workspaceEntity.properties = [workspaceID, workspaceTitle, sortOrder, workspaceRootNode]
 		paneNodeEntity.properties = [
 			nodeID,
 			nodeKind,
@@ -327,7 +325,6 @@ extension WorkspacePersistenceController {
 			workspaceSnapshotNotes,
 			workspaceSnapshotPreviewText,
 			workspaceSnapshotSearchText,
-			workspaceSnapshotFocusedPaneID,
 			workspaceSnapshotRootNode,
 			workspaceSnapshotSessionSnapshots,
 		]

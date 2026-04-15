@@ -48,8 +48,7 @@ struct WorkspacePersistenceTests {
 						)
 					)
 				)
-			),
-			focusedPaneID: rightMiddlePane.id
+			)
 		)
 		let persistence = WorkspacePersistenceController.inMemoryForTesting()
 		let model = WorkspaceStore(
@@ -59,9 +58,6 @@ struct WorkspacePersistenceTests {
 		)
 
 		let originalLeaves = workspace.paneLeaves
-		let originalFocusedPath = try #require(
-			leafPaths(in: workspace.root).first(where: { $0.leaf.id == rightMiddlePane.id })?.path
-		)
 		let expectedSignature = try #require(workspace.root.map(nodeSignature(from:)))
 
 		let metadataBySessionID: [TerminalSessionID: (title: String, directory: String, transcript: String)] = [
@@ -91,14 +87,10 @@ struct WorkspacePersistenceTests {
 		let reopenedWorkspace = try #require(model.workspaces.first(where: { $0.id == reopenedWorkspaceID }))
 		let reopenedRoot = try #require(reopenedWorkspace.root)
 		let reopenedLeaves = reopenedWorkspace.paneLeaves
-		let reopenedFocusedPath = try #require(
-			leafPaths(in: reopenedRoot).first(where: { $0.leaf.id == reopenedWorkspace.focusedPaneID })?.path
-		)
 
 		#expect(summary.paneCount == 5)
 		#expect(nodeSignature(from: reopenedRoot) == expectedSignature)
 		#expect(reopenedWorkspace.paneCount == 5)
-		#expect(reopenedFocusedPath == originalFocusedPath)
 		#expect(reopenedLeaves.count == originalLeaves.count)
 
 		for (index, originalLeaf) in originalLeaves.enumerated() {
@@ -131,8 +123,7 @@ struct WorkspacePersistenceTests {
 						)
 					)
 				)
-			),
-			focusedPaneID: bottomRightPane.id
+			)
 		)
 		let persistence = WorkspacePersistenceController.inMemoryForTesting()
 		let model = WorkspaceStore(
@@ -142,9 +133,6 @@ struct WorkspacePersistenceTests {
 		)
 
 		let originalLeaves = workspace.paneLeaves
-		let originalFocusedPath = try #require(
-			leafPaths(in: workspace.root).first(where: { $0.leaf.id == bottomRightPane.id })?.path
-		)
 		let expectedSignature = try #require(workspace.root.map(nodeSignature(from:)))
 
 		let metadataBySessionID: [TerminalSessionID: (title: String, directory: String, transcript: String)] = [
@@ -173,14 +161,10 @@ struct WorkspacePersistenceTests {
 		let reopenedWorkspace = try #require(model.workspaces.first(where: { $0.id == reopenedWorkspaceID }))
 		let reopenedRoot = try #require(reopenedWorkspace.root)
 		let reopenedLeaves = reopenedWorkspace.paneLeaves
-		let reopenedFocusedPath = try #require(
-			leafPaths(in: reopenedRoot).first(where: { $0.leaf.id == reopenedWorkspace.focusedPaneID })?.path
-		)
 
 		#expect(summary.paneCount == 3)
 		#expect(nodeSignature(from: reopenedRoot) == expectedSignature)
 		#expect(reopenedWorkspace.paneCount == 3)
-		#expect(reopenedFocusedPath == originalFocusedPath)
 		#expect(reopenedLeaves.count == originalLeaves.count)
 
 		for (index, originalLeaf) in originalLeaves.enumerated() {
@@ -247,8 +231,7 @@ struct WorkspacePersistenceTests {
 						)
 					)
 				)
-			),
-			focusedPaneID: topRightPane.id
+			)
 		)
 		let persistence = WorkspacePersistenceController.inMemoryForTesting()
 		let model = WorkspaceStore(
@@ -272,8 +255,9 @@ struct WorkspacePersistenceTests {
 		)
 
 		let firstReopenedWorkspaceID = try #require(model.openSavedWorkspace(summary.id))
-		_ = try #require(model.workspaces.first(where: { $0.id == firstReopenedWorkspaceID }))
-		model.splitFocusedPane(in: firstReopenedWorkspaceID, .right)
+		let firstReopenedWorkspace = try #require(model.workspaces.first(where: { $0.id == firstReopenedWorkspaceID }))
+		let firstReopenedPane = try #require(firstReopenedWorkspace.root?.firstLeaf())
+		_ = try #require(model.splitPane(firstReopenedPane.id, in: firstReopenedWorkspaceID, direction: .right))
 		let mutatedFirstWorkspace = try #require(model.workspaces.first(where: { $0.id == firstReopenedWorkspaceID }))
 		#expect(mutatedFirstWorkspace.paneCount == 4)
 
@@ -306,8 +290,7 @@ struct WorkspacePersistenceTests {
 					first: .leaf(leftPane),
 					second: .leaf(rightPane)
 				)
-			),
-			focusedPaneID: leftPane.id
+			)
 		)
 		let persistence = WorkspacePersistenceController.inMemoryForTesting()
 		let model = WorkspaceStore(
@@ -343,8 +326,7 @@ struct WorkspacePersistenceTests {
 					first: .leaf(leftPane),
 					second: .leaf(rightPane)
 				)
-			),
-			focusedPaneID: rightPane.id
+			)
 		)
 		let persistence = WorkspacePersistenceController.inMemoryForTesting()
 		let launchContextBuilder = TestSupport.makeLaunchContextBuilder(defaultCurrentDirectory: "/tmp/default-fallback")
@@ -434,8 +416,7 @@ struct WorkspacePersistenceTests {
 					first: .leaf(leftPane),
 					second: .leaf(rightPane)
 				)
-			),
-			focusedPaneID: leftPane.id
+			)
 		)
 		let persistence = WorkspacePersistenceController.inMemoryForTesting()
 		persistence.save(workspaces: [workspace])
@@ -468,19 +449,6 @@ private func nodeSignature(from node: PaneNode) -> PaneNodeSignature {
 				first: nodeSignature(from: split.first),
 				second: nodeSignature(from: split.second)
 			)
-	}
-}
-
-private func leafPaths(in node: PaneNode?, path: [Int] = []) -> [(leaf: PaneLeaf, path: [Int])] {
-	guard let node else {
-		return []
-	}
-
-	switch node {
-		case .leaf(let leaf):
-			return [(leaf, path)]
-		case .split(let split):
-			return leafPaths(in: split.first, path: path + [0]) + leafPaths(in: split.second, path: path + [1])
 	}
 }
 

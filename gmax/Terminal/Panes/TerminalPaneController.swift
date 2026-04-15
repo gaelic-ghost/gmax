@@ -14,8 +14,8 @@ import SwiftTerm
 final class TerminalPaneController: ObservableObject {
 	let paneID: PaneID
 	let session: TerminalSession
-	private weak var attachedTerminalView: LocalProcessTerminalView?
-	private var retainedTerminalView: LocalProcessTerminalView?
+	private weak var attachedTerminalView: WorkspaceTerminalView?
+	private var retainedTerminalView: WorkspaceTerminalView?
 	private var retainedTerminalGeneration: Int?
 	private var startedTerminalGeneration: Int?
 
@@ -26,41 +26,29 @@ final class TerminalPaneController: ObservableObject {
 
 	func terminalView(
 		for generation: Int,
-		processDelegate: LocalProcessTerminalViewDelegate,
-		clickTarget: AnyObject,
-		clickAction: Selector
-	) -> LocalProcessTerminalView {
+		processDelegate: LocalProcessTerminalViewDelegate
+	) -> WorkspaceTerminalView {
 		if
 			let terminalView = retainedTerminalView,
 			retainedTerminalGeneration == generation
 		{
-			configureTerminalView(
-				terminalView,
-				processDelegate: processDelegate,
-				clickTarget: clickTarget,
-				clickAction: clickAction
-			)
+			configureTerminalView(terminalView, processDelegate: processDelegate)
 			return terminalView
 		}
 
-		let terminalView = LocalProcessTerminalView(frame: .zero)
+		let terminalView = WorkspaceTerminalView(frame: .zero)
 		retainedTerminalView = terminalView
 		retainedTerminalGeneration = generation
 		startedTerminalGeneration = nil
-		configureTerminalView(
-			terminalView,
-			processDelegate: processDelegate,
-			clickTarget: clickTarget,
-			clickAction: clickAction
-		)
+		configureTerminalView(terminalView, processDelegate: processDelegate)
 		return terminalView
 	}
 
-	func attach(terminalView: LocalProcessTerminalView) {
+	func attach(terminalView: WorkspaceTerminalView) {
 		attachedTerminalView = terminalView
 	}
 
-	func detach(terminalView: LocalProcessTerminalView) {
+	func detach(terminalView: WorkspaceTerminalView) {
 		guard attachedTerminalView === terminalView else {
 			return
 		}
@@ -109,21 +97,9 @@ final class TerminalPaneController: ObservableObject {
 	}
 
 	private func configureTerminalView(
-		_ terminalView: LocalProcessTerminalView,
-		processDelegate: LocalProcessTerminalViewDelegate,
-		clickTarget: AnyObject,
-		clickAction: Selector
+		_ terminalView: WorkspaceTerminalView,
+		processDelegate: LocalProcessTerminalViewDelegate
 	) {
 		terminalView.processDelegate = processDelegate
-		for recognizer in terminalView.gestureRecognizers {
-			guard recognizer is NSClickGestureRecognizer else {
-				continue
-			}
-			terminalView.removeGestureRecognizer(recognizer)
-		}
-
-		let clickRecognizer = NSClickGestureRecognizer(target: clickTarget, action: clickAction)
-		clickRecognizer.delaysPrimaryMouseButtonEvents = false
-		terminalView.addGestureRecognizer(clickRecognizer)
 	}
 }

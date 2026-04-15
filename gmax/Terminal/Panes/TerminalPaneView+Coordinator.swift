@@ -13,19 +13,16 @@ extension TerminalPaneView {
 	@MainActor
 	final class Coordinator: NSObject, LocalProcessTerminalViewDelegate {
 		let controller: TerminalPaneController
-		let onFocus: () -> Void
+		private var wasFocused = false
 
-		init(controller: TerminalPaneController, onFocus: @escaping () -> Void) {
+		init(controller: TerminalPaneController) {
 			self.controller = controller
-			self.onFocus = onFocus
 		}
 
 		func makeHostingView() -> TerminalPaneHostView {
 			let terminalView = controller.terminalView(
 				for: controller.session.relaunchGeneration,
-				processDelegate: self,
-				clickTarget: self,
-				clickAction: #selector(handleTerminalClick(_:))
+				processDelegate: self
 			)
 			controller.attach(terminalView: terminalView)
 			let hostingView = TerminalPaneHostView(terminalView: terminalView)
@@ -35,13 +32,15 @@ extension TerminalPaneView {
 
 		func update(hostingView: TerminalPaneHostView, isFocused: Bool) {
 			startProcessIfNeeded(in: hostingView.terminalView)
-			if isFocused, hostingView.window?.firstResponder !== hostingView.terminalView {
-				hostingView.window?.makeFirstResponder(hostingView.terminalView)
+			if isFocused, !wasFocused {
+				hostingView.terminalView.alignFirstResponderToTerminal()
 			}
+			wasFocused = isFocused
 		}
 
 		func dismantle(hostingView: TerminalPaneHostView) {
 			controller.detach(terminalView: hostingView.terminalView)
+			wasFocused = false
 		}
 
 		private func startProcessIfNeeded(in terminalView: LocalProcessTerminalView) {
@@ -99,16 +98,6 @@ extension TerminalPaneView {
 				await Task.yield()
 				controller.session.state = .exited(exitCode)
 			}
-		}
-
-		@objc
-		private func handleTerminalClick(_ recognizer: NSClickGestureRecognizer) {
-			guard let terminalView = recognizer.view as? LocalProcessTerminalView else {
-				return
-			}
-
-			onFocus()
-			terminalView.window?.makeFirstResponder(terminalView)
 		}
 	}
 }

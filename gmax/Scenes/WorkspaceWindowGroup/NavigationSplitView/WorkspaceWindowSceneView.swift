@@ -14,6 +14,9 @@ struct WorkspaceWindowSceneView: View {
 	@SceneStorage("mainShell.isInspectorVisible") private var restoredInspectorVisible = true
 	@SceneStorage("mainShell.isSidebarVisible") private var restoredSidebarVisible = true
 	@State private var hasAppliedSceneState = false
+	@State private var paneFrames: [PaneID: CGRect] = [:]
+	@State private var paneFocusHistory: [PaneID] = []
+	@FocusState private var focusedTarget: WorkspaceFocusTarget?
 
 	var body: some View {
 		let openSavedWorkspaceLibrary = {
@@ -72,26 +75,169 @@ struct WorkspaceWindowSceneView: View {
 		}
 		let pendingDeletionWorkspace = workspacePendingDeletionID.flatMap { workspaceID in workspaceStore.workspaces.first { $0.id == workspaceID } }
 		let pendingRenameWorkspace = workspacePendingRenameID.flatMap { workspaceID in workspaceStore.workspaces.first { $0.id == workspaceID } }
-		let canSplitFocusedPane = selectedWorkspaceID
-			.flatMap { selectedWorkspaceID in workspaceStore.workspaces.first { $0.id == selectedWorkspaceID } }
-			.flatMap { workspace in
-				workspace.focusedPaneID.flatMap { workspace.root?.findPane(id: $0) }
-			} != nil
+		let selectedWorkspace = selectedWorkspaceID.flatMap { selectedWorkspaceID in
+			workspaceStore.workspaces.first { $0.id == selectedWorkspaceID }
+		}
+		let focusedPaneID: PaneID? = {
+			if case .pane(let paneID) = focusedTarget {
+				return paneID
+			}
+			return nil
+		}()
+		let activePaneIDs = Set(selectedWorkspace?.paneLeaves.map(\.id) ?? [])
+		let paneIDsInWorkspace: (WorkspaceID) -> Set<PaneID> = { workspaceID in
+			Set(
+				workspaceStore.workspaces
+					.first(where: { $0.id == workspaceID })?
+					.paneLeaves
+					.map(\.id) ?? []
+			)
+		}
+		let currentActivePaneIDs = {
+			selectedWorkspaceID.map(paneIDsInWorkspace) ?? []
+		}
+		let inspectedPaneID: PaneID? = {
+			if case .pane(let paneID) = focusedTarget, activePaneIDs.contains(paneID) {
+				return paneID
+			}
+
+			return paneFocusHistory.last(where: { activePaneIDs.contains($0) })
+		}()
+		let prunePaneNavigationState = {
+			let activePaneIDs = currentActivePaneIDs()
+			paneFrames = paneFrames.filter { activePaneIDs.contains($0.key) }
+			paneFocusHistory = paneFocusHistory.filter { activePaneIDs.contains($0) }
+		}
+		let focusPaneTarget: (PaneID?) -> Void = { paneID in
+			let activePaneIDs = currentActivePaneIDs()
+			guard let paneID, activePaneIDs.contains(paneID) else {
+				focusedTarget = nil
+				return
+			}
+
+			focusedTarget = .pane(paneID)
+			paneFocusHistory.removeAll { $0 == paneID }
+			paneFocusHistory.append(paneID)
+		}
+		let createPaneInWorkspace: (WorkspaceID) -> Void = { workspaceID in
+			let createdPaneID = workspaceStore.createPane(in: workspaceID)
+			prunePaneNavigationState()
+			focusPaneTarget(createdPaneID)
+		}
+		let splitPaneInWorkspace: (WorkspaceID, PaneID, SplitDirection) -> Void = { workspaceID, paneID, direction in
+			let insertedPaneID = workspaceStore.splitPane(paneID, in: workspaceID, direction: direction)
+			prunePaneNavigationState()
+			focusPaneTarget(insertedPaneID)
+		}
+		let closePaneInWorkspace: (WorkspaceID, PaneID) -> Void = { workspaceID, paneID in
+			let wasFocusedPane = focusedTarget == .pane(paneID)
+			let fallbackPaneID = workspaceStore.closePane(paneID, in: workspaceID)
+			prunePaneNavigationState()
+
+			if wasFocusedPane {
+				if let fallbackPaneID {
+					focusPaneTarget(fallbackPaneID)
+				} else if isInspectorVisible {
+					focusedTarget = .inspector
+				} else {
+					focusedTarget = nil
+				}
+			} else if case .pane(let currentPaneID) = focusedTarget, !paneIDsInWorkspace(workspaceID).contains(currentPaneID) {
+				if let fallbackPaneID {
+					focusPaneTarget(fallbackPaneID)
+				} else if isInspectorVisible {
+					focusedTarget = .inspector
+				} else {
+					focusedTarget = nil
+				}
+			}
+		}
+		let moveFocusedPaneFocus: (PaneFocusDirection) -> Void = { direction in
+			guard let selectedWorkspace else {
+				return
+			}
+
+			let paneLeaves = selectedWorkspace.paneLeaves
+			guard !paneLeaves.isEmpty else {
+				focusedTarget = nil
+				return
+			}
+
+			guard
+				let currentFocusedPaneID = focusedPaneID,
+				let focusedIndex = paneLeaves.firstIndex(where: { $0.id == currentFocusedPaneID })
+			else {
+				let fallbackPaneID = switch direction {
+					case .previous:
+						paneLeaves.last?.id
+					default:
+						paneLeaves.first?.id
+				}
+				focusPaneTarget(fallbackPaneID)
+				return
+			}
+
+			let nextPaneID: PaneID? = switch direction {
+				case .next:
+					paneLeaves[(focusedIndex + 1) % paneLeaves.count].id
+				case .previous:
+					paneLeaves[(focusedIndex - 1 + paneLeaves.count) % paneLeaves.count].id
+				case .left, .right, .up, .down:
+					directionalPaneFocus(
+						from: currentFocusedPaneID,
+						paneFrames: paneFrames,
+						direction: direction,
+						history: paneFocusHistory
+					)
+			}
+
+			focusPaneTarget(nextPaneID)
+		}
+		let splitFocusedPane: (SplitDirection) -> Void = { direction in
+			guard let selectedWorkspaceID, let focusedPaneID else {
+				return
+			}
+
+			let insertedPaneID = workspaceStore.splitPane(focusedPaneID, in: selectedWorkspaceID, direction: direction)
+			prunePaneNavigationState()
+			focusPaneTarget(insertedPaneID)
+		}
+		let canSplitFocusedPane = selectedWorkspace.flatMap { workspace in
+			focusedPaneID.flatMap { workspace.root?.findPane(id: $0) }
+		} != nil
 
 		NavigationSplitView(columnVisibility: $columnVisibility) {
 			SidebarPane(
 				model: workspaceStore,
 				selection: $selectedWorkspaceID,
+				focusedTarget: $focusedTarget,
 				requestRenameWorkspace: presentWorkspaceRename,
 				requestDeleteWorkspace: presentWorkspaceDeletion
 			)
 			.navigationSplitViewColumnWidth(220)
 		} detail: {
-			ContentPane(model: workspaceStore, selectedWorkspaceID: $selectedWorkspaceID)
+			ContentPane(
+				model: workspaceStore,
+				selectedWorkspaceID: $selectedWorkspaceID,
+				focusedTarget: $focusedTarget,
+				onCreatePane: createPaneInWorkspace,
+				onSplitPane: splitPaneInWorkspace,
+				onClosePane: closePaneInWorkspace,
+				onUpdatePaneFrames: { paneFrames in
+					self.paneFrames = paneFrames
+					prunePaneNavigationState()
+				},
+				onMovePaneFocus: moveFocusedPaneFocus
+			)
 				.navigationSplitViewColumnWidth(min: 640, ideal: 920)
 		}
 		.inspector(isPresented: $isInspectorVisible) {
-			DetailPane(model: workspaceStore, selectedWorkspaceID: $selectedWorkspaceID)
+			DetailPane(
+				model: workspaceStore,
+				selectedWorkspaceID: $selectedWorkspaceID,
+				inspectedPaneID: inspectedPaneID,
+				focusedTarget: $focusedTarget
+			)
 				.inspectorColumnWidth(min: 220, ideal: 260, max: 340)
 		}
 		.sheet(isPresented: $isSavedWorkspaceLibraryPresented) {
@@ -188,9 +334,7 @@ struct WorkspaceWindowSceneView: View {
 
 			ToolbarItemGroup(placement: .primaryAction) {
 				Button("Split Right", systemImage: "uiwindow.split.2x1") {
-					if let selectedWorkspaceID {
-						workspaceStore.splitFocusedPane(in: selectedWorkspaceID, .right)
-					}
+					splitFocusedPane(.right)
 				}
 				.labelStyle(.iconOnly)
 				.help("Split the focused pane to the right (\u{2318}D)")
@@ -198,9 +342,7 @@ struct WorkspaceWindowSceneView: View {
 				.accessibilityIdentifier("mainShell.splitRightButton")
 
 				Button("Split Down", systemImage: "uiwindow.split.2x1.rotate.90") {
-					if let selectedWorkspaceID {
-						workspaceStore.splitFocusedPane(in: selectedWorkspaceID, .down)
-					}
+					splitFocusedPane(.down)
 				}
 				.labelStyle(.iconOnly)
 				.help("Split the focused pane downward (\u{21E7}\u{2318}D)")
@@ -248,11 +390,34 @@ struct WorkspaceWindowSceneView: View {
 		.onChange(of: selectedWorkspaceID?.rawValue.uuidString) { _, newValue in
 			restoredSelectedWorkspaceID = newValue
 		}
+		.onChange(of: focusedTarget) { _, newValue in
+			guard case .pane(let paneID) = newValue, activePaneIDs.contains(paneID) else {
+				return
+			}
+
+			paneFocusHistory.removeAll { $0 == paneID }
+			paneFocusHistory.append(paneID)
+		}
 		.onChange(of: workspaceStore.workspaces.map(\.id.rawValue)) { _, _ in
 			normalizeSelection()
 		}
+		.onChange(of: selectedWorkspaceID) { _, _ in
+			paneFrames = [:]
+			paneFocusHistory = []
+		}
+		.onChange(of: selectedWorkspace?.paneLeaves.map(\.id) ?? []) { _, paneIDs in
+			let activePaneIDs = Set(paneIDs)
+			paneFrames = paneFrames.filter { activePaneIDs.contains($0.key) }
+			paneFocusHistory = paneFocusHistory.filter { activePaneIDs.contains($0) }
+			if case .pane(let paneID) = focusedTarget, !activePaneIDs.contains(paneID) {
+				focusedTarget = isInspectorVisible ? .inspector : nil
+			}
+		}
 		.onChange(of: isInspectorVisible) { _, newValue in
 			restoredInspectorVisible = newValue
+			if !newValue, focusedTarget == .inspector {
+				focusPaneTarget(inspectedPaneID)
+			}
 		}
 		.onChange(of: columnVisibility) { _, newValue in
 			restoredSidebarVisible = newValue == .all
@@ -284,4 +449,140 @@ enum UITestLaunchBehavior {
 			}
 		}
 	}
+}
+
+private struct PaneNavigationMetrics: Comparable {
+	let hasPerpendicularOverlap: Bool
+	let perpendicularOverlap: CGFloat
+	let directionalDistance: CGFloat
+	let perpendicularDistance: CGFloat
+	let historyRank: Int
+
+	static func < (lhs: Self, rhs: Self) -> Bool {
+		if lhs.hasPerpendicularOverlap != rhs.hasPerpendicularOverlap {
+			return !lhs.hasPerpendicularOverlap && rhs.hasPerpendicularOverlap
+		}
+		if lhs.perpendicularOverlap != rhs.perpendicularOverlap {
+			return lhs.perpendicularOverlap < rhs.perpendicularOverlap
+		}
+		if lhs.directionalDistance != rhs.directionalDistance {
+			return lhs.directionalDistance > rhs.directionalDistance
+		}
+		if lhs.perpendicularDistance != rhs.perpendicularDistance {
+			return lhs.perpendicularDistance > rhs.perpendicularDistance
+		}
+		return lhs.historyRank < rhs.historyRank
+	}
+}
+
+private func directionalPaneFocus(
+	from paneID: PaneID,
+	paneFrames: [PaneID: CGRect],
+	direction: PaneFocusDirection,
+	history: [PaneID]
+) -> PaneID? {
+	guard let currentFrame = paneFrames[paneID] else {
+		return nil
+	}
+
+	let candidates: [(PaneID, PaneNavigationMetrics)] = paneFrames.compactMap { candidatePaneID, candidateFrame in
+		guard candidatePaneID != paneID else {
+			return nil
+		}
+
+		guard let metrics = navigationMetrics(
+			from: currentFrame,
+			to: candidateFrame,
+			direction: direction,
+			history: history,
+			paneID: candidatePaneID
+		) else {
+			return nil
+		}
+
+		return (candidatePaneID, metrics)
+	}
+
+	return candidates.max { lhs, rhs in
+		lhs.1 < rhs.1
+	}?.0
+}
+
+private func navigationMetrics(
+	from currentFrame: CGRect,
+	to candidateFrame: CGRect,
+	direction: PaneFocusDirection,
+	history: [PaneID],
+	paneID: PaneID
+) -> PaneNavigationMetrics? {
+	let directionalDistance: CGFloat
+	let perpendicularOverlap: CGFloat
+	let perpendicularDistance: CGFloat
+
+	switch direction {
+		case .left:
+			guard candidateFrame.midX < currentFrame.midX else { return nil }
+			directionalDistance = max(currentFrame.minX - candidateFrame.maxX, 0)
+			perpendicularOverlap = overlapLength(
+				currentMin: currentFrame.minY,
+				currentMax: currentFrame.maxY,
+				candidateMin: candidateFrame.minY,
+				candidateMax: candidateFrame.maxY
+			)
+			perpendicularDistance = abs(candidateFrame.midY - currentFrame.midY)
+
+		case .right:
+			guard candidateFrame.midX > currentFrame.midX else { return nil }
+			directionalDistance = max(candidateFrame.minX - currentFrame.maxX, 0)
+			perpendicularOverlap = overlapLength(
+				currentMin: currentFrame.minY,
+				currentMax: currentFrame.maxY,
+				candidateMin: candidateFrame.minY,
+				candidateMax: candidateFrame.maxY
+			)
+			perpendicularDistance = abs(candidateFrame.midY - currentFrame.midY)
+
+		case .up:
+			guard candidateFrame.midY < currentFrame.midY else { return nil }
+			directionalDistance = max(currentFrame.minY - candidateFrame.maxY, 0)
+			perpendicularOverlap = overlapLength(
+				currentMin: currentFrame.minX,
+				currentMax: currentFrame.maxX,
+				candidateMin: candidateFrame.minX,
+				candidateMax: candidateFrame.maxX
+			)
+			perpendicularDistance = abs(candidateFrame.midX - currentFrame.midX)
+
+		case .down:
+			guard candidateFrame.midY > currentFrame.midY else { return nil }
+			directionalDistance = max(candidateFrame.minY - currentFrame.maxY, 0)
+			perpendicularOverlap = overlapLength(
+				currentMin: currentFrame.minX,
+				currentMax: currentFrame.maxX,
+				candidateMin: candidateFrame.minX,
+				candidateMax: candidateFrame.maxX
+			)
+			perpendicularDistance = abs(candidateFrame.midX - currentFrame.midX)
+
+		case .next, .previous:
+			return nil
+	}
+
+	let historyRank = history.lastIndex(of: paneID).map { history.distance(from: $0, to: history.endIndex) } ?? 0
+	return PaneNavigationMetrics(
+		hasPerpendicularOverlap: perpendicularOverlap > 0,
+		perpendicularOverlap: perpendicularOverlap,
+		directionalDistance: directionalDistance,
+		perpendicularDistance: perpendicularDistance,
+		historyRank: historyRank
+	)
+}
+
+private func overlapLength(
+	currentMin: CGFloat,
+	currentMax: CGFloat,
+	candidateMin: CGFloat,
+	candidateMax: CGFloat
+) -> CGFloat {
+	max(0, min(currentMax, candidateMax) - max(currentMin, candidateMin))
 }

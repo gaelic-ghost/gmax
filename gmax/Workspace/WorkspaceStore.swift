@@ -12,8 +12,6 @@ final class WorkspaceStore: ObservableObject {
 	let launchContextBuilder: TerminalLaunchContextBuilder
 	let sessions: TerminalSessionRegistry
 	let paneControllers: TerminalPaneControllerStore
-	var paneFramesByWorkspace: [WorkspaceID: [PaneID: CGRect]]
-	var paneFocusHistoryByWorkspace: [WorkspaceID: [PaneID]]
 	var pendingPersistenceTask: Task<Void, Never>?
 	var recentlyClosedWorkspaces: [RecentlyClosedWorkspace] = []
 
@@ -43,7 +41,7 @@ final class WorkspaceStore: ObservableObject {
 			let persistedWorkspaces = shouldRestorePersistedWorkspaces ? persistence.loadWorkspaces() : []
 			if persistedWorkspaces.isEmpty {
 				let pane = PaneLeaf()
-				resolvedWorkspaces = [Workspace(title: "Workspace 1", root: .leaf(pane), focusedPaneID: pane.id)]
+				resolvedWorkspaces = [Workspace(title: "Workspace 1", root: .leaf(pane))]
 			} else {
 				resolvedWorkspaces = persistedWorkspaces
 			}
@@ -65,14 +63,5 @@ final class WorkspaceStore: ObservableObject {
 		)
 		self.paneControllers = TerminalPaneControllerStore()
 		self.workspaces = resolvedWorkspaces
-		self.paneFramesByWorkspace = [:]
-		self.paneFocusHistoryByWorkspace = Dictionary(
-			uniqueKeysWithValues: resolvedWorkspaces.compactMap { workspace in
-				guard let focusedPaneID = workspace.focusedPaneID else {
-					return nil
-				}
-				return (workspace.id, [focusedPaneID])
-			}
-		)
 	}
 }

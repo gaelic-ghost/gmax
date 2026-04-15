@@ -15,7 +15,7 @@ struct TerminalAccessibilitySnapshot {
 }
 
 final class TerminalPaneHostView: NSView {
-	let terminalView: LocalProcessTerminalView
+	let terminalView: WorkspaceTerminalView
 	var onEffectiveAppearanceChange: ((NSAppearance) -> Void)?
 	private var accessibilitySnapshot = TerminalAccessibilitySnapshot(label: "Shell terminal", value: "", help: "")
 	private var onAccessibilityFocus: (() -> Void)?
@@ -24,7 +24,7 @@ final class TerminalPaneHostView: NSView {
 	private var onAccessibilitySplitDown: (() -> Void)?
 	private var onAccessibilityClose: (() -> Void)?
 
-	init(terminalView: LocalProcessTerminalView) {
+	init(terminalView: WorkspaceTerminalView) {
 		self.terminalView = terminalView
 		super.init(frame: .zero)
 		setup()
@@ -92,7 +92,7 @@ final class TerminalPaneHostView: NSView {
 	@objc
 	private func accessibilityFocusPane() -> Bool {
 		onAccessibilityFocus?()
-		window?.makeFirstResponder(terminalView)
+		terminalView.alignFirstResponderToTerminal()
 		return true
 	}
 

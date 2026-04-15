@@ -10,6 +10,7 @@ import SwiftUI
 struct SidebarPane: View {
 	@ObservedObject var model: WorkspaceStore
 	@Binding var selection: WorkspaceID?
+	let focusedTarget: FocusState<WorkspaceFocusTarget?>.Binding
 	let requestRenameWorkspace: (WorkspaceID) -> Void
 	let requestDeleteWorkspace: (WorkspaceID) -> Void
 
@@ -39,6 +40,7 @@ struct SidebarPane: View {
 			}
 		}
 		.accessibilityIdentifier("sidebar.workspaceList")
+		.focused(focusedTarget, equals: .sidebar)
 		.navigationTitle("Workspaces")
 		.toolbar {
 			ToolbarItem(placement: .automatic) {
@@ -89,10 +91,19 @@ struct SidebarPane: View {
 }
 
 #Preview {
-	SidebarPane(
-		model: WorkspaceStore(),
-		selection: .constant(nil),
-		requestRenameWorkspace: { _ in },
-		requestDeleteWorkspace: { _ in }
-	)
+	SidebarPanePreview()
+}
+
+private struct SidebarPanePreview: View {
+	@FocusState private var focusedTarget: WorkspaceFocusTarget?
+
+	var body: some View {
+		SidebarPane(
+			model: WorkspaceStore(),
+			selection: .constant(nil),
+			focusedTarget: $focusedTarget,
+			requestRenameWorkspace: { _ in },
+			requestDeleteWorkspace: { _ in }
+		)
+	}
 }

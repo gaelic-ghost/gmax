@@ -111,10 +111,10 @@ This part is healthy and clearly belongs outside SwiftTerm:
 
 This part is currently custom and tied to the workspace model:
 
-- `ContentPaneLeafView` receives `isFocused`
-- tapping the pane calls `model.focusPane(...)`
-- `Workspace.focusedPaneID` acts as the live source of truth
-- pane close command publication depends on `isFocused`
+- `ContentPaneLeafView` still receives an `isFocused` flag, but that flag is now derived from scene-owned SwiftUI focus
+- tapping the pane now updates the scene-local `@FocusState`
+- `Workspace.focusedPaneID` still exists as persisted workspace metadata, but it is no longer the live runtime source of truth for pane focus
+- pane close command publication now follows scene-local focus rather than store-owned focus
 
 This is the part we already expect to redesign toward native SwiftUI focus.
 
@@ -141,7 +141,7 @@ That is exactly the kind of coupling the focus redesign should break apart.
 
 ## What This Suggests About Prompt vs Scrollback
 
-At this stage of the project, prompt versus scrollback appears to be a terminal
+At this stage of the project, prompt versus scrollback is a terminal
 interaction distinction, not a scene-command distinction.
 
 That matches both our current product intent and SwiftTerm's surface:
@@ -153,12 +153,15 @@ That matches both our current product intent and SwiftTerm's surface:
 - Copy, selection, find, and text input are already handled inside the terminal
   control.
 
-So the current best model is:
+This is now the settled model for `gmax`:
 
 - the pane is the workspace-level command target
 - the terminal view is the text/input/responder surface inside that pane
 - prompt versus scrollback remains an internal terminal interaction difference
-  unless later product work proves that command meaning actually differs
+  owned by SwiftTerm
+- `gmax` should not add a parallel prompt-versus-scrollback focus or command
+  model unless later product work proves SwiftTerm's existing behavior
+  insufficient
 
 That is a much cleaner boundary than trying to model prompt and scrollback as
 separate scene-level focus targets today.

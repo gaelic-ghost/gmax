@@ -11,8 +11,7 @@ extension WorkspaceStore {
 		let pane = PaneLeaf()
 		let workspace = Workspace(
 			title: uniqueWorkspaceTitle(startingWith: "Workspace \(workspaces.count + 1)"),
-			root: .leaf(pane),
-			focusedPaneID: pane.id
+			root: .leaf(pane)
 		)
 
 		workspaces.append(workspace)
@@ -20,7 +19,6 @@ extension WorkspaceStore {
 			id: pane.sessionID,
 			launchConfiguration: launchContextBuilder.makeLaunchConfiguration()
 		)
-		paneFocusHistoryByWorkspace[workspace.id] = [pane.id]
 		Logger.workspace.notice("Created a new workspace and seeded it with an initial pane. Workspace title: \(workspace.title, privacy: .public). Workspace ID: \(workspace.id.rawValue.uuidString, privacy: .public)")
 		schedulePersistenceSave()
 		return workspace.id
@@ -49,16 +47,11 @@ extension WorkspaceStore {
 		}
 
 		let workspace = workspaces[workspaceIndex]
-		var focusedPaneID: PaneID?
 		let duplicatedWorkspace = Workspace(
 			title: uniqueWorkspaceTitle(startingWith: "\(workspace.title) Copy"),
-			root: workspace.root.map {
-				duplicateNode($0, focusedPaneID: workspace.focusedPaneID, clonedFocusedPaneID: &focusedPaneID)
-			},
-			focusedPaneID: focusedPaneID
+			root: workspace.root.map { duplicateNode($0) }
 		)
 		workspaces.insert(duplicatedWorkspace, at: workspaceIndex + 1)
-		paneFocusHistoryByWorkspace[duplicatedWorkspace.id] = [duplicatedWorkspace.focusedPaneID].compactMap { $0 }
 		Logger.workspace.notice("Duplicated a workspace layout into a new workspace. Source workspace ID: \(workspaceID.rawValue.uuidString, privacy: .public). New workspace title: \(duplicatedWorkspace.title, privacy: .public). New workspace ID: \(duplicatedWorkspace.id.rawValue.uuidString, privacy: .public)")
 		schedulePersistenceSave()
 		return duplicatedWorkspace.id
@@ -96,7 +89,6 @@ extension WorkspaceStore {
 
 		let insertionIndex = min(closedWorkspace.formerIndex, workspaces.count)
 		workspaces.insert(closedWorkspace.workspace, at: insertionIndex)
-		paneFocusHistoryByWorkspace[closedWorkspace.workspace.id] = [closedWorkspace.workspace.focusedPaneID].compactMap { $0 }
 
 		for leaf in closedWorkspace.workspace.root?.leaves() ?? [] {
 			let launchConfiguration = closedWorkspace.launchConfigurationsBySessionID[leaf.sessionID]
@@ -171,7 +163,6 @@ extension WorkspaceStore {
 		var launchConfigurationsBySessionID: [TerminalSessionID: TerminalLaunchConfiguration] = [:]
 		var transcriptsBySessionID: [TerminalSessionID: String] = [:]
 		var titlesBySessionID: [TerminalSessionID: String] = [:]
-		var focusedPaneID: PaneID?
 		let restoredWorkspace = Workspace(
 			title: {
 				let title = snapshot.title.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -185,18 +176,14 @@ extension WorkspaceStore {
 			root: snapshot.workspace.root.map {
 				restoreNode(
 					$0,
-					focusedPaneID: snapshot.workspace.focusedPaneID,
 					paneSnapshotsBySessionID: snapshot.paneSnapshotsBySessionID,
 					launchConfigurationsBySessionID: &launchConfigurationsBySessionID,
 					transcriptsBySessionID: &transcriptsBySessionID,
-					titlesBySessionID: &titlesBySessionID,
-					restoredFocusedPaneID: &focusedPaneID
+					titlesBySessionID: &titlesBySessionID
 				)
-			},
-			focusedPaneID: focusedPaneID
+			}
 		)
 		workspaces.append(restoredWorkspace)
-		paneFocusHistoryByWorkspace[restoredWorkspace.id] = [restoredWorkspace.focusedPaneID].compactMap { $0 }
 
 		for (sessionID, launchConfiguration) in launchConfigurationsBySessionID {
 			let session = sessions.ensureSession(id: sessionID, launchConfiguration: launchConfiguration)
@@ -250,11 +237,7 @@ extension WorkspaceStore {
 		}
 	}
 
-	private func duplicateNode(
-		_ node: PaneNode,
-		focusedPaneID: PaneID?,
-		clonedFocusedPaneID: inout PaneID?
-	) -> PaneNode {
+	private func duplicateNode(_ node: PaneNode) -> PaneNode {
 		switch node {
 			case .leaf(let leaf):
 				let sourceSession = sessions.ensureSession(id: leaf.sessionID)
@@ -267,9 +250,6 @@ extension WorkspaceStore {
 						currentDirectory: inheritedCurrentDirectory
 					)
 				)
-				if leaf.id == focusedPaneID {
-					clonedFocusedPaneID = clonedLeaf.id
-				}
 				return .leaf(clonedLeaf)
 
 			case .split(let split):
@@ -277,16 +257,8 @@ extension WorkspaceStore {
 					PaneSplit(
 						axis: split.axis,
 						fraction: split.fraction,
-						first: duplicateNode(
-							split.first,
-							focusedPaneID: focusedPaneID,
-							clonedFocusedPaneID: &clonedFocusedPaneID
-						),
-						second: duplicateNode(
-							split.second,
-							focusedPaneID: focusedPaneID,
-							clonedFocusedPaneID: &clonedFocusedPaneID
-						)
+						first: duplicateNode(split.first),
+						second: duplicateNode(split.second)
 					)
 				)
 		}
@@ -333,8 +305,6 @@ extension WorkspaceStore {
 		}
 
 		workspaces.remove(at: workspaceIndex)
-		paneFramesByWorkspace.removeValue(forKey: workspaceID)
-		paneFocusHistoryByWorkspace.removeValue(forKey: workspaceID)
 		removeUnreferencedSessions()
 
 		let nextSelectedWorkspaceID = workspaces.isEmpty ? nil : workspaces[min(workspaceIndex, workspaces.count - 1)].id
@@ -391,12 +361,10 @@ extension WorkspaceStore {
 	}
 	private func restoreNode(
 		_ node: PaneNode,
-		focusedPaneID: PaneID?,
 		paneSnapshotsBySessionID: [TerminalSessionID: SavedPaneSessionSnapshot],
 		launchConfigurationsBySessionID: inout [TerminalSessionID: TerminalLaunchConfiguration],
 		transcriptsBySessionID: inout [TerminalSessionID: String],
-		titlesBySessionID: inout [TerminalSessionID: String],
-		restoredFocusedPaneID: inout PaneID?
+		titlesBySessionID: inout [TerminalSessionID: String]
 	) -> PaneNode {
 		switch node {
 			case .leaf(let leaf):
@@ -411,9 +379,6 @@ extension WorkspaceStore {
 				if let title = paneSnapshot?.title {
 					titlesBySessionID[restoredLeaf.sessionID] = title
 				}
-				if leaf.id == focusedPaneID {
-					restoredFocusedPaneID = restoredLeaf.id
-				}
 				return .leaf(restoredLeaf)
 
 			case .split(let split):
@@ -423,21 +388,17 @@ extension WorkspaceStore {
 						fraction: split.fraction,
 						first: restoreNode(
 							split.first,
-							focusedPaneID: focusedPaneID,
 							paneSnapshotsBySessionID: paneSnapshotsBySessionID,
 							launchConfigurationsBySessionID: &launchConfigurationsBySessionID,
 							transcriptsBySessionID: &transcriptsBySessionID,
-							titlesBySessionID: &titlesBySessionID,
-							restoredFocusedPaneID: &restoredFocusedPaneID
+							titlesBySessionID: &titlesBySessionID
 						),
 						second: restoreNode(
 							split.second,
-							focusedPaneID: focusedPaneID,
 							paneSnapshotsBySessionID: paneSnapshotsBySessionID,
 							launchConfigurationsBySessionID: &launchConfigurationsBySessionID,
 							transcriptsBySessionID: &transcriptsBySessionID,
-							titlesBySessionID: &titlesBySessionID,
-							restoredFocusedPaneID: &restoredFocusedPaneID
+							titlesBySessionID: &titlesBySessionID
 						)
 					)
 				)

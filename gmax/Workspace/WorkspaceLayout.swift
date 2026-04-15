@@ -37,7 +37,6 @@ struct Workspace: Identifiable, Hashable, Codable {
 	var id = WorkspaceID()
 	var title: String
 	var root: PaneNode? = nil
-	var focusedPaneID: PaneID? = nil
 
 	var paneLeaves: [PaneLeaf] {
 		root?.leaves() ?? []

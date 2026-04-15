@@ -1263,7 +1263,6 @@ import Foundation
 
 @MainActor
 extension WorkspaceStore {
-    func focusPane(_ paneID: PaneID, in workspaceID: WorkspaceID)
     func splitPane(_ paneID: PaneID, in workspaceID: WorkspaceID, direction: SplitDirection)
     func closePane(_ paneID: PaneID, in workspaceID: WorkspaceID)
     func replaceSession(in paneID: PaneID, workspaceID: WorkspaceID, with sessionID: TerminalSessionID)
