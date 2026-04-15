@@ -76,7 +76,7 @@ struct ContentPaneLeafView: View {
 		}
 		.background(backgroundStyle)
 		.contentShape(Rectangle())
-		.focusedValue(\.closeFocusedPaneAction, isFocused ? onClose : nil)
+		.focusedValue(\.closeFocusedPane, isFocused ? onClose : nil)
 		.onTapGesture(perform: onFocus)
 		.accessibilityElement(children: .contain)
 		.accessibilityLabel(accessibilityLabel)

@@ -8,15 +8,24 @@
 import OSLog
 import SwiftUI
 
+extension FocusedValues {
+	@Entry var selectedWorkspaceSelection: Binding<WorkspaceID?>?
+	@Entry var openSavedWorkspaceLibrary: (() -> Void)?
+	@Entry var presentWorkspaceRename: ((WorkspaceID) -> Void)?
+	@Entry var presentWorkspaceDeletion: ((WorkspaceID) -> Void)?
+	@Entry var closeFocusedPane: (() -> Void)?
+	@Entry var closeEmptyWorkspace: (() -> Void)?
+}
+
 struct MainShellCommands: Commands {
 	@Environment(\.dismiss) private var dismiss
 	@FocusedObject private var shellModel: ShellModel?
 	@FocusedValue(\.selectedWorkspaceSelection) private var selectedWorkspaceSelection
-	@FocusedValue(\.openSavedWorkspaceLibraryAction) private var openSavedWorkspaceLibraryAction
-	@FocusedValue(\.presentWorkspaceRenameAction) private var presentWorkspaceRenameAction
-	@FocusedValue(\.presentWorkspaceDeletionAction) private var presentWorkspaceDeletionAction
-	@FocusedValue(\.closeFocusedPaneAction) private var closeFocusedPaneAction
-	@FocusedValue(\.closeEmptyWorkspaceAction) private var closeEmptyWorkspaceAction
+	@FocusedValue(\.openSavedWorkspaceLibrary) private var openSavedWorkspaceLibrary
+	@FocusedValue(\.presentWorkspaceRename) private var presentWorkspaceRename
+	@FocusedValue(\.presentWorkspaceDeletion) private var presentWorkspaceDeletion
+	@FocusedValue(\.closeFocusedPane) private var closeFocusedPane
+	@FocusedValue(\.closeEmptyWorkspace) private var closeEmptyWorkspace
 	private let diagnosticsLogger = Logger.gmax(.diagnostics)
 
 	var body: some Commands {
@@ -28,7 +37,9 @@ struct MainShellCommands: Commands {
 
 		CommandGroup(after: .newItem) {
 			Button("New Workspace") {
-				createWorkspace()
+				if let shellModel {
+					selectedWorkspaceSelection?.wrappedValue = shellModel.createWorkspace()
+				}
 			}
 			.keyboardShortcut("n", modifiers: [.command, .shift])
 			.disabled(shellModel == nil)
@@ -36,10 +47,10 @@ struct MainShellCommands: Commands {
 
 		CommandGroup(after: .newItem) {
 			Button("Open Workspace…") {
-				openSavedWorkspaceLibraryAction?()
+				openSavedWorkspaceLibrary?()
 			}
 			.keyboardShortcut("o", modifiers: [.command])
-			.disabled(openSavedWorkspaceLibraryAction == nil)
+			.disabled(openSavedWorkspaceLibrary == nil)
 		}
 
 		CommandGroup(replacing: .saveItem) {
@@ -59,43 +70,51 @@ struct MainShellCommands: Commands {
 
 		CommandMenu("Workspace") {
 			Button("Undo Close Workspace") {
-				undoCloseWorkspace()
+				if let shellModel {
+					selectedWorkspaceSelection?.wrappedValue = shellModel.undoCloseWorkspace()
+				}
 			}
 			.keyboardShortcut("o", modifiers: [.command, .shift])
 			.disabled(!(shellModel?.canUndoCloseWorkspace() ?? false))
 
 			Divider()
 
-			Button("Rename Workspace") {
-				guard let selectedWorkspaceID else {
-					return
+				Button("Rename Workspace") {
+					guard let selectedWorkspaceID else {
+						return
+					}
+					presentWorkspaceRename?(selectedWorkspaceID)
 				}
-				presentWorkspaceRenameAction?(selectedWorkspaceID)
-			}
-			.disabled(selectedWorkspaceID == nil || presentWorkspaceRenameAction == nil)
+				.disabled(selectedWorkspaceID == nil || presentWorkspaceRename == nil)
 
 			Button("Duplicate Workspace Layout") {
-				duplicateSelectedWorkspaceLayout()
+				guard let shellModel, let selectedWorkspaceID else {
+					return
+				}
+				selectedWorkspaceSelection?.wrappedValue = shellModel.duplicateWorkspace(selectedWorkspaceID)
 			}
 			.disabled(selectedWorkspaceID == nil || shellModel == nil)
 
 			Button("Close Workspace to Library") {
-				closeSelectedWorkspaceToLibrary()
+				guard let shellModel, let selectedWorkspaceID else {
+					return
+				}
+				selectedWorkspaceSelection?.wrappedValue = shellModel.closeWorkspaceToLibrary(selectedWorkspaceID)
 			}
-			.disabled(!canCloseWorkspace())
+			.disabled(selectedWorkspaceID == nil || shellModel == nil)
 
 			Button("Close Workspace") {
 				closeWorkspace()
 			}
 			.keyboardShortcut("w", modifiers: [.command, .option])
-			.disabled(!canCloseWorkspace())
+			.disabled(selectedWorkspaceID == nil || shellModel == nil)
 
-			Button("Delete Workspace", role: .destructive) {
-				guard let selectedWorkspaceID else {
-					return
+				Button("Delete Workspace", role: .destructive) {
+					guard let selectedWorkspaceID else {
+						return
+					}
+					presentWorkspaceDeletion?(selectedWorkspaceID)
 				}
-				presentWorkspaceDeletionAction?(selectedWorkspaceID)
-			}
 			.disabled(!canDeleteSelectedWorkspace())
 
 			Divider()
@@ -166,19 +185,11 @@ struct MainShellCommands: Commands {
 		selectedWorkspaceSelection?.wrappedValue
 	}
 
-	private func updateSelectedWorkspaceID(_ workspaceID: WorkspaceID?) {
-		selectedWorkspaceSelection?.wrappedValue = workspaceID
-	}
-
 	private func canDeleteSelectedWorkspace() -> Bool {
 		guard let shellModel, let selectedWorkspaceID else {
 			return false
 		}
 		return shellModel.canDeleteWorkspace(selectedWorkspaceID)
-	}
-
-	private func canCloseWorkspace() -> Bool {
-		selectedWorkspaceID != nil && shellModel != nil
 	}
 
 	private func canSplitFocusedPane() -> Bool {
@@ -194,74 +205,38 @@ struct MainShellCommands: Commands {
 		return workspace.root?.findPane(id: focusedPaneID) != nil
 	}
 
-	private func createWorkspace() {
-		guard let shellModel else {
-			return
-		}
-		updateSelectedWorkspaceID(shellModel.createWorkspace())
-	}
-
-	private func undoCloseWorkspace() {
-		guard let shellModel else {
-			return
-		}
-		updateSelectedWorkspaceID(shellModel.undoCloseWorkspace())
-	}
-
-	private func duplicateSelectedWorkspaceLayout() {
-		guard let shellModel, let selectedWorkspaceID else {
-			return
-		}
-		updateSelectedWorkspaceID(shellModel.duplicateWorkspace(selectedWorkspaceID))
-	}
-
-	private func closeSelectedWorkspaceToLibrary() {
-		guard let shellModel, let selectedWorkspaceID else {
-			return
-		}
-		updateSelectedWorkspaceID(shellModel.closeWorkspaceToLibrary(selectedWorkspaceID))
-	}
-
 	private func selectPreviousWorkspace() {
-		guard let shellModel else {
-			return
-		}
-
-		let workspaces = shellModel.workspaces
+		let workspaces = shellModel?.workspaces ?? []
 		guard !workspaces.isEmpty else {
-			updateSelectedWorkspaceID(nil)
+			selectedWorkspaceSelection?.wrappedValue = nil
 			return
 		}
 
 		guard let selectedWorkspaceID,
 			  let currentIndex = workspaces.firstIndex(where: { $0.id == selectedWorkspaceID }) else {
-			updateSelectedWorkspaceID(workspaces.last?.id)
+			selectedWorkspaceSelection?.wrappedValue = workspaces.last?.id
 			return
 		}
 
 		let previousIndex = (currentIndex - 1 + workspaces.count) % workspaces.count
-		updateSelectedWorkspaceID(workspaces[previousIndex].id)
+		selectedWorkspaceSelection?.wrappedValue = workspaces[previousIndex].id
 	}
 
 	private func selectNextWorkspace() {
-		guard let shellModel else {
-			return
-		}
-
-		let workspaces = shellModel.workspaces
+		let workspaces = shellModel?.workspaces ?? []
 		guard !workspaces.isEmpty else {
-			updateSelectedWorkspaceID(nil)
+			selectedWorkspaceSelection?.wrappedValue = nil
 			return
 		}
 
 		guard let selectedWorkspaceID,
 			  let currentIndex = workspaces.firstIndex(where: { $0.id == selectedWorkspaceID }) else {
-			updateSelectedWorkspaceID(workspaces.first?.id)
+			selectedWorkspaceSelection?.wrappedValue = workspaces.first?.id
 			return
 		}
 
 		let nextIndex = (currentIndex + 1) % workspaces.count
-		updateSelectedWorkspaceID(workspaces[nextIndex].id)
+		selectedWorkspaceSelection?.wrappedValue = workspaces[nextIndex].id
 	}
 
 	private func movePaneFocus(_ direction: PaneFocusDirection) {
@@ -296,22 +271,22 @@ struct MainShellCommands: Commands {
 	}
 
 	private var closeCommandTitle: String {
-		if closeFocusedPaneAction != nil {
+		if closeFocusedPane != nil {
 			return "Close Pane"
 		}
-		if closeEmptyWorkspaceAction != nil {
+		if closeEmptyWorkspace != nil {
 			return "Close Workspace"
 		}
 		return "Close Window"
 	}
 
 	private func closeActiveContext() {
-		if let closeFocusedPaneAction {
-			closeFocusedPaneAction()
+		if let closeFocusedPane {
+			closeFocusedPane()
 			return
 		}
-		if let closeEmptyWorkspaceAction {
-			closeEmptyWorkspaceAction()
+		if let closeEmptyWorkspace {
+			closeEmptyWorkspace()
 			return
 		}
 		dismiss()
@@ -332,6 +307,6 @@ struct MainShellCommands: Commands {
 		diagnosticsLogger.notice(
 			"Ran the close-workspace command from the active shell window. Next selected workspace ID: \(nextSelectedWorkspaceID?.rawValue.uuidString ?? "(none)", privacy: .public)"
 		)
-		updateSelectedWorkspaceID(nextSelectedWorkspaceID)
+		selectedWorkspaceSelection?.wrappedValue = nextSelectedWorkspaceID
 	}
 }

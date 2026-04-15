@@ -11,7 +11,7 @@ import SwiftUI
 @main
 struct gmaxApp: App {
 	init() {
-		UITestLaunchBehavior.applyIfNeeded()
+		UITestLaunchBehavior.resetStateIfNeeded()
 	}
 
 	var body: some Scene {
@@ -32,7 +32,7 @@ struct gmaxApp: App {
 }
 
 private struct MainShellWindowView: View {
-	@StateObject private var shellModel: ShellModel
+	@StateObject private var shellModel = ShellModel()
 	@State private var selectedWorkspaceID: WorkspaceID?
 	@State private var workspacePendingDeletionID: WorkspaceID?
 	@State private var workspacePendingRenameID: WorkspaceID?
@@ -46,23 +46,11 @@ private struct MainShellWindowView: View {
 	@State private var hasAppliedSceneState = false
 	private let diagnosticsLogger = Logger.gmax(.diagnostics)
 
-	private let sidebarColumnWidth: CGFloat = 220
-	private let contentColumnIdealWidth: CGFloat = 920
-	private let inspectorColumnMinimumWidth: CGFloat = 220
-	private let inspectorColumnIdealWidth: CGFloat = 260
-	private let inspectorColumnMaximumWidth: CGFloat = 340
-
-	init() {
-		let shellModel = ShellModel()
-		_shellModel = StateObject(wrappedValue: shellModel)
-		_selectedWorkspaceID = State(initialValue: shellModel.workspaces.first?.id)
-	}
-
 	var body: some View {
 		NavigationSplitView(columnVisibility: $columnVisibility) {
 			SidebarPane(
 				model: shellModel,
-				selection: workspaceSelection,
+				selection: $selectedWorkspaceID,
 				requestRenameWorkspace: { workspaceID in
 					presentWorkspaceRename(for: workspaceID)
 				},
@@ -70,23 +58,23 @@ private struct MainShellWindowView: View {
 					presentWorkspaceDeletionConfirmation(for: workspaceID)
 				}
 			)
-			.navigationSplitViewColumnWidth(sidebarColumnWidth)
+			.navigationSplitViewColumnWidth(220)
 		} detail: {
-			ContentPane(model: shellModel, selectedWorkspaceID: workspaceSelection)
-				.navigationSplitViewColumnWidth(min: 640, ideal: contentColumnIdealWidth)
+			ContentPane(model: shellModel, selectedWorkspaceID: $selectedWorkspaceID)
+				.navigationSplitViewColumnWidth(min: 640, ideal: 920)
 		}
 		.inspector(isPresented: $isInspectorVisible) {
-			DetailPane(model: shellModel, selectedWorkspaceID: workspaceSelection)
+			DetailPane(model: shellModel, selectedWorkspaceID: $selectedWorkspaceID)
 				.inspectorColumnWidth(
-					min: inspectorColumnMinimumWidth,
-					ideal: inspectorColumnIdealWidth,
-					max: inspectorColumnMaximumWidth
+					min: 220,
+					ideal: 260,
+					max: 340
 				)
 		}
 		.sheet(isPresented: $isSavedWorkspaceLibraryPresented) {
 			SavedWorkspaceLibrarySheet(
 				model: shellModel,
-				selectedWorkspaceID: workspaceSelection
+				selectedWorkspaceID: $selectedWorkspaceID
 			)
 		}
 		.alert(
@@ -118,14 +106,14 @@ private struct MainShellWindowView: View {
 			)
 		}
 		.focusedSceneObject(shellModel)
-		.focusedSceneValue(\.selectedWorkspaceSelection, workspaceSelection)
-		.focusedSceneValue(\.openSavedWorkspaceLibraryAction) {
+		.focusedSceneValue(\.selectedWorkspaceSelection, $selectedWorkspaceID)
+		.focusedSceneValue(\.openSavedWorkspaceLibrary) {
 			isSavedWorkspaceLibraryPresented = true
 		}
-		.focusedSceneValue(\.presentWorkspaceRenameAction) { workspaceID in
+		.focusedSceneValue(\.presentWorkspaceRename) { workspaceID in
 			presentWorkspaceRename(for: workspaceID)
 		}
-		.focusedSceneValue(\.presentWorkspaceDeletionAction) { workspaceID in
+		.focusedSceneValue(\.presentWorkspaceDeletion) { workspaceID in
 			presentWorkspaceDeletionConfirmation(for: workspaceID)
 		}
 		.toolbar {
@@ -184,7 +172,7 @@ private struct MainShellWindowView: View {
 			restoredSelectedWorkspaceID = newValue
 		}
 		.onChange(of: shellModel.workspaces.map(\.id.rawValue)) { _, _ in
-			normalizeSelectionAfterWorkspaceMutation()
+			selectedWorkspaceID = normalizedSelectedWorkspaceID(selectedWorkspaceID)
 		}
 		.onChange(of: isInspectorVisible) { _, newValue in
 			restoredInspectorVisible = newValue
@@ -221,15 +209,6 @@ private struct MainShellWindowView: View {
 		return workspace.root?.findPane(id: focusedPaneID) != nil
 	}
 
-	private var workspaceSelection: Binding<WorkspaceID?> {
-		Binding(
-			get: { selectedWorkspaceID },
-			set: { newValue in
-				selectedWorkspaceID = normalizedSelectedWorkspaceID(newValue)
-			}
-		)
-	}
-
 	private func applySceneStateIfNeeded() {
 		guard !hasAppliedSceneState else {
 			return
@@ -239,7 +218,7 @@ private struct MainShellWindowView: View {
 		let restoredSelection = restoredSelectedWorkspaceID
 			.flatMap(UUID.init(uuidString:))
 			.map { WorkspaceID(rawValue: $0) }
-		selectedWorkspaceID = normalizedSelectedWorkspaceID(restoredSelection ?? selectedWorkspaceID)
+		selectedWorkspaceID = normalizedSelectedWorkspaceID(restoredSelection ?? shellModel.workspaces.first?.id)
 		columnVisibility = restoredSidebarVisible ? .all : .doubleColumn
 		isInspectorVisible = restoredInspectorVisible
 		diagnosticsLogger.notice(
@@ -257,10 +236,6 @@ private struct MainShellWindowView: View {
 			return
 		}
 		shellModel.splitFocusedPane(in: selectedWorkspaceID, direction)
-	}
-
-	private func normalizeSelectionAfterWorkspaceMutation() {
-		selectedWorkspaceID = normalizedSelectedWorkspaceID(selectedWorkspaceID)
 	}
 
 	private func presentWorkspaceDeletionConfirmation(for workspaceID: WorkspaceID) {
@@ -301,7 +276,7 @@ private struct MainShellWindowView: View {
 			"Deleted a workspace after the active shell window confirmed the destructive action. Workspace ID: \(workspacePendingDeletionID.rawValue.uuidString, privacy: .public)"
 		)
 		self.workspacePendingDeletionID = nil
-		normalizeSelectionAfterWorkspaceMutation()
+		selectedWorkspaceID = normalizedSelectedWorkspaceID(selectedWorkspaceID)
 	}
 
 	private func presentWorkspaceRename(for workspaceID: WorkspaceID) {
@@ -382,5 +357,32 @@ private struct MainShellWindowView: View {
 			return workspaceID
 		}
 		return shellModel.workspaces.first?.id
+	}
+}
+
+private enum UITestLaunchBehavior {
+	private static let resetStateEnvironmentKey = "GMAX_UI_TEST_RESET_STATE"
+
+	static var isEnabled: Bool {
+		ProcessInfo.processInfo.environment[resetStateEnvironmentKey] == "1"
+	}
+
+	static func resetStateIfNeeded() {
+		guard isEnabled else {
+			return
+		}
+
+		let defaults = UserDefaults.standard
+		if let bundleIdentifier = Bundle.main.bundleIdentifier {
+			defaults.removePersistentDomain(forName: bundleIdentifier)
+		}
+		defaults.synchronize()
+
+		let storeURL = ShellPersistenceController.storeURL()
+		for cleanupURL in [storeURL, storeURL.appendingPathExtension("shm"), storeURL.appendingPathExtension("wal")] {
+			if FileManager.default.fileExists(atPath: cleanupURL.path) {
+				try? FileManager.default.removeItem(at: cleanupURL)
+			}
+		}
 	}
 }

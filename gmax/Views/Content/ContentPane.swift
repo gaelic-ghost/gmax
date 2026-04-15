@@ -61,7 +61,7 @@ struct ContentPane: View {
 			}
 			.navigationTitle(workspace.title)
 			.focusedSceneValue(
-				\.closeEmptyWorkspaceAction,
+				\.closeEmptyWorkspace,
 				workspace.root == nil
 					? {
 						selectedWorkspaceID = model.closeWorkspace(workspace.id)
