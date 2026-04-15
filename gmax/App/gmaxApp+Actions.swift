@@ -12,4 +12,6 @@ extension FocusedValues {
 	@Entry var openSavedWorkspaceLibraryAction: (() -> Void)?
 	@Entry var presentWorkspaceRenameAction: ((WorkspaceID) -> Void)?
 	@Entry var presentWorkspaceDeletionAction: ((WorkspaceID) -> Void)?
+	@Entry var closeFocusedPaneAction: (() -> Void)?
+	@Entry var closeEmptyWorkspaceAction: (() -> Void)?
 }

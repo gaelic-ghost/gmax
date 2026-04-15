@@ -9,11 +9,14 @@ import OSLog
 import SwiftUI
 
 struct MainShellCommands: Commands {
+	@Environment(\.dismiss) private var dismiss
 	@FocusedObject private var shellModel: ShellModel?
 	@FocusedValue(\.selectedWorkspaceSelection) private var selectedWorkspaceSelection
 	@FocusedValue(\.openSavedWorkspaceLibraryAction) private var openSavedWorkspaceLibraryAction
 	@FocusedValue(\.presentWorkspaceRenameAction) private var presentWorkspaceRenameAction
 	@FocusedValue(\.presentWorkspaceDeletionAction) private var presentWorkspaceDeletionAction
+	@FocusedValue(\.closeFocusedPaneAction) private var closeFocusedPaneAction
+	@FocusedValue(\.closeEmptyWorkspaceAction) private var closeEmptyWorkspaceAction
 	private let diagnosticsLogger = Logger.gmax(.diagnostics)
 
 	var body: some Commands {
@@ -45,6 +48,13 @@ struct MainShellCommands: Commands {
 			}
 			.keyboardShortcut("s", modifiers: [.command])
 			.disabled(selectedWorkspaceID == nil || shellModel == nil)
+
+			Divider()
+
+			Button(closeCommandTitle) {
+				closeActiveContext()
+			}
+			.keyboardShortcut("w", modifiers: [.command])
 		}
 
 		CommandMenu("Workspace") {
@@ -277,6 +287,28 @@ struct MainShellCommands: Commands {
 			"Requested that the selected workspace be saved to the workspace library from the active shell window. Workspace ID: \(selectedWorkspaceID.rawValue.uuidString, privacy: .public)"
 		)
 		_ = shellModel.saveWorkspaceToLibrary(selectedWorkspaceID)
+	}
+
+	private var closeCommandTitle: String {
+		if closeFocusedPaneAction != nil {
+			return "Close Pane"
+		}
+		if closeEmptyWorkspaceAction != nil {
+			return "Close Workspace"
+		}
+		return "Close Window"
+	}
+
+	private func closeActiveContext() {
+		if let closeFocusedPaneAction {
+			closeFocusedPaneAction()
+			return
+		}
+		if let closeEmptyWorkspaceAction {
+			closeEmptyWorkspaceAction()
+			return
+		}
+		dismiss()
 	}
 
 	private func closeWorkspace() {
