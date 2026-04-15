@@ -17,6 +17,10 @@ struct PaneLeafCard: View {
 	let onSplitDown: () -> Void
 	let onClose: () -> Void
 
+	private var terminalHostIdentity: String {
+		"\(pane.id.rawValue.uuidString)-\(session.relaunchGeneration)"
+	}
+
 	var body: some View {
 		ZStack(alignment: .topLeading) {
 			TerminalPaneRepresentable(
@@ -29,7 +33,9 @@ struct PaneLeafCard: View {
 				onSplitDown: onSplitDown,
 				onClose: onClose
 			)
-			.id(session.relaunchGeneration)
+			// The pane host must stay keyed to the actual pane leaf, not just relaunches,
+			// or SwiftUI can reuse a surviving sibling's coordinator after split collapse.
+			.id(terminalHostIdentity)
 			.background(.black)
 
 			if case .exited(let exitCode) = session.state {
