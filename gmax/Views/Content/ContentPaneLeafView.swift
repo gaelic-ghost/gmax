@@ -31,7 +31,7 @@ struct ContentPaneLeafView: View {
 			session.currentDirectory.flatMap { $0.isEmpty ? nil : "Directory \($0)" }
 		].compactMap(\.self).joined(separator: ". ")
 		ZStack(alignment: .topLeading) {
-			TerminalPaneRepresentable(
+			TerminalPaneView(
 				controller: controller,
 				session: session,
 				isFocused: isFocused,
@@ -132,6 +132,6 @@ struct ContentPaneLeafView: View {
 
 	private func restartShell() {
 		guard session.state != .running else { return }
-		controller.session.prepareForRelaunch()
+		session.prepareForRelaunch()
 	}
 }

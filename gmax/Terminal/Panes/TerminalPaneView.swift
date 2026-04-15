@@ -1,5 +1,5 @@
 //
-//  TerminalPaneRepresentable.swift
+//  TerminalPaneView.swift
 //  gmax
 //
 //  Created by Gale Williams on 4/6/26.
@@ -8,7 +8,7 @@
 import AppKit
 import SwiftUI
 
-struct TerminalPaneRepresentable: NSViewRepresentable {
+struct TerminalPaneView: NSViewRepresentable {
 	@AppStorage(TerminalAppearanceDefaults.fontNameKey)
 	private var terminalFontName = TerminalAppearance.fallback.fontName
 
@@ -31,7 +31,7 @@ struct TerminalPaneRepresentable: NSViewRepresentable {
 		Coordinator(controller: controller, onFocus: onFocus)
 	}
 
-	func makeNSView(context: Context) -> TerminalHostingContainerView {
+	func makeNSView(context: Context) -> TerminalPaneHostView {
 		let hostingView = context.coordinator.makeHostingView()
 		applyCurrentAppearance(to: hostingView)
 		hostingView.updateAccessibility(
@@ -45,7 +45,7 @@ struct TerminalPaneRepresentable: NSViewRepresentable {
 		return hostingView
 	}
 
-	func updateNSView(_ nsView: TerminalHostingContainerView, context: Context) {
+	func updateNSView(_ nsView: TerminalPaneHostView, context: Context) {
 		applyCurrentAppearance(to: nsView)
 		context.coordinator.update(hostingView: nsView, isFocused: isFocused)
 		nsView.updateAccessibility(
@@ -58,15 +58,15 @@ struct TerminalPaneRepresentable: NSViewRepresentable {
 		)
 	}
 
-	static func dismantleNSView(_ nsView: TerminalHostingContainerView, coordinator: Coordinator) {
+	static func dismantleNSView(_ nsView: TerminalPaneHostView, coordinator: Coordinator) {
 		coordinator.dismantle(hostingView: nsView)
 	}
 
-	private func applyCurrentAppearance(to hostingView: TerminalHostingContainerView) {
-		let appearance = TerminalAppearance.persisted(
+	private func applyCurrentAppearance(to hostingView: TerminalPaneHostView) {
+		let appearance = TerminalAppearance(
 			fontName: terminalFontName,
-			fontSize: terminalFontSize,
-			themeName: terminalThemeName
+			fontSize: max(10, min(terminalFontSize, 28)),
+			theme: TerminalTheme(rawValue: terminalThemeName) ?? .defaultTerminal
 		)
 		appearance.apply(to: hostingView.terminalView)
 		hostingView.onEffectiveAppearanceChange = { [weak terminalView = hostingView.terminalView] _ in

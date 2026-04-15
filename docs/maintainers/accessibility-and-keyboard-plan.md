@@ -142,7 +142,7 @@ The pane tree is a custom SwiftUI composition:
 
 - recursive split containers
 - custom draggable split dividers
-- pane cards that host `TerminalPaneRepresentable`
+- pane cards that host `TerminalPaneView`
 - pane focus driven by `ShellModel.focusedPaneID`
 - pane activation currently triggered mainly by click or commands
 
@@ -192,7 +192,7 @@ The pane tree is a custom SwiftUI composition:
 
 ### Current Shape
 
-`TerminalPaneRepresentable` hosts `LocalProcessTerminalView` inside `TerminalHostingContainerView`, and the hosted view becomes first responder when the pane is focused.
+`TerminalPaneView` hosts `LocalProcessTerminalView` inside `TerminalPaneHostView`, and the hosted view becomes first responder when the pane is focused.
 
 ### Plan
 

@@ -1,5 +1,5 @@
 //
-//  TerminalHostingContainerView.swift
+//  TerminalPaneHostView.swift
 //  gmax
 //
 //  Created by Gale Williams on 4/14/26.
@@ -14,7 +14,7 @@ struct TerminalAccessibilitySnapshot {
 	let help: String
 }
 
-final class TerminalHostingContainerView: NSView {
+final class TerminalPaneHostView: NSView {
 	let terminalView: LocalProcessTerminalView
 	var onEffectiveAppearanceChange: ((NSAppearance) -> Void)?
 	private var accessibilitySnapshot = TerminalAccessibilitySnapshot(label: "Shell terminal", value: "", help: "")

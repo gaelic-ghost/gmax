@@ -1,5 +1,5 @@
 //
-//  TerminalPaneRepresentable+Coordinator.swift
+//  TerminalPaneView+Coordinator.swift
 //  gmax
 //
 //  Created by Gale Williams on 4/14/26.
@@ -9,7 +9,7 @@ import AppKit
 import OSLog
 import SwiftTerm
 
-extension TerminalPaneRepresentable {
+extension TerminalPaneView {
 	@MainActor
 	final class Coordinator: NSObject, LocalProcessTerminalViewDelegate {
 		let controller: TerminalPaneController
@@ -20,7 +20,7 @@ extension TerminalPaneRepresentable {
 			self.onFocus = onFocus
 		}
 
-		func makeHostingView() -> TerminalHostingContainerView {
+		func makeHostingView() -> TerminalPaneHostView {
 			let terminalView = controller.terminalView(
 				for: controller.session.relaunchGeneration,
 				processDelegate: self,
@@ -28,19 +28,19 @@ extension TerminalPaneRepresentable {
 				clickAction: #selector(handleTerminalClick(_:))
 			)
 			controller.attach(terminalView: terminalView)
-			let hostingView = TerminalHostingContainerView(terminalView: terminalView)
+			let hostingView = TerminalPaneHostView(terminalView: terminalView)
 			startProcessIfNeeded(in: terminalView)
 			return hostingView
 		}
 
-		func update(hostingView: TerminalHostingContainerView, isFocused: Bool) {
+		func update(hostingView: TerminalPaneHostView, isFocused: Bool) {
 			startProcessIfNeeded(in: hostingView.terminalView)
 			if isFocused, hostingView.window?.firstResponder !== hostingView.terminalView {
 				hostingView.window?.makeFirstResponder(hostingView.terminalView)
 			}
 		}
 
-		func dismantle(hostingView: TerminalHostingContainerView) {
+		func dismantle(hostingView: TerminalPaneHostView) {
 			controller.detach(terminalView: hostingView.terminalView)
 		}
 

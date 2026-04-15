@@ -92,9 +92,12 @@ struct TerminalAppearance: Hashable {
 
 	static func availableFontOptions(fontManager: NSFontManager = .shared) -> [TerminalFontOption] {
 		let fixedPitchFonts = Set(fontManager.availableFontNames(with: .fixedPitchFontMask) ?? [])
-		let installedFonts = fontManager.availableFonts
-
-		let options = installedFonts
+		return [
+			TerminalFontOption(
+				id: TerminalAppearanceDefaults.systemMonospacedFontName,
+				displayName: "System Monospaced"
+			)
+		] + fontManager.availableFonts
 			.filter { fixedPitchFonts.contains($0) }
 			.compactMap { fontName -> TerminalFontOption? in
 				guard let font = NSFont(name: fontName, size: 13) else {
@@ -109,25 +112,6 @@ struct TerminalAppearance: Hashable {
 			.sorted { lhs, rhs in
 				lhs.displayName.localizedCaseInsensitiveCompare(rhs.displayName) == .orderedAscending
 			}
-
-		return [
-			TerminalFontOption(
-				id: TerminalAppearanceDefaults.systemMonospacedFontName,
-				displayName: "System Monospaced"
-			)
-		] + options
-	}
-
-	static func persisted(
-		fontName: String,
-		fontSize: Double,
-		themeName: String
-	) -> TerminalAppearance {
-		TerminalAppearance(
-			fontName: fontName,
-			fontSize: max(10, min(fontSize, 28)),
-			theme: TerminalTheme(rawValue: themeName) ?? .defaultTerminal
-		)
 	}
 
 	var resolvedFont: NSFont {

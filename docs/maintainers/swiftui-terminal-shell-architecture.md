@@ -678,7 +678,7 @@ final class TerminalPaneController: ObservableObject {
 And then:
 
 ```swift
-struct TerminalPaneRepresentable: NSViewRepresentable {
+struct TerminalPaneView: NSViewRepresentable {
     let controller: TerminalPaneController
     let isFocused: Bool
 
@@ -1092,7 +1092,7 @@ Sketch:
 import SwiftUI
 import AppKit
 
-struct TerminalPaneRepresentable: NSViewRepresentable {
+struct TerminalPaneView: NSViewRepresentable {
     let controller: TerminalPaneController
     let isFocused: Bool
     let theme: TerminalTheme
@@ -1101,11 +1101,11 @@ struct TerminalPaneRepresentable: NSViewRepresentable {
         Coordinator(controller: controller)
     }
 
-    func makeNSView(context: Context) -> TerminalHostingContainerView {
+    func makeNSView(context: Context) -> TerminalPaneHostView {
         context.coordinator.makeHostingView(theme: theme)
     }
 
-    func updateNSView(_ nsView: TerminalHostingContainerView, context: Context) {
+    func updateNSView(_ nsView: TerminalPaneHostView, context: Context) {
         context.coordinator.update(
             hostingView: nsView,
             isFocused: isFocused,
@@ -1127,14 +1127,14 @@ import AppKit
 
 final class Coordinator: NSObject {
     private let controller: TerminalPaneController
-    private weak var hostingView: TerminalHostingContainerView?
+    private weak var hostingView: TerminalPaneHostView?
 
     init(controller: TerminalPaneController) {
         self.controller = controller
     }
 
-    func makeHostingView(theme: TerminalTheme) -> TerminalHostingContainerView {
-        let hostingView = TerminalHostingContainerView(hostedView: controller.adapter.terminalView)
+    func makeHostingView(theme: TerminalTheme) -> TerminalPaneHostView {
+        let hostingView = TerminalPaneHostView(hostedView: controller.adapter.terminalView)
         controller.adapter.applyTheme(theme)
         controller.refreshConfiguration()
         self.hostingView = hostingView
@@ -1142,7 +1142,7 @@ final class Coordinator: NSObject {
     }
 
     func update(
-        hostingView: TerminalHostingContainerView,
+        hostingView: TerminalPaneHostView,
         isFocused: Bool,
         theme: TerminalTheme
     ) {
@@ -1165,7 +1165,7 @@ Sketch:
 ```swift
 import AppKit
 
-final class TerminalHostingContainerView: NSView {
+final class TerminalPaneHostView: NSView {
     let hostedView: NSView
 
     init(hostedView: NSView) {
@@ -1233,8 +1233,8 @@ Build the first terminal host/session layer with:
 3. `TerminalSessionRegistry`
 4. `PaneControllerStore`
 5. `TerminalPaneController`
-6. `TerminalPaneRepresentable`
-7. `TerminalHostingContainerView`
+6. `TerminalPaneView`
+7. `TerminalPaneHostView`
 
 Use the local-process backend first if the earliest product milestone is a local shell app.
 

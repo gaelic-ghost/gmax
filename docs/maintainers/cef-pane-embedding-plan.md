@@ -53,8 +53,8 @@ That is already how terminal panes work today:
 
 - `PaneLeaf`
 - `TerminalPaneController`
-- `TerminalPaneRepresentable`
-- `TerminalHostingContainerView`
+- `TerminalPaneView`
+- `TerminalPaneHostView`
 
 CEF fits the same structural shape well. The main change is not the pane tree. The main change is the hosted-surface backend and the bridge boundary.
 
@@ -362,7 +362,7 @@ Its responsibilities:
 - translate AppKit focus and visibility changes into browser-host signals
 - own teardown behavior so browser shutdown is deterministic
 
-This host view should be treated like `TerminalHostingContainerView`, but for a browser surface.
+This host view should be treated like `TerminalPaneHostView`, but for a browser surface.
 
 ## Focus Model
 
