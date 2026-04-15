@@ -60,10 +60,6 @@ struct MainShellSceneView: View {
 					max: inspectorColumnMaximumWidth
 				)
 		}
-		.windowCloseConfirmation(
-			requiresConfirmation: shellModel.requiresLastPaneCloseConfirmation,
-			isBypassingConfirmation: $bindableSceneContext.isBypassingLastPaneCloseConfirmation
-		)
 		.sheet(isPresented: $bindableSceneContext.isSavedWorkspaceLibraryPresented) {
 			SavedWorkspaceLibrarySheet(
 				model: shellModel,

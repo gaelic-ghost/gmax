@@ -17,7 +17,6 @@ final class MainShellSceneContext {
 	var workspacePendingDeletionID: WorkspaceID?
 	var workspacePendingRenameID: WorkspaceID?
 	var workspaceRenameTitleDraft = ""
-	var isBypassingLastPaneCloseConfirmation = false
 	var isSavedWorkspaceLibraryPresented = false
 	var columnVisibility: NavigationSplitViewVisibility
 	var isInspectorVisible: Bool

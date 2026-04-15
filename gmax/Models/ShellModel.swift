@@ -83,13 +83,6 @@ final class ShellModel: ObservableObject {
 		self.paneFocusHistoryByWorkspace = Self.initialFocusHistory(for: workspaces)
 	}
 
-	var requiresLastPaneCloseConfirmation: Bool {
-		guard let workspace = workspaces.first, workspaces.count == 1 else {
-			return false
-		}
-		return workspace.paneCount == 1
-	}
-
 	func normalizedWorkspaceSelection(_ workspaceID: WorkspaceID?) -> WorkspaceID? {
 		if let workspaceID, workspaces.contains(where: { $0.id == workspaceID }) {
 			return workspaceID
