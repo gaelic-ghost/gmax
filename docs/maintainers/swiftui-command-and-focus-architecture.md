@@ -2,402 +2,164 @@
 
 ## Purpose
 
-This document is the mandatory architecture note for any SwiftUI work in `gmax`.
+This note captures the current preferred command, focus, selection, and close-behavior defaults for `gmax`.
 
-Read this before proposing, implementing, or refactoring any SwiftUI command, focus, menu, toolbar, sheet, inspector, selection, or close behavior in this repository.
+Use it as a strong repo-local default, not as a substitute for current Apple documentation. If this note and the SwiftUI or AppKit docs appear to disagree, re-check the Apple docs first and update this note instead of treating it as infallible law.
 
-This note exists because the project previously drifted into custom routing and selection infrastructure that duplicated framework behavior, broke standard macOS affordances, and created cross-window bugs that SwiftUI and AppKit already know how to avoid.
+The main lesson from earlier cleanup work is simple: `gmax` got into trouble when it duplicated built-in scene, focus, and window behavior with custom routing layers. The goal of this note is to preserve that lesson without overstating what SwiftUI guarantees.
 
-The standing rule is simple:
+## Research Workflow
 
-- use SwiftUI and AppKit built-ins first
-- use the framework's documented channels before creating custom ones
-- do not build private routing systems, backchannels, or command buses when the frameworks already provide the mechanism
+Before relying on any rule in this note:
 
-## Non-Negotiable Rules
+- Prefer the Xcode MCP `DocumentationSearch` tool for current SwiftUI and AppKit API lookup.
+- Use Dash as a fallback or cross-check when local doc browsing is more convenient.
+- On this machine, the most relevant installed Apple Dash docsets are the generic Swift API reference (`ntiaiyxj-swift`), Objective-C API reference (`ntiaiyxj-objc`), and offline macOS set (`jtswqsfb`).
+- If neither local path answers the question clearly, use the official Apple documentation URLs linked at the end of this note.
 
-- Scene commands belong on scenes through `Scene.commands { ... }`.
-- App-specific top-level menus belong in `CommandMenu`.
-- Modifying built-in menu structure belongs in `CommandGroup`.
-- Use built-in command groups like `SidebarCommands`, `InspectorCommands`, and `ToolbarCommands` whenever they already match the product surface.
-- Keep the standard window-close command framework-owned. Do not replace or shadow the built-in `Close Window` command unless Apple documentation proves the built-in scene and focus model cannot meet the product requirement.
-- Window-close behavior stays standard unless there is a documented framework gap.
-- Presented views dismiss through the presenting context that owns them.
-- A sheet should dismiss before window-close behavior runs.
-- Scene-wide command context comes from `focusedSceneValue` or `focusedSceneObject`.
-- View-local command context comes from `focusedValue` or `focusedObject`.
-- Environment values flow down the hierarchy.
-- Preferences flow up to container views.
-- Bindings and closures are the normal parent/child coordination path.
-- Global or app-wide backchannels for per-window selection or focus are disallowed.
-- Before adding any custom routing layer, backchannel, coordinator, or command bus, exhaust the implicit behavior already provided by SwiftUI scenes, `focusedSceneValue`, `focusedValue`, and built-in scene command groups.
-- Any custom override of SwiftUI or AppKit command, focus, selection, sheet, toolbar, or close behavior requires a documented framework gap and Gale's approval first.
+## Current Default Model
 
-## What SwiftUI Already Provides
+- Put app-specific menu commands on the scene with `Scene.commands`.
+- Prefer built-in command groups like `SidebarCommands`, `InspectorCommands`, and `ToolbarCommands` when they already match the product surface.
+- Use `focusedSceneValue` or `focusedSceneObject` for command context that should remain available while the window scene is active.
+- Use `focusedValue` or `focusedObject` for command context that should only exist while a specific view or subtree is focused.
+- Use bindings, closures, and ordinary view state for normal parent-child coordination.
+- Use environment values for downward configuration and built-in actions like `dismiss`, `dismissWindow`, `openWindow`, and `openSettings`.
+- Use preferences only for child-to-container signals, especially layout or container-facing configuration.
+- Keep ordinary window close behavior framework-owned unless there is a concrete product need and a documented framework gap.
 
-### Scene Commands
+## How To Choose The Right Channel
 
-SwiftUI's command system is scene-based.
+### Scene command surface
 
-Apple's `Scene.commands(content:)` attaches command sets to a scene. That means menu-bar commands and key commands are defined at the scene boundary, not deep inside arbitrary child views.
+When a command belongs in the menu bar or keyboard-command surface for a window scene, define it on the scene through `Scene.commands`.
 
-Relevant surfaces:
+In `gmax`, that means [`gmax/Scenes/WorkspaceWindowGroup/NavigationSplitView/WorkspaceWindowSceneCommands.swift`](../../gmax/Scenes/WorkspaceWindowGroup/NavigationSplitView/WorkspaceWindowSceneCommands.swift) is the normal home for workspace-window command definitions.
 
-- `Scene.commands { ... }`
-- `Commands`
-- `CommandMenu`
-- `CommandGroup`
-- `CommandGroupPlacement`
-- built-in command groups like `SidebarCommands`, `InspectorCommands`, `ToolbarCommands`
+### Scene-wide command context
 
-What this means for `gmax`:
+Use `focusedSceneValue` or `focusedSceneObject` when the command should stay available as long as the window scene is active, regardless of which child view currently has keyboard focus.
 
-- `WorkspaceWindowSceneCommands` is the right home for app-specific workspace-window commands.
-- A pane view should not try to define scene menus directly.
-- A child view can influence commands by publishing context upward through SwiftUI's documented focus channels, not by inventing a private router.
+Good examples in `gmax`:
 
-### Focused Values
+- the selected workspace for the active window
+- scene-owned sheet or alert presentation actions
+- scene-owned rename, delete, or reopen context
 
-SwiftUI gives us two different focused-value channels, and the difference matters.
+This follows Apple's documented distinction that scene-focused values remain visible regardless of where focus sits inside the active scene.
 
-`focusedSceneValue` is for context that should be visible to scene commands as long as the scene is the active scene, regardless of which subview inside the scene currently has focus.
+### Focused-view command context
 
-Use this for scene-scoped state like:
+Use `focusedValue` or `focusedObject` when the command should only be available while a specific view or its descendants are focused.
 
-- the selected workspace in the active window
-- the active window's library-sheet presentation action
-- the active window's rename or delete workflow state
-- any other command context that should remain available while the scene is active
+Good examples in `gmax`:
 
-`focusedValue` is for context that should only exist when a specific view or one of its descendants has focus.
-
-Use this for view-specific actions like:
-
-- close the currently focused pane
-- split the currently focused pane
-- relaunch the currently focused terminal pane
-- any command that should only enable while a pane view is actually the focused part of the scene
-
-This is the key architectural distinction that must drive command design in `gmax`.
-
-If a command is about the active window regardless of focused subview, use `focusedSceneValue`.
-
-If a command is about the currently focused pane or control, use `focusedValue`.
-
-Do not collapse those two roles into a single custom scene object or app-wide model backchannel.
-
-### Environment
-
-Environment values flow down the view hierarchy.
-
-That is what the environment is for:
-
-- configuration
-- services
-- actions or values a container intentionally gives its descendants
-- framework state like `dismiss`, `openWindow`, `dismissWindow`, `scenePhase`, and so on
-
-Environment is not a general-purpose event bus and is not a replacement for command routing.
-
-Use environment when:
-
-- a parent or scene is configuring descendants
-- a built-in environment action like `dismiss` or `dismissWindow` already does the job
-- a custom environment value makes a real descendant-facing dependency explicit
-
-Do not use environment as a secret side channel to smuggle per-window selection state around the app.
-
-### Preferences
-
-Preferences flow up the view hierarchy to container views.
-
-That is what preferences are for:
-
-- child views reporting configuration needs upward
-- container-level decisions driven by descendant state
-- layout and presentation coordination where the container has to reconcile input from many descendants
-
-Preferences are not a replacement for scene commands or responder-style command routing.
-
-Use preferences when:
-
-- descendants need to communicate layout or container-facing configuration upward
-- a container view has to observe child-produced metadata
-
-Do not use preferences to build a private global action or selection system.
-
-### Bindings and Closures
-
-Bindings and closures are the ordinary composable SwiftUI coordination tools.
-
-They are usually the first choice when:
-
-- a parent view owns state
-- a child view edits or triggers changes to that state
-- the communication stays within a normal parent/child boundary
-
-This is the standard declarative composition path.
-
-When a parent presents a sheet or alert, the child should not invent a route that bypasses the parent. The presenting parent already owns the state that controls presentation and dismissal.
-
-## What AppKit Already Provides
-
-AppKit already owns several jobs that `gmax` should not reimplement.
-
-### Window Close Behavior
-
-AppKit already has the real close-window behavior:
-
-- `NSWindow.performClose(_:)`
-- `NSWindow.close()`
-- `NSWindowDelegate.windowShouldClose(_:)`
-
-The standard close command belongs to the window system. If `gmax` wants ordinary macOS `Close Window` behavior on `⌘W`, that should remain the framework-owned path.
-
-Do not route plain window close through:
-
-- a scene model
-- a workspace-selection object
-- a fake close-command abstraction
-- a custom app-global router
-
-Only intercept close when there is a concrete framework gap and the override is narrowly scoped.
-
-### Responder Chain and Validation
-
-AppKit already provides:
-
-- responder-chain action dispatch
-- menu validation
-- toolbar validation
-- window-level action dispatch
-
-If `gmax` ever needs true responder-style window validation beyond what SwiftUI commands can comfortably express, AppKit's responder and validation surfaces are the native escape hatch.
-
-That still does not justify inventing a separate pseudo-responder architecture.
-
-## Architecture Rules for `gmax`
-
-### 1. Keep Window Close Separate from Workspace and Pane Commands
-
-`Close Window` is not the same thing as `Close Workspace`.
-
-`Close Window`:
-
-- belongs to the standard window command surface
-- should preserve normal macOS behavior
-- should dismiss presented sheets before closing the window
-- should not mutate workspace state directly
-
-`Close Workspace`:
-
-- is an app-specific shell action
-- belongs in app-specific commands
-- should stay distinct from `Close Window`
-
-`Close Pane`:
-
-- is not a window command
-- is a pane-scoped app action
-- should be enabled only when a pane view is actually the focused part of the scene
-- should be driven from pane focus via `focusedValue`, not via app-global selection state
-
-Do not blur these three layers together.
-
-### 1A. Empty Workspaces Stay Local To The Content Pane
-
-In `gmax`, a workspace is rendered in the content pane of the three-column `NavigationSplitView`.
-
-That means the last-pane close path is:
-
+- split the focused pane
 - close the focused pane
-- leave the selected workspace behind as an explicit empty workspace
-- move focus to that empty-workspace content
-- let the content-pane workspace branch publish app-specific close-workspace context through `focusedSceneValue`
+- relaunch the focused pane
 
-Do not skip directly from "last pane closed" to "close the workspace" or "close the window."
+If the pane is not the focused part of the scene, the command should normally disable rather than guessing a target through an app-global backchannel.
 
-Do not add a custom scene router just to decide what `⌘W` means for an empty selected workspace. Start with the content-pane branch, focused values, and the built-in close command path first.
+### Parent-child coordination
 
-### 2. Keep Scene Context Scene-Local
+If the problem is just ordinary view composition, prefer bindings, closures, and direct state ownership over command infrastructure.
 
-Scene-local state is real and legitimate. `gmax` does need some per-window state.
+If the parent owns the presentation, selection, or mutation state already, the child should usually coordinate through that normal parent-child path instead of routing upward through a custom bus.
 
-Examples:
+### Child-to-container signals
 
-- selected workspace ID for that window
-- inspector visibility for that window
-- sidebar visibility for that window
-- sheet presentation state for that window
+Use preferences only when a descendant needs to report information upward to a container that reconciles or acts on it.
 
-That state should stay scene-local and explicit.
+This is the right tool for layout and container-facing metadata. It is not the default tool for command routing.
 
-What it must not become:
+### Built-in environment actions
 
-- a private command framework
-- a global selection authority
-- a fake responder chain
-- a proxy for focused subview state when `focusedValue` is the right API
-
-### 3. Do Not Rebuild Selection Systems
-
-SwiftUI already knows how to model selection through:
-
-- `List(selection:)`
-- `NavigationSplitView`
-- bindings
-- scene-local state
-
-An app-global selected-workspace model for a multi-window `WindowGroup` app is an architectural smell here.
-
-Per-window selection is scene-local.
-
-Per-focused-view context is focus-local.
-
-Do not recreate those roles as app-global state.
-
-### 4. Pane Commands Must Come from Focused Pane Context
-
-If a command is about the currently focused pane, the pane view should publish that capability through `focusedValue`.
-
-Examples of pane-scoped actions that should use focused values:
-
-- close focused pane
-- split focused pane
-- relaunch focused pane
-- copy pane-local metadata if that ever becomes a command
-
-The scene command surface can then read those actions through `@FocusedValue` and enable or disable menu items accordingly.
-
-That is the documented SwiftUI model.
-
-Do not substitute:
-
-- a selected workspace lookup
-- a model-global `focusedPane`
-- a scene object that guesses which pane should receive the action
-
-### 5. Presented Views Dismiss Themselves Through Their Presenter
-
-If a sheet is on screen, the first close action should be the sheet's dismissal, not some custom command path that tunnels past the presentation.
-
-Use:
-
-- the presenter's `isPresented` binding
-- `@Environment(\.dismiss)` inside the presented view when appropriate
-
-Do not:
-
-- manually reroute close commands through unrelated scene state first
-- close workspace state underneath a presented sheet
-- create app-global close infrastructure to compensate for a sheet that should already be dismissible
-
-## Standard Decision Tree
-
-Before adding any new SwiftUI command, focus, selection, toolbar, sheet, or close behavior, answer these questions in order.
-
-### Step 1. Is there already a built-in SwiftUI scene command or command group?
-
-Check:
-
-- `SidebarCommands`
-- `InspectorCommands`
-- `ToolbarCommands`
-- standard `CommandGroupPlacement` insertion or replacement points
-
-If yes, start there.
-
-### Step 2. Is this command scene-wide or focused-view-specific?
-
-If scene-wide:
-
-- use `focusedSceneValue` or `focusedSceneObject`
-
-If focused-view-specific:
-
-- use `focusedValue` or `focusedObject`
-
-Do not mix the two casually.
-
-### Step 3. Is this normal parent/child composition instead of command routing?
-
-If yes:
-
-- use bindings, closures, and ordinary SwiftUI state ownership
-
-Do not promote it into command infrastructure without a reason.
-
-### Step 4. Is this a child-to-container configuration signal?
-
-If yes:
-
-- use preferences
-
-### Step 5. Does the environment already provide the action or value?
-
-Check built-ins like:
+Before adding a custom command or action surface, check whether SwiftUI already provides the action through the environment:
 
 - `dismiss`
 - `dismissWindow`
 - `openWindow`
 - `openSettings`
 
-If yes, use them.
+If one of those already models the behavior, prefer it.
 
-### Step 6. Is this actually an AppKit job?
+### AppKit escape hatch
 
-If it belongs to:
+If the job really belongs to the responder chain, menu validation, toolbar validation, or window-delegate lifecycle, AppKit may be the correct primitive.
 
-- responder chain
-- menu validation
-- toolbar validation
-- window delegate lifecycle
-- window-level close semantics
+That is still different from inventing a parallel in-house responder or command system. Use the native AppKit surface directly before creating a custom abstraction.
 
-then AppKit may be the correct primitive.
+## Repo-Specific Defaults For `gmax`
 
-Use AppKit directly before inventing a SwiftUI-only imitation.
+These are preferences derived from current product shape, not universal SwiftUI laws:
 
-## Forbidden Patterns
+- Per-window workspace selection should stay scene-local rather than app-global.
+- Pane-targeted commands should prefer focused pane context over “current selection” guesses.
+- `Close Window`, `Close Workspace`, and `Close Pane` are different actions and should stay distinct.
+- A presented sheet or alert should normally dismiss through its presenter before any app-defined workspace mutation tries to happen underneath it.
+- Custom routing or close infrastructure should stay narrow and local when it is truly needed.
 
-The following patterns are disallowed in this repository unless this document is explicitly updated with a concrete framework gap and Gale approves the change first.
+## When Custom Infrastructure Is Acceptable
 
-- app-global selected-workspace state for a multi-window shell app
-- app-global focused-pane state used as a command backchannel
-- custom scene objects that act like controller frameworks or command buses
-- hand-built pseudo-responder chains
-- custom close-command pipelines for ordinary sheets and ordinary windows
-- fake routing layers that mirror SwiftUI focus or selection behavior
-- custom event handling meant to replace documented SwiftUI or AppKit command APIs
+Custom command, focus, or close infrastructure is acceptable only when all of the following are true:
 
-## Required Pre-Work for Future SwiftUI Changes
+1. The relevant SwiftUI or AppKit behavior has been checked in current Apple docs.
+2. The built-in surface leaves a concrete product gap in `gmax`.
+3. The narrower options were considered first.
+4. The custom path is documented as a local exception rather than a new general architecture.
+5. Gale approves the tradeoff.
 
-Before doing SwiftUI architecture work in `gmax`:
+When that happens, the write-up should say:
 
-1. Read this document.
-2. Read the relevant Apple documentation for the specific APIs being used.
-3. State which built-in SwiftUI or AppKit behavior you are relying on.
-4. If you believe a custom layer is required, document:
-   - which built-in API was considered
-   - why it is insufficient
-   - what concrete product need is blocked
-   - what maintenance cost the custom path adds
-5. Get Gale's approval before implementing that custom layer.
+- which Apple API was considered
+- what it does according to the docs
+- why it is insufficient here
+- what near-term use case the custom path unlocks
+- what maintenance cost we are accepting
 
-If those steps are not complete, do not build the custom path.
+## Practical Decision Checklist
 
-## References
+Before adding new command, focus, selection, toolbar, sheet, inspector, or close behavior:
 
-- Apple, `Scene.commands(content:)`
-- Apple, `CommandMenu`
-- Apple, `CommandGroup`
-- Apple, `CommandGroupPlacement`
-- Apple, `focusedSceneValue`
-- Apple, `focusedValue`
-- Apple, `EnvironmentValues`
-- Apple, `Preferences`
-- Apple, `WindowGroup`
-- Apple, `DismissAction`
-- Apple, `DismissWindowAction`
-- Apple, `NSWindow.performClose(_:)`
-- Apple, `NSWindowDelegate.windowShouldClose(_:)`
+1. Is there already a built-in scene command or command group that fits?
+2. Is the command scene-wide or focused-view-specific?
+3. Is this just ordinary parent-child composition?
+4. Is this a child-to-container signal?
+5. Does the environment already provide the action?
+6. Is this actually an AppKit job?
+7. If none of the above fit cleanly, what exact framework gap remains?
+
+## Apple References
+
+- `Scene.commands(content:)`
+  - <https://developer.apple.com/documentation/swiftui/scene/commands(content:)>
+- `Commands`
+  - <https://developer.apple.com/documentation/swiftui/commands>
+- `CommandMenu`
+  - <https://developer.apple.com/documentation/swiftui/commandmenu>
+- `CommandGroup`
+  - <https://developer.apple.com/documentation/swiftui/commandgroup>
+- `Building and customizing the menu bar with SwiftUI`
+  - <https://developer.apple.com/documentation/swiftui/building-and-customizing-the-menu-bar-with-swiftui>
+- `focusedSceneValue`
+  - <https://developer.apple.com/documentation/swiftui/view/focusedscenevalue(_:_:)-57boz>
+- `focusedSceneObject`
+  - <https://developer.apple.com/documentation/swiftui/view/focusedsceneobject(_:)-8ovym>
+- `focusedValue`
+  - <https://developer.apple.com/documentation/swiftui/view/focusedvalue(_:_:)-odf9>
+- `FocusedValue`
+  - <https://developer.apple.com/documentation/swiftui/focusedvalue>
+- `EnvironmentValues`
+  - <https://developer.apple.com/documentation/swiftui/environmentvalues>
+- `PreferenceKey`
+  - <https://developer.apple.com/documentation/swiftui/preferencekey>
+- `DismissAction`
+  - <https://developer.apple.com/documentation/swiftui/dismissaction>
+- `OpenWindowAction`
+  - <https://developer.apple.com/documentation/swiftui/openwindowaction>
+- `OpenSettingsAction`
+  - <https://developer.apple.com/documentation/swiftui/opensettingsaction>
+- `NSWindow.performClose(_:)`
+  - <https://developer.apple.com/documentation/appkit/nswindow/1419524-performclose>
+- `NSWindowDelegate.windowShouldClose(_:)`
+  - <https://developer.apple.com/documentation/appkit/nswindowdelegate/windowshouldclose(_)>
