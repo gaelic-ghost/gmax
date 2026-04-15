@@ -53,7 +53,9 @@ struct SidebarPane: View {
 	}
 
 	private var selectedWorkspace: Workspace? {
-		selection.flatMap(model.workspace(for:))
+		selection.flatMap { workspaceID in
+			model.workspaces.first(where: { $0.id == workspaceID })
+		}
 	}
 
 	@ViewBuilder

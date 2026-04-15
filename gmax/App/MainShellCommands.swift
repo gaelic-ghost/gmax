@@ -185,7 +185,13 @@ struct MainShellCommands: Commands {
 		guard let shellModel, let selectedWorkspaceID else {
 			return false
 		}
-		return shellModel.focusedPane(in: selectedWorkspaceID) != nil
+		guard
+			let workspace = shellModel.workspaces.first(where: { $0.id == selectedWorkspaceID }),
+			let focusedPaneID = workspace.focusedPaneID
+		else {
+			return false
+		}
+		return workspace.root?.findPane(id: focusedPaneID) != nil
 	}
 
 	private func createWorkspace() {

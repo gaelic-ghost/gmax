@@ -12,14 +12,19 @@ struct ContentPane: View {
 	@Binding var selectedWorkspaceID: WorkspaceID?
 
 	var body: some View {
-		if let workspace = selectedWorkspaceID.flatMap(model.workspace(for:)) {
+		if let workspace = selectedWorkspaceID.flatMap({ workspaceID in
+			model.workspaces.first(where: { $0.id == workspaceID })
+		}) {
 			Group {
 				if let root = workspace.root {
 					ContentPaneNodeView(
 						node: root,
 						focusedPaneID: workspace.focusedPaneID,
 						controllerForPane: { pane in
-							model.controller(for: pane)
+							model.paneControllers.controller(
+								for: pane,
+								session: model.sessions.ensureSession(id: pane.sessionID)
+							)
 						},
 						onUpdateSplitFraction: { splitID, fraction in
 							model.setSplitFraction(fraction, for: splitID, in: workspace.id)

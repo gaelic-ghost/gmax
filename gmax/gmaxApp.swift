@@ -12,7 +12,6 @@ import SwiftUI
 struct gmaxApp: App {
 	init() {
 		UITestLaunchBehavior.applyIfNeeded()
-		WorkspacePersistenceDefaults.registerDefaults()
 	}
 
 	var body: some Scene {
@@ -56,7 +55,7 @@ private struct MainShellWindowView: View {
 	init() {
 		let shellModel = ShellModel()
 		_shellModel = StateObject(wrappedValue: shellModel)
-		_selectedWorkspaceID = State(initialValue: shellModel.normalizedWorkspaceSelection(nil))
+		_selectedWorkspaceID = State(initialValue: shellModel.workspaces.first?.id)
 	}
 
 	var body: some View {
@@ -199,28 +198,34 @@ private struct MainShellWindowView: View {
 		guard let workspacePendingDeletionID else {
 			return nil
 		}
-		return shellModel.workspace(for: workspacePendingDeletionID)
+		return shellModel.workspaces.first(where: { $0.id == workspacePendingDeletionID })
 	}
 
 	private var pendingRenameWorkspace: Workspace? {
 		guard let workspacePendingRenameID else {
 			return nil
 		}
-		return shellModel.workspace(for: workspacePendingRenameID)
+		return shellModel.workspaces.first(where: { $0.id == workspacePendingRenameID })
 	}
 
 	private var canSplitFocusedPane: Bool {
 		guard let selectedWorkspaceID else {
 			return false
 		}
-		return shellModel.focusedPane(in: selectedWorkspaceID) != nil
+		guard
+			let workspace = shellModel.workspaces.first(where: { $0.id == selectedWorkspaceID }),
+			let focusedPaneID = workspace.focusedPaneID
+		else {
+			return false
+		}
+		return workspace.root?.findPane(id: focusedPaneID) != nil
 	}
 
 	private var workspaceSelection: Binding<WorkspaceID?> {
 		Binding(
 			get: { selectedWorkspaceID },
 			set: { newValue in
-				selectedWorkspaceID = shellModel.normalizedWorkspaceSelection(newValue)
+				selectedWorkspaceID = normalizedSelectedWorkspaceID(newValue)
 			}
 		)
 	}
@@ -234,9 +239,7 @@ private struct MainShellWindowView: View {
 		let restoredSelection = restoredSelectedWorkspaceID
 			.flatMap(UUID.init(uuidString:))
 			.map { WorkspaceID(rawValue: $0) }
-		selectedWorkspaceID = shellModel.normalizedWorkspaceSelection(
-			restoredSelection ?? selectedWorkspaceID
-		)
+		selectedWorkspaceID = normalizedSelectedWorkspaceID(restoredSelection ?? selectedWorkspaceID)
 		columnVisibility = restoredSidebarVisible ? .all : .doubleColumn
 		isInspectorVisible = restoredInspectorVisible
 		diagnosticsLogger.notice(
@@ -257,7 +260,7 @@ private struct MainShellWindowView: View {
 	}
 
 	private func normalizeSelectionAfterWorkspaceMutation() {
-		selectedWorkspaceID = shellModel.normalizedWorkspaceSelection(selectedWorkspaceID)
+		selectedWorkspaceID = normalizedSelectedWorkspaceID(selectedWorkspaceID)
 	}
 
 	private func presentWorkspaceDeletionConfirmation(for workspaceID: WorkspaceID) {
@@ -302,7 +305,7 @@ private struct MainShellWindowView: View {
 	}
 
 	private func presentWorkspaceRename(for workspaceID: WorkspaceID) {
-		guard let workspace = shellModel.workspace(for: workspaceID) else {
+		guard let workspace = shellModel.workspaces.first(where: { $0.id == workspaceID }) else {
 			diagnosticsLogger.notice(
 				"Skipped presenting the workspace rename sheet because the requested workspace no longer exists in the active shell window. Workspace ID: \(workspaceID.rawValue.uuidString, privacy: .public)"
 			)
@@ -372,5 +375,12 @@ private struct MainShellWindowView: View {
 				}
 			}
 		)
+	}
+
+	private func normalizedSelectedWorkspaceID(_ workspaceID: WorkspaceID?) -> WorkspaceID? {
+		if let workspaceID, shellModel.workspaces.contains(where: { $0.id == workspaceID }) {
+			return workspaceID
+		}
+		return shellModel.workspaces.first?.id
 	}
 }

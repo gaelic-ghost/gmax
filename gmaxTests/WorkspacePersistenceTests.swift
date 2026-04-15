@@ -88,7 +88,7 @@ struct WorkspacePersistenceTests {
 			)
 		)
 		let reopenedWorkspaceID = try #require(model.openSavedWorkspace(summary.id))
-		let reopenedWorkspace = try #require(model.workspace(for: reopenedWorkspaceID))
+		let reopenedWorkspace = try #require(model.workspaces.first(where: { $0.id == reopenedWorkspaceID }))
 		let reopenedRoot = try #require(reopenedWorkspace.root)
 		let reopenedLeaves = reopenedWorkspace.paneLeaves
 		let reopenedFocusedPath = try #require(
@@ -170,7 +170,7 @@ struct WorkspacePersistenceTests {
 		)
 
 		let reopenedWorkspaceID = try #require(model.openSavedWorkspace(summary.id))
-		let reopenedWorkspace = try #require(model.workspace(for: reopenedWorkspaceID))
+		let reopenedWorkspace = try #require(model.workspaces.first(where: { $0.id == reopenedWorkspaceID }))
 		let reopenedRoot = try #require(reopenedWorkspace.root)
 		let reopenedLeaves = reopenedWorkspace.paneLeaves
 		let reopenedFocusedPath = try #require(
@@ -216,7 +216,7 @@ struct WorkspacePersistenceTests {
 		)
 
 		let reopenedWorkspaceID = try #require(model.openSavedWorkspace(summary.id))
-		let reopenedWorkspace = try #require(model.workspace(for: reopenedWorkspaceID))
+		let reopenedWorkspace = try #require(model.workspaces.first(where: { $0.id == reopenedWorkspaceID }))
 		let reopenedPane = try #require(reopenedWorkspace.root?.firstLeaf())
 		let reopenedSession = try #require(model.sessions.session(for: reopenedPane.sessionID))
 
@@ -272,13 +272,13 @@ struct WorkspacePersistenceTests {
 		)
 
 		let firstReopenedWorkspaceID = try #require(model.openSavedWorkspace(summary.id))
-		_ = try #require(model.workspace(for: firstReopenedWorkspaceID))
+		_ = try #require(model.workspaces.first(where: { $0.id == firstReopenedWorkspaceID }))
 		model.splitFocusedPane(in: firstReopenedWorkspaceID, .right)
-		let mutatedFirstWorkspace = try #require(model.workspace(for: firstReopenedWorkspaceID))
+		let mutatedFirstWorkspace = try #require(model.workspaces.first(where: { $0.id == firstReopenedWorkspaceID }))
 		#expect(mutatedFirstWorkspace.paneCount == 4)
 
 		let secondReopenedWorkspaceID = try #require(model.openSavedWorkspace(summary.id))
-		let secondReopenedWorkspace = try #require(model.workspace(for: secondReopenedWorkspaceID))
+		let secondReopenedWorkspace = try #require(model.workspaces.first(where: { $0.id == secondReopenedWorkspaceID }))
 		let secondReopenedRoot = try #require(secondReopenedWorkspace.root)
 		let secondReopenedLeaves = secondReopenedWorkspace.paneLeaves
 
@@ -381,7 +381,7 @@ struct WorkspacePersistenceTests {
 		try context.save()
 
 		let reopenedWorkspaceID = try #require(model.openSavedWorkspace(summary.id))
-		let reopenedWorkspace = try #require(model.workspace(for: reopenedWorkspaceID))
+		let reopenedWorkspace = try #require(model.workspaces.first(where: { $0.id == reopenedWorkspaceID }))
 		let reopenedLeaves = reopenedWorkspace.paneLeaves
 		#expect(reopenedLeaves.count == 2)
 
@@ -408,17 +408,16 @@ struct WorkspacePersistenceTests {
 		)
 
 		let firstPane = try #require(firstWorkspace.root?.firstLeaf())
-		let outcome = model.closeWorkspaceToLibrary(
+		let nextSelectedWorkspaceID = model.closeWorkspaceToLibrary(
 			firstWorkspace.id,
 			transcriptsBySessionID: [firstPane.sessionID: "echo library-close\n"]
 		)
 
 		let snapshot = try #require(model.listSavedWorkspaceSnapshots().first)
 		let reopenedWorkspaceID = try #require(model.openSavedWorkspace(snapshot.id))
-		let reopenedWorkspace = try #require(model.workspace(for: reopenedWorkspaceID))
+		let reopenedWorkspace = try #require(model.workspaces.first(where: { $0.id == reopenedWorkspaceID }))
 
-		#expect(outcome.result == .closedWorkspace)
-		#expect(outcome.nextSelectedWorkspaceID == secondWorkspace.id)
+		#expect(nextSelectedWorkspaceID == secondWorkspace.id)
 		#expect(model.workspaces.count == 2)
 		#expect(reopenedWorkspace.title == "Workspace 1")
 	}

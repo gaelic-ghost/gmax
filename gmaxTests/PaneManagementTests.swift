@@ -24,10 +24,10 @@ struct PaneManagementTests {
 		originalSession.currentDirectory = "/tmp/nested-split"
 
 		model.splitFocusedPane(in: workspace.id, .right)
-		let firstInsertedPaneID = try #require(model.workspace(for: workspace.id)?.focusedPaneID)
+		let firstInsertedPaneID = try #require(model.workspaces.first(where: { $0.id == workspace.id })?.focusedPaneID)
 		model.splitFocusedPane(in: workspace.id, .down)
 
-		let updatedWorkspace = try #require(model.workspace(for: workspace.id))
+		let updatedWorkspace = try #require(model.workspaces.first(where: { $0.id == workspace.id }))
 		let root = try #require(updatedWorkspace.root)
 		let outerSplit = try #require(extractRootSplit(from: root))
 		let nestedSplit = try #require(extractRootSplit(from: outerSplit.second))
@@ -60,7 +60,7 @@ struct PaneManagementTests {
 
 		model.splitFocusedPane(in: workspace.id, .down)
 
-		let updatedWorkspace = try #require(model.workspace(for: workspace.id))
+		let updatedWorkspace = try #require(model.workspaces.first(where: { $0.id == workspace.id }))
 		let root = try #require(updatedWorkspace.root)
 		let split = try #require(extractRootSplit(from: root))
 		let firstLeaf = try #require(extractRootLeaf(from: split.first))
@@ -120,7 +120,7 @@ struct PaneManagementTests {
 
 		model.closePane(topRightPane.id, in: workspace.id)
 
-		let updatedWorkspace = try #require(model.workspace(for: workspace.id))
+		let updatedWorkspace = try #require(model.workspaces.first(where: { $0.id == workspace.id }))
 		let framePaneIDs = Set(model.paneFramesByWorkspace[workspace.id]?.map(\.key) ?? [])
 		#expect(updatedWorkspace.focusedPaneID == bottomRightPane.id)
 		#expect(updatedWorkspace.paneLeaves.map(\.id) == [leftPane.id, bottomRightPane.id])
@@ -129,7 +129,7 @@ struct PaneManagementTests {
 		#expect(model.paneFocusHistoryByWorkspace[workspace.id] == [leftPane.id, bottomRightPane.id])
 	}
 
-	@Test func closeFocusedPaneLeavesAnEmptyWorkspaceWhenItWasTheLastPane() throws {
+	@Test func closePaneLeavesAnEmptyWorkspaceWhenItWasTheLastPane() throws {
 		let workspace = TestSupport.makeWorkspace(title: "Workspace 1")
 		let model = ShellModel(
 			workspaces: [workspace],
@@ -141,11 +141,9 @@ struct PaneManagementTests {
 		_ = model.sessions.ensureSession(id: pane.sessionID)
 		model.updatePaneFrames([pane.id: CGRect(x: 0, y: 0, width: 400, height: 300)], in: workspace.id)
 
-		let outcome = model.closeFocusedPane(in: workspace.id)
-		let updatedWorkspace = try #require(model.workspace(for: workspace.id))
+		model.closePane(pane.id, in: workspace.id)
+		let updatedWorkspace = try #require(model.workspaces.first(where: { $0.id == workspace.id }))
 
-		#expect(outcome.result == .closedPane)
-		#expect(outcome.nextSelectedWorkspaceID == workspace.id)
 		#expect(updatedWorkspace.root == nil)
 		#expect(updatedWorkspace.focusedPaneID == nil)
 		#expect(updatedWorkspace.paneCount == 0)
@@ -164,11 +162,11 @@ struct PaneManagementTests {
 
 		let originalPane = try #require(workspace.root?.firstLeaf())
 		model.splitFocusedPane(in: workspace.id, .right)
-		let rightPaneID = try #require(model.workspace(for: workspace.id)?.focusedPaneID)
+		let rightPaneID = try #require(model.workspaces.first(where: { $0.id == workspace.id })?.focusedPaneID)
 		model.splitFocusedPane(in: workspace.id, .down)
-		let bottomRightPaneID = try #require(model.workspace(for: workspace.id)?.focusedPaneID)
+		let bottomRightPaneID = try #require(model.workspaces.first(where: { $0.id == workspace.id })?.focusedPaneID)
 		let bottomRightSessionID = try #require(
-			model.workspace(for: workspace.id)?.paneLeaves.first(where: { $0.id == bottomRightPaneID })?.sessionID
+			model.workspaces.first(where: { $0.id == workspace.id })?.paneLeaves.first(where: { $0.id == bottomRightPaneID })?.sessionID
 		)
 
 		model.focusPane(originalPane.id, in: workspace.id)
@@ -185,7 +183,7 @@ struct PaneManagementTests {
 
 		model.closePane(bottomRightPaneID, in: workspace.id)
 
-		let updatedWorkspace = try #require(model.workspace(for: workspace.id))
+		let updatedWorkspace = try #require(model.workspaces.first(where: { $0.id == workspace.id }))
 		let survivingLeaves = updatedWorkspace.paneLeaves
 		let framePaneIDs = Set(model.paneFramesByWorkspace[workspace.id]?.map(\.key) ?? [])
 
@@ -218,7 +216,7 @@ struct PaneManagementTests {
 
 		model.setSplitFraction(0.65, for: split.id, in: workspace.id)
 
-		let updatedWorkspace = try #require(model.workspace(for: workspace.id))
+		let updatedWorkspace = try #require(model.workspaces.first(where: { $0.id == workspace.id }))
 		let updatedSplit = try #require(updatedWorkspace.root.flatMap(extractRootSplit(from:)))
 		#expect(updatedSplit.fraction == 0.65)
 	}
@@ -253,10 +251,10 @@ struct PaneManagementTests {
 		)
 
 		model.movePaneFocus(.right, in: workspace.id)
-		#expect(model.workspace(for: workspace.id)?.focusedPaneID == rightPane.id)
+		#expect(model.workspaces.first(where: { $0.id == workspace.id })?.focusedPaneID == rightPane.id)
 
 		model.movePaneFocus(.left, in: workspace.id)
-		#expect(model.workspace(for: workspace.id)?.focusedPaneID == leftPane.id)
+		#expect(model.workspaces.first(where: { $0.id == workspace.id })?.focusedPaneID == leftPane.id)
 	}
 
 	@Test func movePaneFocusChoosesTheClosestCandidateInTheRequestedDirection() throws {
@@ -298,10 +296,10 @@ struct PaneManagementTests {
 		)
 
 		model.movePaneFocus(.right, in: workspace.id)
-		#expect(model.workspace(for: workspace.id)?.focusedPaneID == bottomRightPane.id)
+		#expect(model.workspaces.first(where: { $0.id == workspace.id })?.focusedPaneID == bottomRightPane.id)
 
 		model.movePaneFocus(.up, in: workspace.id)
-		#expect(model.workspace(for: workspace.id)?.focusedPaneID == topRightPane.id)
+		#expect(model.workspaces.first(where: { $0.id == workspace.id })?.focusedPaneID == topRightPane.id)
 	}
 }
 

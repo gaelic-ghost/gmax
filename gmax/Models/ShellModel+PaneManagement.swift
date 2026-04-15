@@ -15,12 +15,21 @@ import SwiftUI
 extension ShellModel {
 	@discardableResult
 	func createPane(in workspaceID: WorkspaceID) -> WorkspaceID? {
-		guard let workspace = workspace(for: workspaceID) else {
+		guard let workspaceIndex = workspaces.firstIndex(where: { $0.id == workspaceID }) else {
 			return nil
 		}
+		let workspace = workspaces[workspaceIndex]
 
 		if workspace.root == nil {
-			createInitialPane(in: workspace.id)
+			let pane = PaneLeaf()
+			workspaces[workspaceIndex].root = .leaf(pane)
+			workspaces[workspaceIndex].focusedPaneID = pane.id
+			_ = sessions.ensureSession(
+				id: pane.sessionID,
+				launchConfiguration: launchContextBuilder.makeLaunchConfiguration()
+			)
+			recordPaneFocus(pane.id, in: workspace.id)
+			schedulePersistenceSave()
 			return workspace.id
 		}
 
@@ -33,8 +42,11 @@ extension ShellModel {
 	}
 
 	func relaunchPane(_ paneID: PaneID, in workspaceID: WorkspaceID) {
-		guard let workspace = workspace(for: workspaceID),
-			  let pane = workspace.root?.findPane(id: paneID) else {
+		guard let workspaceIndex = workspaces.firstIndex(where: { $0.id == workspaceID }) else {
+			return
+		}
+		let workspace = workspaces[workspaceIndex]
+		guard let pane = workspace.root?.findPane(id: paneID) else {
 			paneLogger.error("The app was asked to relaunch a pane, but the target pane could not be resolved inside the selected workspace. The relaunch request was dropped before any shell state changed. Workspace ID: \(workspaceID.rawValue.uuidString, privacy: .public). Pane ID: \(paneID.rawValue.uuidString, privacy: .public)")
 			return
 		}
@@ -47,13 +59,13 @@ extension ShellModel {
 
 	func relaunchFocusedPane(in workspaceID: WorkspaceID) {
 		guard
-			let workspace = workspace(for: workspaceID),
-			let paneID = workspace.focusedPaneID
+			let workspaceIndex = workspaces.firstIndex(where: { $0.id == workspaceID }),
+			let paneID = workspaces[workspaceIndex].focusedPaneID
 		else {
 			return
 		}
 
-		relaunchPane(paneID, in: workspace.id)
+		relaunchPane(paneID, in: workspaces[workspaceIndex].id)
 	}
 
 	func focusPane(_ paneID: PaneID, in workspaceID: WorkspaceID) {
@@ -61,7 +73,7 @@ extension ShellModel {
 			return
 		}
 		guard let root = workspaces[workspaceIndex].root,
-			  root.containsPane(id: paneID)
+			  root.findPane(id: paneID) != nil
 		else {
 			return
 		}
@@ -108,32 +120,32 @@ extension ShellModel {
 
 	func splitFocusedPane(in workspaceID: WorkspaceID, _ direction: SplitDirection) {
 		guard
-			let workspace = workspace(for: workspaceID),
-			let paneID = workspace.focusedPaneID
+			let workspaceIndex = workspaces.firstIndex(where: { $0.id == workspaceID }),
+			let paneID = workspaces[workspaceIndex].focusedPaneID
 		else {
 			return
 		}
 
-		splitPane(paneID, in: workspace.id, direction: direction)
+		splitPane(paneID, in: workspaces[workspaceIndex].id, direction: direction)
 	}
 
 	func closePane(_ paneID: PaneID, in workspaceID: WorkspaceID) {
 		guard let workspaceIndex = workspaces.firstIndex(where: { $0.id == workspaceID }) else {
 			return
 		}
-		guard var root = workspaces[workspaceIndex].root else {
+		guard let root = workspaces[workspaceIndex].root else {
 			return
 		}
 
 		let priorLeaves = root.leaves()
 		let priorFocusedPaneID = workspaces[workspaceIndex].focusedPaneID
-
-		guard root.removePane(id: paneID) != nil else {
+		guard priorLeaves.contains(where: { $0.id == paneID }) else {
 			return
 		}
 
-		let survivingLeaves = root.leaves()
-		workspaces[workspaceIndex].root = survivingLeaves.isEmpty ? nil : root
+		let updatedRoot = root.removingPane(id: paneID)
+		let survivingLeaves = updatedRoot?.leaves() ?? []
+		workspaces[workspaceIndex].root = updatedRoot
 		removeUnreferencedSessions()
 
 		guard !survivingLeaves.isEmpty else {
@@ -157,32 +169,6 @@ extension ShellModel {
 		workspaces[workspaceIndex].focusedPaneID = survivingLeaves[fallbackIndex].id
 		recordPaneFocus(survivingLeaves[fallbackIndex].id, in: workspaceID)
 		schedulePersistenceSave()
-	}
-
-	func closeFocusedPane(in workspaceID: WorkspaceID) {
-		guard let workspace = workspace(for: workspaceID) else {
-			return
-		}
-
-		guard let focusedPaneID = workspace.focusedPaneID else {
-			return
-		}
-
-		if workspace.paneCount == 1 {
-			guard let workspaceIndex = workspaces.firstIndex(where: { $0.id == workspace.id }) else {
-				return
-			}
-
-			workspaces[workspaceIndex].root = nil
-			workspaces[workspaceIndex].focusedPaneID = nil
-			paneFramesByWorkspace.removeValue(forKey: workspace.id)
-			paneFocusHistoryByWorkspace.removeValue(forKey: workspace.id)
-			removeUnreferencedSessions()
-			schedulePersistenceSave()
-			return
-		}
-
-		closePane(focusedPaneID, in: workspace.id)
 	}
 
 	func movePaneFocus(_ direction: PaneFocusDirection, in workspaceID: WorkspaceID) {

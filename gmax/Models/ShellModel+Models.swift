@@ -30,73 +30,33 @@ extension Logger {
 // MARK: Typed wrappers for persisted workspace, pane, split, session, and snapshot IDs.
 
 struct WorkspaceID: RawRepresentable, Hashable, Codable, Identifiable {
-	var rawValue: UUID
+	var rawValue = UUID()
 
 	var id: UUID { rawValue }
-
-	nonisolated init(rawValue: UUID) {
-		self.rawValue = rawValue
-	}
-
-	nonisolated init() {
-		self.rawValue = UUID()
-	}
 }
 
 struct PaneID: RawRepresentable, Hashable, Codable, Identifiable {
-	var rawValue: UUID
+	var rawValue = UUID()
 
 	var id: UUID { rawValue }
-
-	nonisolated init(rawValue: UUID) {
-		self.rawValue = rawValue
-	}
-
-	nonisolated init() {
-		self.rawValue = UUID()
-	}
 }
 
 struct SplitID: RawRepresentable, Hashable, Codable, Identifiable {
-	var rawValue: UUID
+	var rawValue = UUID()
 
 	var id: UUID { rawValue }
-
-	nonisolated init(rawValue: UUID) {
-		self.rawValue = rawValue
-	}
-
-	nonisolated init() {
-		self.rawValue = UUID()
-	}
 }
 
 struct TerminalSessionID: RawRepresentable, Hashable, Codable, Identifiable {
-	var rawValue: UUID
+	var rawValue = UUID()
 
 	var id: UUID { rawValue }
-
-	nonisolated init(rawValue: UUID) {
-		self.rawValue = rawValue
-	}
-
-	nonisolated init() {
-		self.rawValue = UUID()
-	}
 }
 
 struct WorkspaceSnapshotID: RawRepresentable, Hashable, Codable, Identifiable {
-	var rawValue: UUID
+	var rawValue = UUID()
 
 	var id: UUID { rawValue }
-
-	nonisolated init(rawValue: UUID) {
-		self.rawValue = rawValue
-	}
-
-	nonisolated init() {
-		self.rawValue = UUID()
-	}
 }
 
 // MARK: - Workspace Commands
@@ -151,22 +111,10 @@ enum WorkspacePersistenceDefaults {
 // MARK: Persisted and in-memory workspace layout types used by the shell model.
 
 struct Workspace: Identifiable, Hashable, Codable {
-	var id: WorkspaceID
+	var id = WorkspaceID()
 	var title: String
-	var root: PaneNode?
-	var focusedPaneID: PaneID?
-
-	nonisolated init(
-		id: WorkspaceID = WorkspaceID(),
-		title: String,
-		root: PaneNode? = nil,
-		focusedPaneID: PaneID? = nil
-	) {
-		self.id = id
-		self.title = title
-		self.root = root
-		self.focusedPaneID = focusedPaneID
-	}
+	var root: PaneNode? = nil
+	var focusedPaneID: PaneID? = nil
 }
 
 extension Workspace {
@@ -175,7 +123,7 @@ extension Workspace {
 	}
 
 	nonisolated var paneCount: Int {
-		root?.paneCount() ?? 0
+		paneLeaves.count
 	}
 }
 
@@ -185,13 +133,8 @@ indirect enum PaneNode: Hashable, Codable {
 }
 
 struct PaneLeaf: Identifiable, Hashable, Codable {
-	var id: PaneID
-	var sessionID: TerminalSessionID
-
-	nonisolated init(id: PaneID = PaneID(), sessionID: TerminalSessionID = TerminalSessionID()) {
-		self.id = id
-		self.sessionID = sessionID
-	}
+	var id = PaneID()
+	var sessionID = TerminalSessionID()
 }
 
 struct PaneSplit: Hashable, Codable {
@@ -200,25 +143,11 @@ struct PaneSplit: Hashable, Codable {
 		case vertical
 	}
 
-	var id: SplitID
+	var id = SplitID()
 	var axis: Axis
 	var fraction: CGFloat
 	var first: PaneNode
 	var second: PaneNode
-
-	nonisolated init(
-		id: SplitID = SplitID(),
-		axis: Axis,
-		fraction: CGFloat,
-		first: PaneNode,
-		second: PaneNode
-	) {
-		self.id = id
-		self.axis = axis
-		self.fraction = fraction
-		self.first = first
-		self.second = second
-	}
 }
 
 struct SavedPaneSessionSnapshot: Hashable, Codable, Identifiable {
@@ -253,9 +182,4 @@ struct SavedWorkspaceSnapshot: Identifiable, Hashable, Codable {
 	var previewText: String?
 	var workspace: Workspace
 	var paneSnapshotsBySessionID: [TerminalSessionID: SavedPaneSessionSnapshot]
-}
-
-enum PaneRemovalResult {
-	case removedLeaf
-	case collapsedTo(PaneNode)
 }

@@ -12,15 +12,20 @@ struct DetailPane: View {
 	@Binding var selectedWorkspaceID: WorkspaceID?
 
 	var body: some View {
-		if let workspace = selectedWorkspaceID.flatMap(model.workspace(for:)),
-		   let pane = model.focusedPane(in: workspace.id),
+		if let workspace = selectedWorkspaceID.flatMap({ workspaceID in
+			model.workspaces.first(where: { $0.id == workspaceID })
+		}),
+		   let focusedPaneID = workspace.focusedPaneID,
+		   let pane = workspace.root?.findPane(id: focusedPaneID),
 		   let session = model.sessions.session(for: pane.sessionID) {
 			ActivePaneDetails(
 				workspaceTitle: workspace.title,
 				pane: pane,
 				session: session
 			)
-		} else if let workspace = selectedWorkspaceID.flatMap(model.workspace(for:)) {
+		} else if let workspace = selectedWorkspaceID.flatMap({ workspaceID in
+			model.workspaces.first(where: { $0.id == workspaceID })
+		}) {
 			WorkspaceDetails(
 				workspaceTitle: workspace.title,
 				paneCount: workspace.paneCount

@@ -99,7 +99,7 @@ struct WorkspaceLifecycleTests {
 		#expect(model.workspaces.count == 2)
 		#expect(reopenedWorkspaceID == firstWorkspace.id)
 
-		let reopenedWorkspace = try #require(model.workspace(for: firstWorkspace.id))
+		let reopenedWorkspace = try #require(model.workspaces.first(where: { $0.id == firstWorkspace.id }))
 		let reopenedPane = try #require(reopenedWorkspace.root?.firstLeaf())
 		let reopenedSession = try #require(model.sessions.session(for: reopenedPane.sessionID))
 		#expect(reopenedSession.currentDirectory == "/tmp/restored-workspace")
@@ -109,10 +109,9 @@ struct WorkspaceLifecycleTests {
 		let workspace = TestSupport.makeWorkspace(title: "Workspace 1")
 		let model = ShellModel(workspaces: [workspace])
 
-		let outcome = model.closeWorkspace(workspace.id)
+		let nextSelectedWorkspaceID = model.closeWorkspace(workspace.id)
 
-		#expect(outcome.result == .closedWorkspace)
-		#expect(outcome.nextSelectedWorkspaceID == nil)
+		#expect(nextSelectedWorkspaceID == nil)
 		#expect(model.workspaces.isEmpty)
 	}
 }

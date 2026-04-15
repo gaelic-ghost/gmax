@@ -24,7 +24,7 @@ struct PaneTreeMutationTests {
 
 		#expect(didSplit == false)
 		#expect(extractLeaf(from: root)?.id == existingPane.id)
-		#expect(root.paneCount() == 1)
+		#expect(root.leaves().count == 1)
 		#expect(extractLeaf(from: originalRoot)?.id == existingPane.id)
 	}
 
@@ -46,7 +46,7 @@ struct PaneTreeMutationTests {
 		#expect(split.fraction == 0.4)
 		#expect(extractLeaf(from: split.first)?.id == originalPane.id)
 		#expect(extractLeaf(from: split.second)?.id == insertedPane.id)
-		#expect(root.paneCount() == 2)
+		#expect(root.leaves().count == 2)
 	}
 
 	@Test func splitNestedLeafRewritesOnlyTheTargetBranch() throws {
@@ -83,7 +83,7 @@ struct PaneTreeMutationTests {
 	@Test func removePaneCollapsesTheParentToTheSurvivingSibling() throws {
 		let leftPane = PaneLeaf()
 		let rightPane = PaneLeaf()
-		var root = PaneNode.split(
+		let root = PaneNode.split(
 			PaneSplit(
 				axis: .horizontal,
 				fraction: 0.5,
@@ -92,12 +92,9 @@ struct PaneTreeMutationTests {
 			)
 		)
 
-		let result = root.removePane(id: rightPane.id)
-
-		let collapsedNode = try #require(extractCollapsedNode(from: result))
+		let collapsedNode = try #require(root.removingPane(id: rightPane.id))
 		#expect(extractLeaf(from: collapsedNode)?.id == leftPane.id)
-		#expect(extractLeaf(from: root)?.id == leftPane.id)
-		#expect(root.paneCount() == 1)
+		#expect(root.leaves().map(\.id) == [leftPane.id, rightPane.id])
 	}
 
 	@Test func removeNestedPaneCollapsesOnlyTheNestedBranch() throws {
@@ -120,19 +117,17 @@ struct PaneTreeMutationTests {
 			)
 		)
 
-		let result = root.removePane(id: topRightPane.id)
-
-		_ = try #require(extractCollapsedNode(from: result))
-		let outerSplit = try #require(extractSplit(from: root))
+		let updatedRoot = try #require(root.removingPane(id: topRightPane.id))
+		let outerSplit = try #require(extractSplit(from: updatedRoot))
 		#expect(extractLeaf(from: outerSplit.first)?.id == leftPane.id)
 		#expect(extractLeaf(from: outerSplit.second)?.id == bottomRightPane.id)
-		#expect(root.leaves().map(\.id) == [leftPane.id, bottomRightPane.id])
+		#expect(root.leaves().map(\.id) == [leftPane.id, topRightPane.id, bottomRightPane.id])
 	}
 
-	@Test func removePaneReturnsNilWhenThePaneDoesNotExist() throws {
+	@Test func removePaneReturnsTheOriginalTreeWhenThePaneDoesNotExist() throws {
 		let leftPane = PaneLeaf()
 		let rightPane = PaneLeaf()
-		let originalRoot = PaneNode.split(
+		var root = PaneNode.split(
 			PaneSplit(
 				axis: .horizontal,
 				fraction: 0.5,
@@ -140,16 +135,14 @@ struct PaneTreeMutationTests {
 				second: .leaf(rightPane)
 			)
 		)
-		var root = originalRoot
 
-		let result = root.removePane(id: PaneID())
+		let result = try #require(root.removingPane(id: PaneID()))
 
-		#expect(result == nil)
-		let resolvedSplit = try #require(extractSplit(from: root))
-		let expectedSplit = try #require(extractSplit(from: originalRoot))
-		#expect(resolvedSplit.id == expectedSplit.id)
-		#expect(resolvedSplit.axis == expectedSplit.axis)
-		#expect(resolvedSplit.fraction == expectedSplit.fraction)
+			let resultSplit = try #require(extractSplit(from: result))
+			let originalSplit = try #require(extractSplit(from: root))
+			#expect(resultSplit.id == originalSplit.id)
+			#expect(resultSplit.axis == originalSplit.axis)
+			#expect(resultSplit.fraction == originalSplit.fraction)
 		#expect(root.leaves().map(\.id) == [leftPane.id, rightPane.id])
 	}
 
@@ -220,14 +213,14 @@ struct PaneTreeMutationTests {
 			direction: .down,
 			newPane: insertedPane
 		)
-		let removalResult = root.removePane(id: secondPane.id)
+		let removalResult = root.removingPane(id: secondPane.id)
 
 		#expect(didSplit)
-		_ = try #require(extractCollapsedNode(from: removalResult))
-		let outerSplit = try #require(extractSplit(from: root))
+		let collapsedRoot = try #require(removalResult)
+		let outerSplit = try #require(extractSplit(from: collapsedRoot))
 		#expect(extractLeaf(from: outerSplit.first)?.id == firstPane.id)
 		#expect(extractLeaf(from: outerSplit.second)?.id == insertedPane.id)
-		#expect(root.leaves().map(\.id) == [firstPane.id, insertedPane.id])
+		#expect(collapsedRoot.leaves().map(\.id) == [firstPane.id, insertedPane.id])
 	}
 }
 
@@ -243,11 +236,4 @@ private func extractSplit(from node: PaneNode) -> PaneSplit? {
 		return nil
 	}
 	return split
-}
-
-private func extractCollapsedNode(from result: PaneRemovalResult?) -> PaneNode? {
-	guard case .collapsedTo(let node) = result else {
-		return nil
-	}
-	return node
 }

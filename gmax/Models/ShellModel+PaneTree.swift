@@ -30,25 +30,12 @@ extension PaneNode {
 		}
 	}
 
-	nonisolated func containsPane(id: PaneID) -> Bool {
-		findPane(id: id) != nil
-	}
-
 	nonisolated func firstLeaf() -> PaneLeaf? {
 		switch self {
 			case .leaf(let leaf):
 				return leaf
 			case .split(let split):
 				return split.first.firstLeaf() ?? split.second.firstLeaf()
-		}
-	}
-
-	nonisolated func lastLeaf() -> PaneLeaf? {
-		switch self {
-			case .leaf(let leaf):
-				return leaf
-			case .split(let split):
-				return split.second.lastLeaf() ?? split.first.lastLeaf()
 		}
 	}
 
@@ -104,37 +91,33 @@ extension PaneNode {
 		}
 	}
 
-	mutating func removePane(id: PaneID) -> PaneRemovalResult? {
+	nonisolated func removingPane(id: PaneID) -> PaneNode? {
 		switch self {
 			case .leaf(let leaf):
-				return leaf.id == id ? .removedLeaf : nil
+				return leaf.id == id ? nil : self
 
-			case .split(var split):
-				if let result = split.first.removePane(id: id) {
-					switch result {
-						case .removedLeaf:
-							self = split.second
-							return .collapsedTo(split.second)
-						case .collapsedTo(let node):
-							split.first = node
-							self = .split(split)
-							return .collapsedTo(self)
-					}
+			case .split(let split):
+				let first = split.first.removingPane(id: id)
+				let second = split.second.removingPane(id: id)
+
+				switch (first, second) {
+					case (nil, nil):
+						return nil
+					case (let remaining?, nil):
+						return remaining
+					case (nil, let remaining?):
+						return remaining
+					case (let first?, let second?):
+						return .split(
+							PaneSplit(
+								id: split.id,
+								axis: split.axis,
+								fraction: split.fraction,
+								first: first,
+								second: second
+							)
+						)
 				}
-
-				if let result = split.second.removePane(id: id) {
-					switch result {
-						case .removedLeaf:
-							self = split.first
-							return .collapsedTo(split.first)
-						case .collapsedTo(let node):
-							split.second = node
-							self = .split(split)
-							return .collapsedTo(self)
-					}
-				}
-
-				return nil
 		}
 	}
 
@@ -161,15 +144,6 @@ extension PaneNode {
 				}
 
 				return false
-		}
-	}
-
-	nonisolated func paneCount() -> Int {
-		switch self {
-			case .leaf:
-				return 1
-			case .split(let split):
-				return split.first.paneCount() + split.second.paneCount()
 		}
 	}
 }

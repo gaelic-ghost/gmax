@@ -15,14 +15,12 @@ import SwiftUI
 extension ShellModel {
 	@discardableResult
 	func createWorkspace() -> WorkspaceID {
-		let workspace = Self.makeDefaultWorkspace(
-			title: uniqueWorkspaceTitle(startingWith: "Workspace \(workspaces.count + 1)")
+		let pane = PaneLeaf()
+		let workspace = Workspace(
+			title: uniqueWorkspaceTitle(startingWith: "Workspace \(workspaces.count + 1)"),
+			root: .leaf(pane),
+			focusedPaneID: pane.id
 		)
-		guard let pane = workspace.root?.firstLeaf() else {
-			workspaces.append(workspace)
-			schedulePersistenceSave()
-			return workspace.id
-		}
 
 		workspaces.append(workspace)
 		_ = sessions.ensureSession(
@@ -70,7 +68,17 @@ extension ShellModel {
 	}
 
 	func closeWorkspace(_ workspaceID: WorkspaceID) -> WorkspaceID? {
-		removeWorkspace(workspaceID, closeEffects: defaultCloseEffects())
+		removeWorkspace(
+			workspaceID,
+			closeEffects: WorkspaceCloseEffects(
+				recordRecentlyClosed: UserDefaults.standard.bool(
+					forKey: WorkspacePersistenceDefaults.keepRecentlyClosedWorkspacesKey
+				),
+				saveToLibrary: UserDefaults.standard.bool(
+					forKey: WorkspacePersistenceDefaults.autoSaveClosedWorkspacesKey
+				)
+			)
+		)
 	}
 
 	func deleteWorkspace(_ workspaceID: WorkspaceID) {
@@ -107,7 +115,7 @@ extension ShellModel {
 			_ = sessions.ensureSession(id: leaf.sessionID, launchConfiguration: launchConfiguration)
 		}
 
-		updateRecentlyClosedWorkspaceCount()
+		recentlyClosedWorkspaceCount = recentlyClosedWorkspaces.count
 		workspaceLogger.notice("Reopened a recently closed workspace from the in-memory history stack. Workspace title: \(closedWorkspace.workspace.title, privacy: .public). Workspace ID: \(closedWorkspace.workspace.id.rawValue.uuidString, privacy: .public)")
 		schedulePersistenceSave()
 		return closedWorkspace.workspace.id
@@ -115,7 +123,7 @@ extension ShellModel {
 
 	func clearRecentlyClosedWorkspaces() {
 		recentlyClosedWorkspaces.removeAll()
-		updateRecentlyClosedWorkspaceCount()
+		recentlyClosedWorkspaceCount = 0
 		workspaceLogger.notice("Cleared the in-memory recently closed workspace stack for the current app session.")
 	}
 
@@ -128,7 +136,7 @@ extension ShellModel {
 		_ workspaceID: WorkspaceID,
 		transcriptsBySessionID: [TerminalSessionID: String] = [:]
 	) -> SavedWorkspaceSnapshotSummary? {
-		guard let workspace = workspace(for: workspaceID) else {
+		guard let workspace = workspaces.first(where: { $0.id == workspaceID }) else {
 			workspaceLogger.error("The app was asked to save a workspace to the library, but that workspace no longer exists in the current shell model. Workspace ID: \(workspaceID.rawValue.uuidString, privacy: .public)")
 			return nil
 		}
@@ -154,11 +162,12 @@ extension ShellModel {
 		_ workspaceID: WorkspaceID,
 		transcriptsBySessionID: [TerminalSessionID: String] = [:]
 	) -> WorkspaceID? {
-		let defaultEffects = defaultCloseEffects()
 		return removeWorkspace(
 			workspaceID,
 			closeEffects: WorkspaceCloseEffects(
-				recordRecentlyClosed: defaultEffects.recordRecentlyClosed,
+				recordRecentlyClosed: UserDefaults.standard.bool(
+					forKey: WorkspacePersistenceDefaults.keepRecentlyClosedWorkspacesKey
+				),
 				saveToLibrary: true
 			),
 			explicitTranscriptsBySessionID: transcriptsBySessionID
@@ -311,37 +320,6 @@ extension ShellModel {
 		}
 	}
 
-	static func makeDefaultWorkspace(title: String = "Workspace 1") -> Workspace {
-		let pane = PaneLeaf()
-		return Workspace(
-			title: title,
-			root: .leaf(pane),
-			focusedPaneID: pane.id
-		)
-	}
-
-	func createInitialPane(in workspaceID: WorkspaceID) {
-		guard let workspaceIndex = workspaces.firstIndex(where: { $0.id == workspaceID }) else {
-			return
-		}
-
-		let pane = PaneLeaf()
-		workspaces[workspaceIndex].root = .leaf(pane)
-		workspaces[workspaceIndex].focusedPaneID = pane.id
-		_ = sessions.ensureSession(
-			id: pane.sessionID,
-			launchConfiguration: launchContextBuilder.makeLaunchConfiguration()
-		)
-		recordPaneFocus(pane.id, in: workspaceID)
-		schedulePersistenceSave()
-	}
-
-	static func initialFocusHistory(for workspaces: [Workspace]) -> [WorkspaceID: [PaneID]] {
-		Dictionary(uniqueKeysWithValues: workspaces.map { workspace in
-			(workspace.id, [workspace.focusedPaneID].compactMap { $0 })
-		})
-	}
-
 	func schedulePersistenceSave() {
 		pendingPersistenceTask?.cancel()
 		let workspacesSnapshot = workspaces
@@ -399,17 +377,6 @@ extension ShellModel {
 		return nextSelectedWorkspaceID
 	}
 
-	func defaultCloseEffects(defaults: UserDefaults = .standard) -> WorkspaceCloseEffects {
-		WorkspaceCloseEffects(
-			recordRecentlyClosed: defaults.bool(
-				forKey: WorkspacePersistenceDefaults.keepRecentlyClosedWorkspacesKey
-			),
-			saveToLibrary: defaults.bool(
-				forKey: WorkspacePersistenceDefaults.autoSaveClosedWorkspacesKey
-			)
-		)
-	}
-
 	private func recordRecentlyClosedWorkspace(_ workspace: Workspace, formerIndex: Int) {
 		guard UserDefaults.standard.bool(forKey: WorkspacePersistenceDefaults.keepRecentlyClosedWorkspacesKey) else {
 			return
@@ -437,10 +404,6 @@ extension ShellModel {
 				recentlyClosedWorkspaces.count - WorkspacePersistenceDefaults.maxRecentlyClosedWorkspaceCount
 			)
 		}
-		updateRecentlyClosedWorkspaceCount()
-	}
-
-	private func updateRecentlyClosedWorkspaceCount() {
 		recentlyClosedWorkspaceCount = recentlyClosedWorkspaces.count
 	}
 
