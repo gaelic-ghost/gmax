@@ -157,7 +157,7 @@ struct MainShellCommands: Commands {
 		guard let sceneContext else {
 			return false
 		}
-		return sceneContext.selectedWorkspaceID != nil && sceneContext.shellModel.workspaces.count > 1
+		return sceneContext.selectedWorkspaceID != nil
 	}
 
 	private func canSplitFocusedPane(in sceneContext: MainShellSceneContext?) -> Bool {

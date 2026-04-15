@@ -364,10 +364,6 @@ extension ShellModel {
 			return CloseCommandOutcome(result: .noAction, nextSelectedWorkspaceID: nil)
 		}
 
-		if workspaces.count == 1 {
-			return CloseCommandOutcome(result: .closeWindow, nextSelectedWorkspaceID: nil)
-		}
-
 		let workspace = workspaces[workspaceIndex]
 		if closeEffects.saveToLibrary {
 			let resolvedTranscripts = snapshotTranscripts(

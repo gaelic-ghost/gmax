@@ -132,10 +132,18 @@ extension ShellModel {
 			return
 		}
 
-		workspaces[workspaceIndex].root = root
+		let survivingLeaves = root.leaves()
+		workspaces[workspaceIndex].root = survivingLeaves.isEmpty ? nil : root
 		removeUnreferencedSessions()
 
-		let survivingLeaves = workspaces[workspaceIndex].paneLeaves
+		guard !survivingLeaves.isEmpty else {
+			workspaces[workspaceIndex].focusedPaneID = nil
+			paneFramesByWorkspace.removeValue(forKey: workspaceID)
+			paneFocusHistoryByWorkspace.removeValue(forKey: workspaceID)
+			schedulePersistenceSave()
+			return
+		}
+
 		if let priorFocusedPaneID,
 		   survivingLeaves.contains(where: { $0.id == priorFocusedPaneID }) {
 			workspaces[workspaceIndex].focusedPaneID = priorFocusedPaneID
@@ -162,7 +170,17 @@ extension ShellModel {
 		}
 
 		if workspace.paneCount == 1 {
-			return removeWorkspace(workspace.id, closeEffects: defaultCloseEffects())
+			guard let workspaceIndex = workspaces.firstIndex(where: { $0.id == workspace.id }) else {
+				return CloseCommandOutcome(result: .noAction, nextSelectedWorkspaceID: normalizedWorkspaceSelection(workspaceID))
+			}
+
+			workspaces[workspaceIndex].root = nil
+			workspaces[workspaceIndex].focusedPaneID = nil
+			paneFramesByWorkspace.removeValue(forKey: workspace.id)
+			paneFocusHistoryByWorkspace.removeValue(forKey: workspace.id)
+			removeUnreferencedSessions()
+			schedulePersistenceSave()
+			return CloseCommandOutcome(result: .closedPane, nextSelectedWorkspaceID: workspace.id)
 		}
 
 		closePane(focusedPaneID, in: workspace.id)

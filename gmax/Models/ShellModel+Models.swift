@@ -119,7 +119,6 @@ enum PaneFocusDirection {
 enum CloseCommandResult {
 	case closedPane
 	case closedWorkspace
-	case closeWindow
 	case noAction
 }
 

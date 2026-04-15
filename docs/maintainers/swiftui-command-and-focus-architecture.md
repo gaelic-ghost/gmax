@@ -20,6 +20,7 @@ The standing rule is simple:
 - App-specific top-level menus belong in `CommandMenu`.
 - Modifying built-in menu structure belongs in `CommandGroup`.
 - Use built-in command groups like `SidebarCommands`, `InspectorCommands`, and `ToolbarCommands` whenever they already match the product surface.
+- Keep the standard window-close command framework-owned. Do not replace or shadow the built-in `Close Window` command unless Apple documentation proves the built-in scene and focus model cannot meet the product requirement.
 - Window-close behavior stays standard unless there is a documented framework gap.
 - Presented views dismiss through the presenting context that owns them.
 - A sheet should dismiss before window-close behavior runs.
@@ -29,6 +30,7 @@ The standing rule is simple:
 - Preferences flow up to container views.
 - Bindings and closures are the normal parent/child coordination path.
 - Global or app-wide backchannels for per-window selection or focus are disallowed.
+- Before adding any custom routing layer, backchannel, coordinator, or command bus, exhaust the implicit behavior already provided by SwiftUI scenes, view focus, local command handlers, and AppKit responder-chain dispatch.
 - Any custom override of SwiftUI or AppKit command, focus, selection, sheet, toolbar, or close behavior requires a documented framework gap and Gale's approval first.
 
 ## What SwiftUI Already Provides
@@ -199,8 +201,24 @@ That still does not justify inventing a separate pseudo-responder architecture.
 - is a pane-scoped app action
 - should be enabled only when a pane view is actually the focused part of the scene
 - should be driven from pane focus via `focusedValue`, not via app-global selection state
+- may also be handled locally by the focused pane view through built-in command handling when that keeps the behavior self-contained and avoids scene-level routing
 
 Do not blur these three layers together.
+
+### 1A. Empty Workspaces Stay Local To The Content Pane
+
+In `gmax`, a workspace is rendered in the content pane of the three-column `NavigationSplitView`.
+
+That means the last-pane close path is:
+
+- close the focused pane
+- leave the selected workspace behind as an explicit empty workspace
+- move focus to that empty-workspace content
+- let that empty-workspace content handle app-specific close behavior for the selected workspace
+
+Do not skip directly from "last pane closed" to "close the workspace" or "close the window."
+
+Do not add a custom scene router just to decide what `⌘W` means for an empty selected workspace. Start with local view behavior and the built-in close command path first.
 
 ### 2. Keep Scene Context Scene-Local
 

@@ -5,6 +5,7 @@
 //  Created by Gale Williams on 4/14/26.
 //
 
+import AppKit
 import SwiftUI
 
 struct PaneLeafCard: View {
@@ -71,6 +72,12 @@ struct PaneLeafCard: View {
 		.background(backgroundStyle)
 		.contentShape(Rectangle())
 		.onTapGesture(perform: onFocus)
+		.onCommand(#selector(NSWindow.performClose(_:))) {
+			guard isFocused else {
+				return
+			}
+			onClose()
+		}
 		.accessibilityElement(children: .contain)
 		.accessibilityLabel(accessibilityLabel)
 		.accessibilityValue(accessibilityValue)

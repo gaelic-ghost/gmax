@@ -129,6 +129,31 @@ struct PaneManagementTests {
 		#expect(model.paneFocusHistoryByWorkspace[workspace.id] == [leftPane.id, bottomRightPane.id])
 	}
 
+	@Test func closeFocusedPaneLeavesAnEmptyWorkspaceWhenItWasTheLastPane() throws {
+		let workspace = TestSupport.makeWorkspace(title: "Workspace 1")
+		let model = ShellModel(
+			workspaces: [workspace],
+			persistence: .inMemoryForTesting(),
+			launchContextBuilder: TestSupport.makeLaunchContextBuilder(defaultCurrentDirectory: "/tmp/gmax-tests")
+		)
+
+		let pane = try #require(workspace.root?.firstLeaf())
+		_ = model.sessions.ensureSession(id: pane.sessionID)
+		model.updatePaneFrames([pane.id: CGRect(x: 0, y: 0, width: 400, height: 300)], in: workspace.id)
+
+		let outcome = model.closeFocusedPane(in: workspace.id)
+		let updatedWorkspace = try #require(model.workspace(for: workspace.id))
+
+		#expect(outcome.result == .closedPane)
+		#expect(outcome.nextSelectedWorkspaceID == workspace.id)
+		#expect(updatedWorkspace.root == nil)
+		#expect(updatedWorkspace.focusedPaneID == nil)
+		#expect(updatedWorkspace.paneCount == 0)
+		#expect(model.sessions.session(for: pane.sessionID) == nil)
+		#expect(model.paneFramesByWorkspace[workspace.id] == nil)
+		#expect(model.paneFocusHistoryByWorkspace[workspace.id] == nil)
+	}
+
 	@Test func closingTheFocusedPaneAfterMultipleSplitsPrefersTheMostRecentSurvivingFocus() throws {
 		let workspace = TestSupport.makeWorkspace(title: "Workspace 1")
 		let model = ShellModel(

@@ -88,7 +88,6 @@ struct SidebarPane: View {
 					selection = model.closeWorkspaceToLibrary(workspace.id).nextSelectedWorkspaceID
 				}
 			}
-		.disabled(model.workspaces.count == 1)
 
 		Divider()
 
@@ -98,7 +97,6 @@ struct SidebarPane: View {
 					selection = model.closeWorkspace(workspace.id).nextSelectedWorkspaceID
 				}
 			}
-		.disabled(model.workspaces.count == 1)
 
 		Button("Delete Workspace", role: .destructive) {
 			requestDeleteWorkspace(workspace.id)
@@ -127,7 +125,6 @@ struct SidebarPane: View {
 				selection = model.closeWorkspaceToLibrary(workspace.id).nextSelectedWorkspaceID
 			}
 		}
-		.disabled(model.workspaces.count == 1)
 
 		Divider()
 

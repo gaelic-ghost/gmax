@@ -104,4 +104,15 @@ struct WorkspaceLifecycleTests {
 		let reopenedSession = try #require(model.sessions.session(for: reopenedPane.sessionID))
 		#expect(reopenedSession.currentDirectory == "/tmp/restored-workspace")
 	}
+
+	@Test func closeWorkspaceRemovesTheLastWorkspaceWithoutAskingToCloseTheWindow() {
+		let workspace = TestSupport.makeWorkspace(title: "Workspace 1")
+		let model = ShellModel(workspaces: [workspace])
+
+		let outcome = model.closeWorkspace(workspace.id)
+
+		#expect(outcome.result == .closedWorkspace)
+		#expect(outcome.nextSelectedWorkspaceID == nil)
+		#expect(model.workspaces.isEmpty)
+	}
 }

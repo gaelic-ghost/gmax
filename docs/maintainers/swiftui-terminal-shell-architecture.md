@@ -335,7 +335,6 @@ The current preferred shortcut model is:
 - `cmd-shift-o`: `Undo Close Workspace`
 - `cmd-w`: contextual `Close`
 - `cmd-option-w`: `Close Workspace`
-- `cmd-shift-w`: `Close Window`
 - `cmd-t`: `New Pane`
 - `cmd-d`: `Split Right`
 - `cmd-shift-d`: `Split Down`
@@ -1769,9 +1768,9 @@ Recommended first-pass shape:
 - sort order
 - optional root-node relationship so an empty workspace is representable
 
-That optional root relationship should be treated as a recovery and extensibility seam, not as the primary day-to-day workspace state.
+That optional root relationship should be treated as a real product state, not just a recovery seam.
 
-Normal user flows should still prefer creating workspaces with an initial pane and collapsing the last pane into workspace or window close behavior instead of leaving behind empty layouts. The shell UI should nevertheless handle an empty workspace intentionally because the model and persistence layer already admit that shape, restore or migration paths can encounter it, and future features may legitimately clear or rebuild a workspace before the first replacement pane exists.
+Normal user flows should still prefer creating workspaces with an initial pane, but closing the last pane in a selected workspace should leave that workspace behind as an explicit empty workspace. The shell UI should render that empty state intentionally in the content pane, because the model and persistence layer already admit that shape, restore or migration paths can encounter it, and the close-command model is simpler when pane close, workspace close, and window close remain distinct lifecycle steps.
 
 `PaneNodeEntity` stores:
 

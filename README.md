@@ -164,9 +164,8 @@ The current shell exposes a command-first keyboard model across the `File`, `Wor
 - `cmd-shift-d`: split the focused pane downward
 - `cmd-option-left/right/up/down`: move focus directionally
 - `cmd-option-[` and `cmd-option-]`: move focus in pane order
-- `cmd-w`: close the focused pane, then close the workspace if it was the last pane, then close the window if it was the last workspace
+- `cmd-w`: close the focused pane when a pane is focused, close the selected empty workspace when the empty-workspace content is focused, otherwise use the standard window close command
 - `cmd-option-w`: close the selected workspace directly
-- `cmd-shift-w`: close the current window directly
 
 ## Status
 
