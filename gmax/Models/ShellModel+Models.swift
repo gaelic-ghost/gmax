@@ -116,17 +116,6 @@ enum PaneFocusDirection {
 	case down
 }
 
-enum CloseCommandResult {
-	case closedPane
-	case closedWorkspace
-	case noAction
-}
-
-struct CloseCommandOutcome {
-	let result: CloseCommandResult
-	let nextSelectedWorkspaceID: WorkspaceID?
-}
-
 enum WorkspacePersistenceDefaults {
 	static let restoreWorkspacesOnLaunchKey = "workspacePersistence.restoreOnLaunch"
 	static let keepRecentlyClosedWorkspacesKey = "workspacePersistence.keepRecentlyClosed"

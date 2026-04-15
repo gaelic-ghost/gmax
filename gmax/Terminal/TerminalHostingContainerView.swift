@@ -37,6 +37,9 @@ final class TerminalHostingContainerView: NSView {
 
 	private func setup() {
 		wantsLayer = true
+		if terminalView.superview !== self {
+			terminalView.removeFromSuperview()
+		}
 		terminalView.translatesAutoresizingMaskIntoConstraints = false
 		addSubview(terminalView)
 

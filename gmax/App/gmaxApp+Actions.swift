@@ -36,6 +36,4 @@ final class MainShellSceneContext {
 
 extension FocusedValues {
 	@Entry var mainShellSceneContext: MainShellSceneContext?
-	@Entry var closePaneCommand: (() -> Void)?
-	@Entry var closeWorkspaceCommand: (() -> Void)?
 }

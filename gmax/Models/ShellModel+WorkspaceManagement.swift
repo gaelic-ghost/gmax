@@ -69,7 +69,7 @@ extension ShellModel {
 		workspaces.count > 1 && workspaces.contains(where: { $0.id == workspaceID })
 	}
 
-	func closeWorkspace(_ workspaceID: WorkspaceID) -> CloseCommandOutcome {
+	func closeWorkspace(_ workspaceID: WorkspaceID) -> WorkspaceID? {
 		removeWorkspace(workspaceID, closeEffects: defaultCloseEffects())
 	}
 
@@ -153,7 +153,7 @@ extension ShellModel {
 	func closeWorkspaceToLibrary(
 		_ workspaceID: WorkspaceID,
 		transcriptsBySessionID: [TerminalSessionID: String] = [:]
-	) -> CloseCommandOutcome {
+	) -> WorkspaceID? {
 		let defaultEffects = defaultCloseEffects()
 		return removeWorkspace(
 			workspaceID,
@@ -359,9 +359,9 @@ extension ShellModel {
 		_ workspaceID: WorkspaceID,
 		closeEffects: WorkspaceCloseEffects,
 		explicitTranscriptsBySessionID: [TerminalSessionID: String] = [:]
-	) -> CloseCommandOutcome {
+	) -> WorkspaceID? {
 		guard let workspaceIndex = workspaces.firstIndex(where: { $0.id == workspaceID }) else {
-			return CloseCommandOutcome(result: .noAction, nextSelectedWorkspaceID: nil)
+			return nil
 		}
 
 		let workspace = workspaces[workspaceIndex]
@@ -396,10 +396,7 @@ extension ShellModel {
 
 		workspaceLogger.notice("Closed a workspace from the live shell. Workspace title: \(workspace.title, privacy: .public). Workspace ID: \(workspace.id.rawValue.uuidString, privacy: .public). Recorded in recently closed: \(closeEffects.recordRecentlyClosed). Saved to library: \(closeEffects.saveToLibrary)")
 		schedulePersistenceSave()
-		return CloseCommandOutcome(
-			result: .closedWorkspace,
-			nextSelectedWorkspaceID: nextSelectedWorkspaceID
-		)
+		return nextSelectedWorkspaceID
 	}
 
 	func defaultCloseEffects(defaults: UserDefaults = .standard) -> WorkspaceCloseEffects {

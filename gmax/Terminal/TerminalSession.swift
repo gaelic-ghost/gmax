@@ -5,8 +5,9 @@
 //  Created by Gale Williams on 4/6/26.
 //
 
-import Foundation
+import AppKit
 import Combine
+import Foundation
 import SwiftTerm
 
 struct TerminalLaunchConfiguration: Hashable, Codable {
@@ -155,22 +156,55 @@ final class TerminalPaneControllerStore {
 final class TerminalPaneController: ObservableObject {
 	let paneID: PaneID
 	let session: TerminalSession
-	private weak var terminalView: LocalProcessTerminalView?
+	private weak var attachedTerminalView: LocalProcessTerminalView?
+	private var retainedTerminalView: LocalProcessTerminalView?
+	private var retainedTerminalGeneration: Int?
 
 	init(paneID: PaneID, session: TerminalSession) {
 		self.paneID = paneID
 		self.session = session
 	}
 
+	func terminalView(
+		for generation: Int,
+		processDelegate: LocalProcessTerminalViewDelegate,
+		clickTarget: AnyObject,
+		clickAction: Selector
+	) -> LocalProcessTerminalView {
+		if
+			let terminalView = retainedTerminalView,
+			retainedTerminalGeneration == generation
+		{
+			configureTerminalView(
+				terminalView,
+				processDelegate: processDelegate,
+				clickTarget: clickTarget,
+				clickAction: clickAction
+			)
+			return terminalView
+		}
+
+		let terminalView = LocalProcessTerminalView(frame: .zero)
+		retainedTerminalView = terminalView
+		retainedTerminalGeneration = generation
+		configureTerminalView(
+			terminalView,
+			processDelegate: processDelegate,
+			clickTarget: clickTarget,
+			clickAction: clickAction
+		)
+		return terminalView
+	}
+
 	func attach(terminalView: LocalProcessTerminalView) {
-		self.terminalView = terminalView
+		attachedTerminalView = terminalView
 	}
 
 	func detach(terminalView: LocalProcessTerminalView) {
-		guard self.terminalView === terminalView else {
+		guard attachedTerminalView === terminalView else {
 			return
 		}
-		self.terminalView = nil
+		attachedTerminalView = nil
 	}
 
 	func restoreTranscriptIfNeeded(into terminalView: LocalProcessTerminalView) {
@@ -187,7 +221,7 @@ final class TerminalPaneController: ObservableObject {
 	}
 
 	func captureTranscript() -> String? {
-		guard let terminalView else {
+		guard let terminalView = retainedTerminalView else {
 			return nil
 		}
 
@@ -204,5 +238,28 @@ final class TerminalPaneController: ObservableObject {
 
 		let normalizedTranscript = transcript.trimmingCharacters(in: .newlines)
 		return normalizedTranscript.isEmpty ? nil : transcript
+	}
+
+	private func configureTerminalView(
+		_ terminalView: LocalProcessTerminalView,
+		processDelegate: LocalProcessTerminalViewDelegate,
+		clickTarget: AnyObject,
+		clickAction: Selector
+	) {
+		terminalView.processDelegate = processDelegate
+		let recognizerSelector = clickAction
+		let hasMatchingRecognizer = terminalView.gestureRecognizers.contains { recognizer in
+			guard let clickRecognizer = recognizer as? NSClickGestureRecognizer else {
+				return false
+			}
+			return clickRecognizer.target === clickTarget && clickRecognizer.action == recognizerSelector
+		}
+		guard !hasMatchingRecognizer else {
+			return
+		}
+
+		let clickRecognizer = NSClickGestureRecognizer(target: clickTarget, action: clickAction)
+		clickRecognizer.delaysPrimaryMouseButtonEvents = false
+		terminalView.addGestureRecognizer(clickRecognizer)
 	}
 }

@@ -85,7 +85,7 @@ struct SidebarPane: View {
 			Button("Close Workspace to Library") {
 				Task { @MainActor in
 					await Task.yield()
-					selection = model.closeWorkspaceToLibrary(workspace.id).nextSelectedWorkspaceID
+					selection = model.closeWorkspaceToLibrary(workspace.id)
 				}
 			}
 
@@ -94,7 +94,7 @@ struct SidebarPane: View {
 			Button("Close Workspace") {
 				Task { @MainActor in
 					await Task.yield()
-					selection = model.closeWorkspace(workspace.id).nextSelectedWorkspaceID
+					selection = model.closeWorkspace(workspace.id)
 				}
 			}
 
@@ -122,7 +122,7 @@ struct SidebarPane: View {
 		Button("Close Workspace to Library") {
 			Task { @MainActor in
 				await Task.yield()
-				selection = model.closeWorkspaceToLibrary(workspace.id).nextSelectedWorkspaceID
+				selection = model.closeWorkspaceToLibrary(workspace.id)
 			}
 		}
 

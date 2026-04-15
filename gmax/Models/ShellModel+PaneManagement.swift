@@ -159,19 +159,18 @@ extension ShellModel {
 		schedulePersistenceSave()
 	}
 
-	@discardableResult
-	func closeFocusedPane(in workspaceID: WorkspaceID) -> CloseCommandOutcome {
+	func closeFocusedPane(in workspaceID: WorkspaceID) {
 		guard let workspace = workspace(for: workspaceID) else {
-			return CloseCommandOutcome(result: .noAction, nextSelectedWorkspaceID: normalizedWorkspaceSelection(workspaceID))
+			return
 		}
 
 		guard let focusedPaneID = workspace.focusedPaneID else {
-			return CloseCommandOutcome(result: .noAction, nextSelectedWorkspaceID: normalizedWorkspaceSelection(workspaceID))
+			return
 		}
 
 		if workspace.paneCount == 1 {
 			guard let workspaceIndex = workspaces.firstIndex(where: { $0.id == workspace.id }) else {
-				return CloseCommandOutcome(result: .noAction, nextSelectedWorkspaceID: normalizedWorkspaceSelection(workspaceID))
+				return
 			}
 
 			workspaces[workspaceIndex].root = nil
@@ -180,11 +179,10 @@ extension ShellModel {
 			paneFocusHistoryByWorkspace.removeValue(forKey: workspace.id)
 			removeUnreferencedSessions()
 			schedulePersistenceSave()
-			return CloseCommandOutcome(result: .closedPane, nextSelectedWorkspaceID: workspace.id)
+			return
 		}
 
 		closePane(focusedPaneID, in: workspace.id)
-		return CloseCommandOutcome(result: .closedPane, nextSelectedWorkspaceID: normalizedWorkspaceSelection(workspaceID))
 	}
 
 	func movePaneFocus(_ direction: PaneFocusDirection, in workspaceID: WorkspaceID) {

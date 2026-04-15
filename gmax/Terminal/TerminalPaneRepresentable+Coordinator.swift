@@ -23,12 +23,13 @@ extension TerminalPaneRepresentable {
 		}
 
 		func makeHostingView() -> TerminalHostingContainerView {
-			let terminalView = LocalProcessTerminalView(frame: .zero)
-			terminalView.processDelegate = self
+			let terminalView = controller.terminalView(
+				for: controller.session.relaunchGeneration,
+				processDelegate: self,
+				clickTarget: self,
+				clickAction: #selector(handleTerminalClick(_:))
+			)
 			controller.attach(terminalView: terminalView)
-			let clickRecognizer = NSClickGestureRecognizer(target: self, action: #selector(handleTerminalClick(_:)))
-			clickRecognizer.delaysPrimaryMouseButtonEvents = false
-			terminalView.addGestureRecognizer(clickRecognizer)
 			let hostingView = TerminalHostingContainerView(terminalView: terminalView)
 			startProcessIfNeeded(in: terminalView)
 			return hostingView

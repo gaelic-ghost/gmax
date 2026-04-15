@@ -38,8 +38,7 @@ struct ContentPane: View {
 						},
 						onClosePane: { paneID in
 							model.focusPane(paneID, in: workspace.id)
-							let outcome = model.closeFocusedPane(in: workspace.id)
-							selectedWorkspaceID = outcome.nextSelectedWorkspaceID
+							model.closeFocusedPane(in: workspace.id)
 						}
 					)
 				} else {
@@ -51,14 +50,6 @@ struct ContentPane: View {
 					)
 				}
 			}
-			.focusedSceneValue(
-				\.closeWorkspaceCommand,
-				workspace.root == nil
-					? {
-						selectedWorkspaceID = model.closeWorkspace(workspace.id).nextSelectedWorkspaceID
-					}
-					: nil
-			)
 			.navigationTitle(workspace.title)
 		} else {
 			ContentUnavailableView {

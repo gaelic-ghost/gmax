@@ -10,9 +10,6 @@ import SwiftUI
 
 struct MainShellCommands: Commands {
 	@FocusedValue(\.mainShellSceneContext) private var sceneContext
-	@FocusedValue(\.closePaneCommand) private var closePaneCommand
-	@FocusedValue(\.closeWorkspaceCommand) private var closeWorkspaceCommand
-	@Environment(\.dismiss) private var dismiss
 	private let diagnosticsLogger = Logger.gmax(.diagnostics)
 
 	var body: some Commands {
@@ -44,11 +41,6 @@ struct MainShellCommands: Commands {
 			}
 			.keyboardShortcut("s", modifiers: [.command])
 			.disabled(sceneContext?.selectedWorkspaceID == nil)
-
-			Button("Close") {
-				performClose()
-			}
-			.keyboardShortcut("w", modifiers: [.command])
 		}
 
 		CommandMenu("Workspace") {
@@ -184,20 +176,6 @@ struct MainShellCommands: Commands {
 		sceneContext.selectedWorkspaceID = sceneContext.shellModel.createWorkspace()
 	}
 
-	private func performClose() {
-		if let closePaneCommand {
-			closePaneCommand()
-			return
-		}
-
-		if let closeWorkspaceCommand {
-			closeWorkspaceCommand()
-			return
-		}
-
-		dismiss()
-	}
-
 	private func presentWorkspaceRename(for workspaceID: WorkspaceID, in sceneContext: MainShellSceneContext) {
 		guard let workspace = sceneContext.shellModel.workspace(for: workspaceID) else {
 			diagnosticsLogger.notice(
@@ -246,7 +224,7 @@ struct MainShellCommands: Commands {
 		guard let sceneContext, let selectedWorkspaceID = sceneContext.selectedWorkspaceID else {
 			return
 		}
-		sceneContext.selectedWorkspaceID = sceneContext.shellModel.closeWorkspaceToLibrary(selectedWorkspaceID).nextSelectedWorkspaceID
+		sceneContext.selectedWorkspaceID = sceneContext.shellModel.closeWorkspaceToLibrary(selectedWorkspaceID)
 	}
 
 	private func selectPreviousWorkspace(in sceneContext: MainShellSceneContext?) {
@@ -333,10 +311,10 @@ struct MainShellCommands: Commands {
 			return
 		}
 
-		let outcome = sceneContext.shellModel.closeWorkspace(selectedWorkspaceID)
+		let nextSelectedWorkspaceID = sceneContext.shellModel.closeWorkspace(selectedWorkspaceID)
 		diagnosticsLogger.notice(
-			"Ran the close-workspace command from the active shell window. Result: \(String(describing: outcome.result), privacy: .public). Next selected workspace ID: \(outcome.nextSelectedWorkspaceID?.rawValue.uuidString ?? "(none)", privacy: .public)"
+			"Ran the close-workspace command from the active shell window. Next selected workspace ID: \(nextSelectedWorkspaceID?.rawValue.uuidString ?? "(none)", privacy: .public)"
 		)
-		sceneContext.selectedWorkspaceID = outcome.nextSelectedWorkspaceID
+		sceneContext.selectedWorkspaceID = nextSelectedWorkspaceID
 	}
 }
