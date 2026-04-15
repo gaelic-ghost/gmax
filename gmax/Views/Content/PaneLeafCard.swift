@@ -71,7 +71,7 @@ struct PaneLeafCard: View {
 		.background(backgroundStyle)
 		.contentShape(Rectangle())
 		.onTapGesture(perform: onFocus)
-		.focusedValue(\.closePaneCommand, onClose)
+			.focusedValue(\.closePaneCommand, isFocused ? onClose : nil)
 		.accessibilityElement(children: .contain)
 		.accessibilityLabel(accessibilityLabel)
 		.accessibilityValue(accessibilityValue)
