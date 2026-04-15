@@ -47,13 +47,18 @@ struct ContentPane: View {
 						workspaceTitle: workspace.title,
 						onStartShell: {
 							selectedWorkspaceID = model.createPane(in: workspace.id)
-						},
-						onCloseWorkspace: {
-							selectedWorkspaceID = model.closeWorkspace(workspace.id).nextSelectedWorkspaceID
 						}
 					)
 				}
 			}
+			.focusedSceneValue(
+				\.closeWorkspaceCommand,
+				workspace.root == nil
+					? {
+						selectedWorkspaceID = model.closeWorkspace(workspace.id).nextSelectedWorkspaceID
+					}
+					: nil
+			)
 			.navigationTitle(workspace.title)
 		} else {
 			ContentUnavailableView {
@@ -68,24 +73,16 @@ struct ContentPane: View {
 private struct EmptyWorkspaceView: View {
 	let workspaceTitle: String
 	let onStartShell: () -> Void
-	let onCloseWorkspace: () -> Void
-	@FocusState private var isFocused: Bool
 
 	var body: some View {
 		ContentUnavailableView {
 			Label("This Workspace Has No Panes", systemImage: "rectangle.dashed")
 		} description: {
 			Text("Start a fresh shell to rebuild \(workspaceTitle) with one live terminal pane, or use the standard Close command to close this empty workspace.")
-		} actions: {
-			Button("Start Shell", action: onStartShell)
-				.buttonStyle(.borderedProminent)
-		}
-		.focusable()
-		.focused($isFocused)
-		.onAppear {
-			isFocused = true
-		}
-		.focusedValue(\.closeWorkspaceCommand, onCloseWorkspace)
+			} actions: {
+				Button("Start Shell", action: onStartShell)
+					.buttonStyle(.borderedProminent)
+			}
 	}
 }
 
