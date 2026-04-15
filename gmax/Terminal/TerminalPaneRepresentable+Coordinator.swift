@@ -43,7 +43,6 @@ extension TerminalPaneRepresentable {
 
 		func dismantle(hostingView: TerminalHostingContainerView) {
 			controller.detach(terminalView: hostingView.terminalView)
-			hostingView.terminalView.terminate()
 		}
 
 		private func startProcessIfNeeded(in terminalView: LocalProcessTerminalView) {
