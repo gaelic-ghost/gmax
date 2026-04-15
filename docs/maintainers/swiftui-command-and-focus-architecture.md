@@ -30,7 +30,7 @@ The standing rule is simple:
 - Preferences flow up to container views.
 - Bindings and closures are the normal parent/child coordination path.
 - Global or app-wide backchannels for per-window selection or focus are disallowed.
-- Before adding any custom routing layer, backchannel, coordinator, or command bus, exhaust the implicit behavior already provided by SwiftUI scenes, view focus, local command handlers, and AppKit responder-chain dispatch.
+- Before adding any custom routing layer, backchannel, coordinator, or command bus, exhaust the implicit behavior already provided by SwiftUI scenes, `View.onCommand(_:perform:)`, `focusedSceneValue`, `focusedValue`, and built-in scene command groups.
 - Any custom override of SwiftUI or AppKit command, focus, selection, sheet, toolbar, or close behavior requires a documented framework gap and Gale's approval first.
 
 ## What SwiftUI Already Provides
@@ -49,12 +49,14 @@ Relevant surfaces:
 - `CommandGroup`
 - `CommandGroupPlacement`
 - built-in command groups like `SidebarCommands`, `InspectorCommands`, `ToolbarCommands`
+- `View.onCommand(_:perform:)`
 
 What this means for `gmax`:
 
 - `MainShellCommands` is the right home for app-specific shell commands.
-- A pane view should not try to own menu-bar commands directly.
+- A pane view should not try to define scene menus directly.
 - A child view can influence commands by publishing context upward through SwiftUI's documented focus channels, not by inventing a private router.
+- A focused child view can also handle a command locally with `View.onCommand(_:perform:)` when the behavior belongs to that view instead of the scene menu definition.
 
 ### Focused Values
 
@@ -201,7 +203,7 @@ That still does not justify inventing a separate pseudo-responder architecture.
 - is a pane-scoped app action
 - should be enabled only when a pane view is actually the focused part of the scene
 - should be driven from pane focus via `focusedValue`, not via app-global selection state
-- may also be handled locally by the focused pane view through built-in command handling when that keeps the behavior self-contained and avoids scene-level routing
+- may also be handled locally by the focused pane view through SwiftUI's documented `View.onCommand(_:perform:)` when that keeps the behavior self-contained and avoids scene-level routing
 
 Do not blur these three layers together.
 
@@ -214,7 +216,7 @@ That means the last-pane close path is:
 - close the focused pane
 - leave the selected workspace behind as an explicit empty workspace
 - move focus to that empty-workspace content
-- let that empty-workspace content handle app-specific close behavior for the selected workspace
+- let that empty-workspace content handle app-specific close behavior for the selected workspace through SwiftUI's documented `View.onCommand(_:perform:)`
 
 Do not skip directly from "last pane closed" to "close the workspace" or "close the window."
 

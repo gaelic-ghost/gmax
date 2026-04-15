@@ -96,6 +96,7 @@ private struct WorkspaceContent: View {
 				.onAppear {
 					isFocused = true
 				}
+				// Keep empty-workspace close behavior local to the focused SwiftUI content view.
 				.onCommand(#selector(NSWindow.performClose(_:))) {
 					onCloseWorkspace()
 				}

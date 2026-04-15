@@ -72,6 +72,7 @@ struct PaneLeafCard: View {
 		.background(backgroundStyle)
 		.contentShape(Rectangle())
 		.onTapGesture(perform: onFocus)
+		// Use SwiftUI's documented view command handling so the focused pane owns pane close.
 		.onCommand(#selector(NSWindow.performClose(_:))) {
 			guard isFocused else {
 				return

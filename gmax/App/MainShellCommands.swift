@@ -15,6 +15,8 @@ struct MainShellCommands: Commands {
 	var body: some Commands {
 		SidebarCommands()
 		InspectorCommands()
+		TextEditingCommands()
+		TextFormattingCommands()
 		ToolbarCommands()
 
 		CommandGroup(after: .newItem) {
