@@ -1,8 +1,8 @@
 //
-//  MainShellCommands.swift
+//  gmaxApp+Commands.swift
 //  gmax
 //
-//  Created by Codex on 4/14/26.
+//  Created by Gale Williams on 4/14/26.
 //
 
 import OSLog
@@ -79,13 +79,13 @@ struct MainShellCommands: Commands {
 
 			Divider()
 
-				Button("Rename Workspace") {
-					guard let selectedWorkspaceID else {
-						return
-					}
-					presentWorkspaceRename?(selectedWorkspaceID)
+			Button("Rename Workspace") {
+				guard let selectedWorkspaceID else {
+					return
 				}
-				.disabled(selectedWorkspaceID == nil || presentWorkspaceRename == nil)
+				presentWorkspaceRename?(selectedWorkspaceID)
+			}
+			.disabled(selectedWorkspaceID == nil || presentWorkspaceRename == nil)
 
 			Button("Duplicate Workspace Layout") {
 				guard let shellModel, let selectedWorkspaceID else {
@@ -109,12 +109,12 @@ struct MainShellCommands: Commands {
 			.keyboardShortcut("w", modifiers: [.command, .option])
 			.disabled(selectedWorkspaceID == nil || shellModel == nil)
 
-				Button("Delete Workspace", role: .destructive) {
-					guard let selectedWorkspaceID else {
-						return
-					}
-					presentWorkspaceDeletion?(selectedWorkspaceID)
+			Button("Delete Workspace", role: .destructive) {
+				guard let selectedWorkspaceID else {
+					return
 				}
+				presentWorkspaceDeletion?(selectedWorkspaceID)
+			}
 			.disabled(!canDeleteSelectedWorkspace())
 
 			Divider()
@@ -132,49 +132,49 @@ struct MainShellCommands: Commands {
 			.disabled((shellModel?.workspaces.count ?? 0) < 2)
 		}
 
-			CommandMenu("Pane") {
-				Button("Move Focus Left") {
-					movePaneFocus(.left)
-				}
+		CommandMenu("Pane") {
+			Button("Move Focus Left") {
+				movePaneFocus(.left)
+			}
 			.keyboardShortcut(.leftArrow, modifiers: [.command, .option])
 
-				Button("Move Focus Right") {
-					movePaneFocus(.right)
-				}
+			Button("Move Focus Right") {
+				movePaneFocus(.right)
+			}
 			.keyboardShortcut(.rightArrow, modifiers: [.command, .option])
 
-				Button("Move Focus Up") {
-					movePaneFocus(.up)
-				}
+			Button("Move Focus Up") {
+				movePaneFocus(.up)
+			}
 			.keyboardShortcut(.upArrow, modifiers: [.command, .option])
 
-				Button("Move Focus Down") {
-					movePaneFocus(.down)
-				}
+			Button("Move Focus Down") {
+				movePaneFocus(.down)
+			}
 			.keyboardShortcut(.downArrow, modifiers: [.command, .option])
 
 			Divider()
 
-				Button("Focus Next Pane") {
-					movePaneFocus(.next)
-				}
+			Button("Focus Next Pane") {
+				movePaneFocus(.next)
+			}
 			.keyboardShortcut("]", modifiers: [.command, .option])
 
-				Button("Focus Previous Pane") {
-					movePaneFocus(.previous)
-				}
+			Button("Focus Previous Pane") {
+				movePaneFocus(.previous)
+			}
 			.keyboardShortcut("[", modifiers: [.command, .option])
 
 			Section("New Pane") {
-					Button("Split Right") {
-						splitFocusedPane(.right)
-					}
+				Button("Split Right") {
+					splitFocusedPane(.right)
+				}
 				.keyboardShortcut("d", modifiers: [.command])
 				.disabled(!canSplitFocusedPane())
 
-					Button("Split Down") {
-						splitFocusedPane(.down)
-					}
+				Button("Split Down") {
+					splitFocusedPane(.down)
+				}
 				.keyboardShortcut("d", modifiers: [.command, .shift])
 				.disabled(!canSplitFocusedPane())
 			}
