@@ -15,7 +15,7 @@ struct ContentPane: View {
 		if let workspace = selectedWorkspaceID.flatMap(model.workspace(for:)) {
 			Group {
 				if let root = workspace.root {
-					PaneNodeView(
+					ContentPaneNodeView(
 						node: root,
 						focusedPaneID: workspace.focusedPaneID,
 						controllerForPane: { pane in
@@ -42,11 +42,11 @@ struct ContentPane: View {
 					.focusSection()
 					.accessibilityElement(children: .contain)
 					.accessibilityLabel("Workspace pane area")
-					.onPreferenceChange(PaneFramePreferenceKey.self) { paneFrames in
+					.onPreferenceChange(ContentPaneFramePreferenceKey.self) { paneFrames in
 						model.updatePaneFrames(paneFrames, in: workspace.id)
 					}
 				} else {
-					EmptyWorkspaceView(
+					ContentPaneEmptyWorkspaceView(
 						workspaceTitle: workspace.title,
 						onStartShell: {
 							selectedWorkspaceID = model.createPane(in: workspace.id)
@@ -73,7 +73,7 @@ struct ContentPane: View {
 	}
 }
 
-private struct PaneNodeView: View {
+private struct ContentPaneNodeView: View {
 	let node: PaneNode
 	let focusedPaneID: PaneID?
 	let controllerForPane: (PaneLeaf) -> TerminalPaneController
@@ -86,7 +86,7 @@ private struct PaneNodeView: View {
 		switch node {
 			case .leaf(let leaf):
 				let controller = controllerForPane(leaf)
-				PaneLeafCard(
+				ContentPaneLeafView(
 					pane: leaf,
 					controller: controller,
 					session: controller.session,
@@ -104,12 +104,12 @@ private struct PaneNodeView: View {
 				)
 
 			case .split(let split):
-				PaneSplitContainer(
+				ContentPaneSplitView(
 					axis: split.axis,
 					fraction: split.fraction,
 					onFractionChange: { onUpdateSplitFraction(split.id, $0) }
 				) {
-					PaneNodeView(
+					ContentPaneNodeView(
 						node: split.first,
 						focusedPaneID: focusedPaneID,
 						controllerForPane: controllerForPane,
@@ -119,7 +119,7 @@ private struct PaneNodeView: View {
 						onClosePane: onClosePane
 					)
 				} second: {
-					PaneNodeView(
+					ContentPaneNodeView(
 						node: split.second,
 						focusedPaneID: focusedPaneID,
 						controllerForPane: controllerForPane,
@@ -133,7 +133,7 @@ private struct PaneNodeView: View {
 	}
 }
 
-struct PaneFramePreferenceKey: PreferenceKey {
+struct ContentPaneFramePreferenceKey: PreferenceKey {
 	static var defaultValue: [PaneID: CGRect] = [:]
 
 	static func reduce(value: inout [PaneID: CGRect], nextValue: () -> [PaneID: CGRect]) {
@@ -141,7 +141,7 @@ struct PaneFramePreferenceKey: PreferenceKey {
 	}
 }
 
-private struct EmptyWorkspaceView: View {
+private struct ContentPaneEmptyWorkspaceView: View {
 	let workspaceTitle: String
 	let onStartShell: () -> Void
 

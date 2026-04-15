@@ -1,5 +1,5 @@
 //
-//  PaneLeafCard.swift
+//  ContentPaneLeafView.swift
 //  gmax
 //
 //  Created by Gale Williams on 4/14/26.
@@ -7,7 +7,7 @@
 
 import SwiftUI
 
-struct PaneLeafCard: View {
+struct ContentPaneLeafView: View {
 	let pane: PaneLeaf
 	let controller: TerminalPaneController
 	@ObservedObject var session: TerminalSession
@@ -69,7 +69,7 @@ struct PaneLeafCard: View {
 		.background {
 			GeometryReader { geometry in
 				Color.clear.preference(
-					key: PaneFramePreferenceKey.self,
+					key: ContentPaneFramePreferenceKey.self,
 					value: [pane.id: geometry.frame(in: .named("workspace-pane-tree"))]
 				)
 			}

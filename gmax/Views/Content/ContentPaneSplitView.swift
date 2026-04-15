@@ -1,5 +1,5 @@
 //
-//  PaneSplitContainer.swift
+//  ContentPaneSplitView.swift
 //  gmax
 //
 //  Created by Gale Williams on 4/14/26.
@@ -8,7 +8,7 @@
 import AppKit
 import SwiftUI
 
-struct PaneSplitContainer<First: View, Second: View>: View {
+struct ContentPaneSplitView<First: View, Second: View>: View {
 	private let axis: PaneSplit.Axis
 	private let fraction: CGFloat
 	private let onFractionChange: (CGFloat) -> Void
