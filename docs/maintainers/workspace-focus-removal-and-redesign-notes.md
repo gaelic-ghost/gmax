@@ -45,7 +45,7 @@ The main custom pieces were:
 - `isFocused` plumbing through [`ContentPane.swift`](../../gmax/Scenes/WorkspaceWindowGroup/NavigationSplitView/ContentPanel/ContentPane.swift), [`ContentPaneLeafView.swift`](../../gmax/Scenes/WorkspaceWindowGroup/NavigationSplitView/ContentPanel/ContentPaneLeafView.swift), and [`TerminalPaneView.swift`](../../gmax/Terminal/Panes/TerminalPaneView.swift)
   - Partially redesigned.
   - Pane views now bind against scene-owned `@FocusState`, but the terminal bridge still consumes a derived `isFocused` flag while the SwiftTerm/AppKit boundary is being narrowed.
-- `onFocus` closures from [`ContentPaneLeafView.swift`](../../gmax/Scenes/WorkspaceWindowGroup/NavigationSplitView/ContentPanel/ContentPaneLeafView.swift) into [`TerminalPaneView+Coordinator.swift`](../../gmax/Terminal/Panes/TerminalPaneView+Coordinator.swift)
+- pane-activation callbacks from [`ContentPaneLeafView.swift`](../../gmax/Scenes/WorkspaceWindowGroup/NavigationSplitView/ContentPanel/ContentPaneLeafView.swift) into [`TerminalPaneView.swift`](../../gmax/Terminal/Panes/TerminalPaneView.swift) and [`TerminalPaneHostView.swift`](../../gmax/Terminal/Panes/TerminalPaneHostView.swift)
   - Pointer and accessibility interactions still explicitly push focus back into the scene-owned focus state.
 - `window?.makeFirstResponder(...)` calls in [`TerminalPaneView+Coordinator.swift`](../../gmax/Terminal/Panes/TerminalPaneView+Coordinator.swift)
   - The AppKit bridge still force-aligns the terminal view's first responder with pane focus transitions.
@@ -72,9 +72,9 @@ The goal here is not “delete focus.” The goal is to stop owning custom focus
 - `paneFramesByWorkspace`, `updatePaneFrames(...)`, and directional geometry ranking
   - Store-owned frame storage and frame updates are removed.
   - Directional geometry ranking still exists, but now lives alongside scene-local focus state rather than inside `WorkspaceStore`.
-- `onFocus` closure chains and `.onTapGesture(perform: onFocus)`
-  - Marked for removal as the normal way panes become focused.
-  - Native focus movement should do this work.
+- wrapper-owned pane activation callbacks and `.onTapGesture { focusedTarget = ... }`
+  - Marked for narrowing rather than preserving as the default focus path.
+  - Native focus movement should do as much of this work as SwiftUI will allow cleanly.
 - Forced first-responder synchronization in `TerminalPaneView+Coordinator.update(...)`
   - Marked for redesign.
   - Some AppKit responder alignment will probably remain for the embedded terminal, but it should follow native focus transitions instead of model-owned “isFocused” state.
@@ -186,6 +186,12 @@ Prompt-versus-scrollback is intentionally no longer an open question here.
 SwiftTerm owns that internal terminal interaction behavior, and `gmax` should
 keep treating the enclosing pane as the workspace-level focus and command
 target.
+
+The SwiftTerm-side ownership question is also much narrower now than it was in
+earlier planning. [`swiftterm-surface-investigation.md`](./swiftterm-surface-investigation.md)
+should be treated as the current source of truth for what SwiftTerm already
+handles cleanly on its own and which remaining behaviors are still wrapper-side
+glue in `gmax`.
 
 Pane navigation policy is also no longer an open question here.
 The intended behavior remains:

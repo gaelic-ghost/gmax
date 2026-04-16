@@ -24,6 +24,15 @@ Use this together with:
 - [`workspace-window-scene-command-focus-map.md`](./workspace-window-scene-command-focus-map.md)
 - [`swiftui-command-and-focus-architecture.md`](./swiftui-command-and-focus-architecture.md)
 
+Status summary for this note:
+
+- the scene-local focus foundation is already landed
+- the per-window payload-plus-placement persistence foundation is already landed
+- the remaining work is mostly command-surface clarification and SwiftTerm
+  bridge narrowing
+- prompt-versus-scrollback ownership should be treated as settled in favor of
+  SwiftTerm unless a later product requirement proves otherwise
+
 ## Core Design Goal
 
 Define a small, stable set of logical focus targets for the workspace window, then shape the view hierarchy around those targets.
@@ -289,6 +298,20 @@ command system should not need to care.
 
 ## Recommended Sequencing
 
+### Phase 0: tighten the maintainer docs
+
+Before the next code pass, align the maintainer notes around one explicit
+status read:
+
+- persistence foundation landed
+- scene-owned focus foundation landed
+- SwiftTerm already owns terminal-native interaction inside the active pane
+- the next implementation work is bridge narrowing and command clarity, not a
+  fresh focus-model redesign
+
+This keeps the next code pass from reopening questions that are already
+settled.
+
 ### Phase 1: define next-pass ownership boundaries
 
 Decide:
@@ -315,6 +338,14 @@ Adjust view structure so each logical focus target has a clean owning view:
 Keep scene-owned native focus as the source of truth, then remove or narrow the
 remaining terminal bridge behavior that still follows derived pane focus.
 
+The first cuts here should be:
+
+- stop treating `updateNSView` as the place where responder alignment happens
+- shrink wrapper-owned activation glue before inventing new terminal-side
+  customization
+- only widen `WorkspaceTerminalView` if a real SwiftTerm gap remains after the
+  simpler cuts
+
 ### Phase 4: follow through on scene-local restoration and persistence
 
 Now that runtime focus is no longer model-owned, keep the persistence model
@@ -328,6 +359,10 @@ These are the decisions worth carrying into the next implementation pass:
 1. How thin can the SwiftUI-to-SwiftTerm bridge become while still handling the small amount of responder translation SwiftTerm does not already cover on its own?
 2. How should the existing spatial pane-navigation behavior and the existing next/previous pane-navigation behavior migrate toward more native focus movement over time without losing current behavior?
 3. How should saved-workspace history and any future library-detail surfaces fit around the now-landed payload-plus-placement persistence model?
+
+For the next implementation pass, these should be treated as refinement
+questions, not permission to reopen prompt-versus-scrollback ownership or the
+payload-plus-placement persistence model.
 
 ## Provisional Design Decisions
 

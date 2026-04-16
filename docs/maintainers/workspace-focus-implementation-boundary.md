@@ -37,6 +37,11 @@ Use this together with:
 - [`workspace-window-state-and-persistence-model.md`](./workspace-window-state-and-persistence-model.md)
 - [`swiftterm-surface-investigation.md`](./swiftterm-surface-investigation.md)
 
+The terminal-behavior side of this boundary is no longer speculative. Use
+[`swiftterm-surface-investigation.md`](./swiftterm-surface-investigation.md) as
+the source of truth for the responder, selection, search, and prompt-versus-
+scrollback behaviors SwiftTerm already owns.
+
 ## Documented Framework Behavior We Are Relying On
 
 This boundary depends on a few documented Apple behaviors:
@@ -200,6 +205,8 @@ It should own:
 - transcript restore and capture
 - narrow translation from pane activation into terminal first responder, if
   SwiftTerm still needs that help
+- accessibility affordances that describe the enclosing pane rather than trying
+  to replace SwiftTerm's internal terminal interaction model
 
 It should not own:
 
@@ -225,8 +232,8 @@ AppKit responder state follow a model boolean.
 
 The better path is:
 
-- pane becomes active through native SwiftUI focus or an explicit activation
-  transition
+- pane becomes active through native SwiftUI focus or a narrowly scoped
+  activation transition
 - terminal first responder is requested only at that transition boundary if
   needed
 
@@ -237,12 +244,11 @@ That is a much narrower responsibility.
 SwiftTerm already owns selection and mouse interaction behavior inside the
 terminal surface.
 
-So we should stop defaulting to:
-
-- removing existing click recognizers
-- installing our own recognizer as the primary control path
-
-unless we can name a concrete SwiftTerm gap we must fill.
+The current bridge is already better than the earlier shape because it is no
+longer installing a replacement click recognizer. The remaining cleanup is to
+avoid letting wrapper-owned tap and accessibility activation paths grow back
+into a parallel terminal interaction model unless we can name a concrete
+SwiftTerm gap we must fill.
 
 ### 4. Stop using pane geometry as the general focus engine
 
@@ -284,6 +290,12 @@ scene-owned actions.
 Use `focusedValue` from the pane container when pane-local commands should only
 exist while the pane is active.
 
+### 5. Keep terminal-specific hooks in the terminal subclass seam
+
+`WorkspaceTerminalView`, as the local `LocalProcessTerminalView` subclass, is
+the preferred place for any terminal-specific responder or host-policy hooks
+that still survive after the bridge is narrowed.
+
 ## Provisional Implementation Shape
 
 The most likely implementation direction is:
@@ -315,7 +327,7 @@ The safest order looks like this:
 ### Phase 3: narrow the SwiftTerm bridge
 
 - remove update-loop responder forcing
-- remove custom click behavior unless a concrete gap remains
+- shrink wrapper-owned activation glue unless a concrete gap remains
 - move terminal-specific hooks into a narrower terminal-side seam
 
 ### Phase 4: revisit persistence

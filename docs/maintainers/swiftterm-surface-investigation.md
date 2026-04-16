@@ -122,11 +122,11 @@ This is the part we already expect to redesign toward native SwiftUI focus.
 
 This is where the wrapper is currently fighting the terminal surface a bit:
 
-- `updateNSView` forces `window?.makeFirstResponder(terminalView)` whenever
-  `isFocused` is true
-- a custom click gesture recognizer is installed on the SwiftTerm view
-- the click handler calls `onFocus()` and then forces first responder
-- accessibility "Focus Pane" also forces first responder
+- `updateNSView` still drives responder alignment from a derived `isFocused`
+  flag
+- pane activation still flows through wrapper-owned activation callbacks
+- accessibility "Focus Pane" still forces first responder through the host view
+- the pane container still translates taps into scene-level pane activation
 
 This means our wrapper is currently trying to synchronize:
 
@@ -176,12 +176,17 @@ Forcing first responder whenever `isFocused` is true makes the terminal's
 AppKit focus follow a workspace-model boolean. That is the reverse of the native
 flow we likely want.
 
-### Custom click recognizer installation
+### Wrapper-owned activation glue
 
-We currently remove SwiftTerm click recognizers and install our own
-`NSClickGestureRecognizer`. That is risky because SwiftTerm already owns mouse
-interaction and selection behavior. Even when this works today, it increases the
-chance that we are shadowing or subtly changing terminal-native behavior.
+The current code is already better than the earlier bridge shape because it is
+no longer installing a replacement `NSClickGestureRecognizer` on the SwiftTerm
+view.
+
+However, pane activation is still expressed partly through wrapper-owned tap
+and accessibility glue outside SwiftTerm itself. That means the bridge is still
+responsible for reconciling pane activation with terminal responder state, even
+though SwiftTerm already owns the deeper mouse and selection model once the
+terminal is active.
 
 ### Mixed responsibility in `ContentPaneLeafView`
 
@@ -268,11 +273,11 @@ That gives each layer a cleaner job.
 Before implementation, we should answer these:
 
 1. Can pane activation become a native `@FocusState`-driven concept without
-   forcing first responder from `updateNSView`?
+   treating `updateNSView` as the place where responder state is synchronized?
 2. Can the terminal surface become first responder only in response to actual
    activation/click/focus transitions instead of every render update?
-3. Is our custom click recognizer still needed once pane focus is modeled
-   natively?
+3. Can the remaining wrapper-owned tap and accessibility focus hooks shrink
+   further once pane focus is modeled natively?
 4. Which current accessibility actions are truly pane-level actions, and which
    should remain terminal-surface behavior?
 5. Does `ContentPaneLeafView` want to split into a pane container plus a

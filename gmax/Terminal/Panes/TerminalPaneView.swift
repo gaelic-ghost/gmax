@@ -47,7 +47,7 @@ struct TerminalPaneView: NSViewRepresentable {
 
 	func updateNSView(_ nsView: TerminalPaneHostView, context: Context) {
 		applyCurrentAppearance(to: nsView)
-		context.coordinator.update(hostingView: nsView, isFocused: isFocused)
+		context.coordinator.update(hostingView: nsView)
 		nsView.updateAccessibility(
 			snapshot: accessibilitySnapshot,
 			onFocus: onActivatePane,

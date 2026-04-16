@@ -13,7 +13,6 @@ extension TerminalPaneView {
 	@MainActor
 	final class Coordinator: NSObject, LocalProcessTerminalViewDelegate {
 		let controller: TerminalPaneController
-		private var wasFocused = false
 
 		init(controller: TerminalPaneController) {
 			self.controller = controller
@@ -30,17 +29,12 @@ extension TerminalPaneView {
 			return hostingView
 		}
 
-		func update(hostingView: TerminalPaneHostView, isFocused: Bool) {
+		func update(hostingView: TerminalPaneHostView) {
 			startProcessIfNeeded(in: hostingView.terminalView)
-			if isFocused, !wasFocused {
-				hostingView.terminalView.alignFirstResponderToTerminal()
-			}
-			wasFocused = isFocused
 		}
 
 		func dismantle(hostingView: TerminalPaneHostView) {
 			controller.detach(terminalView: hostingView.terminalView)
-			wasFocused = false
 		}
 
 		private func startProcessIfNeeded(in terminalView: LocalProcessTerminalView) {
