@@ -11,7 +11,7 @@ Use this alongside:
 - [`swiftui-command-and-focus-architecture.md`](./swiftui-command-and-focus-architecture.md) for the preferred default model
 - [`workspace-window-scene-command-focus-map.md`](./workspace-window-scene-command-focus-map.md) for the current command and focused-value flow
 - [`framework-command-audit.md`](./framework-command-audit.md) for the broader redesign gaps and priorities
-- [`workspace-focus-target-plan.md`](./workspace-focus-target-plan.md) for the proposed logical focus targets and the next design pass
+- [`workspace-focus-target-plan.md`](./workspace-focus-target-plan.md) for the current logical focus targets and the next design pass
 - [`workspace-focus-implementation-boundary.md`](./workspace-focus-implementation-boundary.md) for the current implementation ownership split we want to move toward
 
 ## Current Custom Focus Surface
@@ -21,6 +21,15 @@ then mirrored into SwiftUI and AppKit. The first cleanup pass has already
 removed the store-owned runtime focus engine, and the remaining cleanup is now
 mostly about narrowing terminal-bridge behavior and clarifying scene-local
 window restoration.
+
+That scene-local restoration foundation is now in place too:
+
+- each `WindowGroup` scene restores through a lightweight `WorkspaceSceneIdentity`
+- live workspace state restores from `.live` placements
+- recent-close state restores from `.recent` placements
+
+The remaining focus work is therefore mostly about bridge narrowing, native
+focus movement, and command behavior at region boundaries.
 
 The main custom pieces were:
 
@@ -164,8 +173,6 @@ That reduces custom coordination, but it does not remove responsibility. The app
 
 ## Open Design Questions
 
-- Should pane-to-pane directional movement stay spatial, or become a simpler
-  next/previous graph with optional spatial refinement later?
 - Should the inspector ever become a command target for pane-oriented commands,
   or should those commands disable whenever focus leaves content?
 - Does the embedded terminal need a dedicated AppKit focus adapter object, or
@@ -179,6 +186,15 @@ Prompt-versus-scrollback is intentionally no longer an open question here.
 SwiftTerm owns that internal terminal interaction behavior, and `gmax` should
 keep treating the enclosing pane as the workspace-level focus and command
 target.
+
+Pane navigation policy is also no longer an open question here.
+The intended behavior remains:
+
+- spatial pane navigation
+- next/previous pane traversal alongside spatial movement
+
+The remaining work there is implementation narrowing toward more native focus
+movement over time, not semantic redesign.
 
 ## Recommended Next Step
 

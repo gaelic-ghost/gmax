@@ -12,22 +12,22 @@ struct SavedWorkspaceLibrarySheet: View {
 	@Binding var selectedWorkspaceID: WorkspaceID?
 	@Environment(\.dismiss) private var dismiss
 	@State private var searchText = ""
-	@State private var selectedSnapshotID: WorkspaceSnapshotID?
+	@State private var selectedSnapshotID: SavedWorkspaceID?
 
 	var body: some View {
 		let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-		let snapshots = model.persistence.listWorkspaceSnapshots(matching: query.isEmpty ? nil : query)
+		let snapshots = model.listSavedWorkspaceSnapshots(matching: query.isEmpty ? nil : query)
 		let normalizeSelection = {
 			if !snapshots.contains(where: { $0.id == selectedSnapshotID }) {
 				selectedSnapshotID = snapshots.first?.id
 			}
 		}
-		let open: (WorkspaceSnapshotID) -> Void = { snapshotID in
+		let open: (SavedWorkspaceID) -> Void = { snapshotID in
 			guard let workspaceID = model.openSavedWorkspace(snapshotID) else { return }
 			selectedWorkspaceID = workspaceID
 			dismiss()
 		}
-		let delete: (WorkspaceSnapshotID) -> Void = { snapshotID in
+		let delete: (SavedWorkspaceID) -> Void = { snapshotID in
 			model.deleteSavedWorkspace(snapshotID)
 			selectedSnapshotID = snapshots.first { $0.id != snapshotID }?.id
 		}

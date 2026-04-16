@@ -129,6 +129,10 @@ extension WorkspacePersistenceController {
 		paneNodeEntity.name = "PaneNodeEntity"
 		paneNodeEntity.managedObjectClassName = NSStringFromClass(PaneNodeEntity.self)
 
+		let workspacePlacementEntity = NSEntityDescription()
+		workspacePlacementEntity.name = "WorkspacePlacementEntity"
+		workspacePlacementEntity.managedObjectClassName = NSStringFromClass(WorkspacePlacementEntity.self)
+
 		let workspaceSnapshotEntity = NSEntityDescription()
 		workspaceSnapshotEntity.name = "WorkspaceSnapshotEntity"
 		workspaceSnapshotEntity.managedObjectClassName = NSStringFromClass(WorkspaceSnapshotEntity.self)
@@ -143,6 +147,12 @@ extension WorkspacePersistenceController {
 
 		let workspaceID = attribute(name: "id", type: .UUIDAttributeType)
 		let workspaceTitle = attribute(name: "title", type: .stringAttributeType)
+		let workspaceCreatedAt = attribute(name: "createdAt", type: .dateAttributeType)
+		let workspaceUpdatedAt = attribute(name: "updatedAt", type: .dateAttributeType)
+		let workspaceNotes = attribute(name: "notes", type: .stringAttributeType, isOptional: true)
+		let workspacePreviewText = attribute(name: "previewText", type: .stringAttributeType, isOptional: true)
+		let workspaceSearchText = attribute(name: "searchText", type: .stringAttributeType, isOptional: true)
+		let workspaceSavedWorkspaceID = attribute(name: "savedWorkspaceID", type: .UUIDAttributeType, isOptional: true)
 		let sortOrder = attribute(name: "sortOrder", type: .integer64AttributeType)
 
 		let nodeID = attribute(name: "id", type: .UUIDAttributeType)
@@ -150,6 +160,20 @@ extension WorkspacePersistenceController {
 		let nodeSessionID = attribute(name: "sessionID", type: .UUIDAttributeType, isOptional: true)
 		let nodeAxis = attribute(name: "axis", type: .stringAttributeType, isOptional: true)
 		let nodeFraction = attribute(name: "fraction", type: .doubleAttributeType)
+
+		let placementID = attribute(name: "id", type: .UUIDAttributeType)
+		let placementRole = attribute(name: "role", type: .stringAttributeType)
+		let placementWindowID = attribute(name: "windowID", type: .UUIDAttributeType, isOptional: true)
+		let placementSortOrder = attribute(name: "sortOrder", type: .integer64AttributeType)
+		let placementRestoreSortOrder = attribute(name: "restoreSortOrder", type: .integer64AttributeType)
+		let placementCreatedAt = attribute(name: "createdAt", type: .dateAttributeType)
+		let placementUpdatedAt = attribute(name: "updatedAt", type: .dateAttributeType)
+		let placementLastOpenedAt = attribute(name: "lastOpenedAt", type: .dateAttributeType, isOptional: true)
+		let placementIsPinned = attribute(name: "isPinned", type: .booleanAttributeType)
+		let placementTitle = attribute(name: "title", type: .stringAttributeType)
+		let placementPreviewText = attribute(name: "previewText", type: .stringAttributeType, isOptional: true)
+		let placementSearchText = attribute(name: "searchText", type: .stringAttributeType, isOptional: true)
+		let placementPaneCount = attribute(name: "paneCount", type: .integer64AttributeType)
 
 		let workspaceSnapshotID = attribute(name: "id", type: .UUIDAttributeType)
 		let workspaceSnapshotSourceWorkspaceID = attribute(name: "sourceWorkspaceID", type: .UUIDAttributeType, isOptional: true)
@@ -230,6 +254,41 @@ extension WorkspacePersistenceController {
 		secondChild.inverseRelationship = secondParent
 		secondParent.inverseRelationship = secondChild
 
+		let workspacePlacements = NSRelationshipDescription()
+		workspacePlacements.name = "placements"
+		workspacePlacements.destinationEntity = workspacePlacementEntity
+		workspacePlacements.minCount = 0
+		workspacePlacements.maxCount = 0
+		workspacePlacements.isOptional = true
+		workspacePlacements.isOrdered = false
+		workspacePlacements.deleteRule = .nullifyDeleteRule
+
+		let placementWorkspace = NSRelationshipDescription()
+		placementWorkspace.name = "workspace"
+		placementWorkspace.destinationEntity = workspaceEntity
+		placementWorkspace.minCount = 0
+		placementWorkspace.maxCount = 1
+		placementWorkspace.deleteRule = .nullifyDeleteRule
+
+		workspacePlacements.inverseRelationship = placementWorkspace
+		placementWorkspace.inverseRelationship = workspacePlacements
+
+		let workspaceSessionSnapshots = NSRelationshipDescription()
+		workspaceSessionSnapshots.name = "sessionSnapshots"
+		workspaceSessionSnapshots.destinationEntity = paneSessionSnapshotEntity
+		workspaceSessionSnapshots.minCount = 0
+		workspaceSessionSnapshots.maxCount = 0
+		workspaceSessionSnapshots.isOptional = true
+		workspaceSessionSnapshots.isOrdered = false
+		workspaceSessionSnapshots.deleteRule = .cascadeDeleteRule
+
+		let paneSessionSnapshotWorkspace = NSRelationshipDescription()
+		paneSessionSnapshotWorkspace.name = "workspace"
+		paneSessionSnapshotWorkspace.destinationEntity = workspaceEntity
+		paneSessionSnapshotWorkspace.minCount = 0
+		paneSessionSnapshotWorkspace.maxCount = 1
+		paneSessionSnapshotWorkspace.deleteRule = .nullifyDeleteRule
+
 		let workspaceSnapshotRootNode = NSRelationshipDescription()
 		workspaceSnapshotRootNode.name = "rootNode"
 		workspaceSnapshotRootNode.destinationEntity = paneSnapshotNodeEntity
@@ -299,8 +358,23 @@ extension WorkspacePersistenceController {
 
 		workspaceSnapshotSessionSnapshots.inverseRelationship = paneSessionSnapshotWorkspaceSnapshot
 		paneSessionSnapshotWorkspaceSnapshot.inverseRelationship = workspaceSnapshotSessionSnapshots
+		workspaceSessionSnapshots.inverseRelationship = paneSessionSnapshotWorkspace
+		paneSessionSnapshotWorkspace.inverseRelationship = workspaceSessionSnapshots
 
-		workspaceEntity.properties = [workspaceID, workspaceTitle, sortOrder, workspaceRootNode]
+		workspaceEntity.properties = [
+			workspaceID,
+			workspaceTitle,
+			workspaceCreatedAt,
+			workspaceUpdatedAt,
+			workspaceNotes,
+			workspacePreviewText,
+			workspaceSearchText,
+			workspaceSavedWorkspaceID,
+			sortOrder,
+			workspaceRootNode,
+			workspacePlacements,
+			workspaceSessionSnapshots,
+		]
 		paneNodeEntity.properties = [
 			nodeID,
 			nodeKind,
@@ -312,6 +386,22 @@ extension WorkspacePersistenceController {
 			firstParent,
 			secondChild,
 			secondParent,
+		]
+		workspacePlacementEntity.properties = [
+			placementID,
+			placementRole,
+			placementWindowID,
+			placementSortOrder,
+			placementRestoreSortOrder,
+			placementCreatedAt,
+			placementUpdatedAt,
+			placementLastOpenedAt,
+			placementIsPinned,
+			placementTitle,
+			placementPreviewText,
+			placementSearchText,
+			placementPaneCount,
+			placementWorkspace,
 		]
 
 		workspaceSnapshotEntity.properties = [
@@ -351,10 +441,18 @@ extension WorkspacePersistenceController {
 			paneSessionSnapshotTranscriptByteCount,
 			paneSessionSnapshotTranscriptLineCount,
 			paneSessionSnapshotPreviewText,
+			paneSessionSnapshotWorkspace,
 			paneSessionSnapshotWorkspaceSnapshot,
 		]
 
-		model.entities = [workspaceEntity, paneNodeEntity, workspaceSnapshotEntity, paneSnapshotNodeEntity, paneSessionSnapshotEntity]
+		model.entities = [
+			workspaceEntity,
+			paneNodeEntity,
+			workspacePlacementEntity,
+			workspaceSnapshotEntity,
+			paneSnapshotNodeEntity,
+			paneSessionSnapshotEntity,
+		]
 		return model
 	}
 

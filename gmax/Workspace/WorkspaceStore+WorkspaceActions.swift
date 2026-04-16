@@ -93,7 +93,10 @@ extension WorkspaceStore {
 		for leaf in closedWorkspace.workspace.root?.leaves() ?? [] {
 			let launchConfiguration = closedWorkspace.launchConfigurationsBySessionID[leaf.sessionID]
 				?? launchContextBuilder.makeLaunchConfiguration()
-			_ = sessions.ensureSession(id: leaf.sessionID, launchConfiguration: launchConfiguration)
+			let session = sessions.ensureSession(id: leaf.sessionID, launchConfiguration: launchConfiguration)
+			session.title = closedWorkspace.titlesBySessionID[leaf.sessionID] ?? session.title
+			session.currentDirectory = launchConfiguration.currentDirectory
+			session.setRestoredTranscript(closedWorkspace.transcriptsBySessionID[leaf.sessionID])
 		}
 
 		recentlyClosedWorkspaceCount = recentlyClosedWorkspaces.count
@@ -112,7 +115,7 @@ extension WorkspaceStore {
 	func saveWorkspaceToLibrary(
 		_ workspaceID: WorkspaceID,
 		transcriptsBySessionID: [TerminalSessionID: String] = [:]
-	) -> SavedWorkspaceSnapshotSummary? {
+	) -> SavedWorkspaceListing? {
 		guard let workspace = workspaces.first(where: { $0.id == workspaceID }) else {
 			Logger.workspace.error("The app was asked to save a workspace to the library, but that workspace no longer exists in the current shell model. Workspace ID: \(workspaceID.rawValue.uuidString, privacy: .public)")
 			return nil
@@ -134,7 +137,7 @@ extension WorkspaceStore {
 		return summary
 	}
 
-	func listSavedWorkspaceSnapshots(matching query: String? = nil) -> [SavedWorkspaceSnapshotSummary] {
+	func listSavedWorkspaceSnapshots(matching query: String? = nil) -> [SavedWorkspaceListing] {
 		persistence.listWorkspaceSnapshots(matching: query)
 	}
 
@@ -154,7 +157,7 @@ extension WorkspaceStore {
 	}
 
 	@discardableResult
-	func openSavedWorkspace(_ snapshotID: WorkspaceSnapshotID) -> WorkspaceID? {
+	func openSavedWorkspace(_ snapshotID: SavedWorkspaceID) -> WorkspaceID? {
 		guard let snapshot = persistence.loadWorkspaceSnapshot(id: snapshotID) else {
 			Logger.workspace.error("The app could not reopen a saved workspace because the requested library snapshot was missing or unreadable. Check the persistence logs for the exact load failure. Snapshot ID: \(snapshotID.rawValue.uuidString, privacy: .public)")
 			return nil
@@ -181,7 +184,8 @@ extension WorkspaceStore {
 					transcriptsBySessionID: &transcriptsBySessionID,
 					titlesBySessionID: &titlesBySessionID
 				)
-			}
+			},
+			savedWorkspaceID: snapshot.savedWorkspaceID
 		)
 		workspaces.append(restoredWorkspace)
 
@@ -198,7 +202,7 @@ extension WorkspaceStore {
 		return restoredWorkspace.id
 	}
 
-	func deleteSavedWorkspace(_ snapshotID: WorkspaceSnapshotID) {
+	func deleteSavedWorkspace(_ snapshotID: SavedWorkspaceID) {
 		guard persistence.deleteWorkspaceSnapshot(id: snapshotID) else {
 			Logger.workspace.error("The app could not delete a saved workspace snapshot from the library because persistence did not confirm the deletion. Check the persistence logs for the exact failure. Snapshot ID: \(snapshotID.rawValue.uuidString, privacy: .public)")
 			return
@@ -217,6 +221,8 @@ extension WorkspaceStore {
 		let workspace: Workspace
 		let formerIndex: Int
 		let launchConfigurationsBySessionID: [TerminalSessionID: TerminalLaunchConfiguration]
+		let titlesBySessionID: [TerminalSessionID: String]
+		let transcriptsBySessionID: [TerminalSessionID: String]
 	}
 
 	private func uniqueWorkspaceTitle(startingWith baseTitle: String) -> String {
@@ -267,12 +273,38 @@ extension WorkspaceStore {
 	func schedulePersistenceSave() {
 		pendingPersistenceTask?.cancel()
 		let workspacesSnapshot = workspaces
+		let recentlyClosedSnapshot = recentlyClosedWorkspaces.map { workspace in
+			RecentlyClosedWorkspaceStateInput(
+				workspace: workspace.workspace,
+				formerIndex: workspace.formerIndex,
+				launchConfigurationsBySessionID: workspace.launchConfigurationsBySessionID,
+				titlesBySessionID: workspace.titlesBySessionID,
+				transcriptsBySessionID: workspace.transcriptsBySessionID
+			)
+		}
+		let transcriptsByWorkspaceID = Dictionary(
+			uniqueKeysWithValues: workspacesSnapshot.map { workspace in
+				(
+					workspace.id,
+					snapshotTranscripts(
+						for: workspace,
+						explicitTranscriptsBySessionID: [:]
+					)
+				)
+			}
+		)
 		pendingPersistenceTask = Task { @MainActor in
 			try? await Task.sleep(for: .milliseconds(250))
 			guard !Task.isCancelled else {
 				return
 			}
-			persistence.save(workspaces: workspacesSnapshot)
+			persistence.saveSceneState(
+				for: sceneIdentity,
+				liveWorkspaces: workspacesSnapshot,
+				recentlyClosedWorkspaces: recentlyClosedSnapshot,
+				sessions: sessions,
+				liveTranscriptsByWorkspaceID: transcriptsByWorkspaceID
+			)
 		}
 	}
 
@@ -327,13 +359,23 @@ extension WorkspaceStore {
 			)
 			return (leaf.sessionID, launchConfiguration)
 		})
+		let titlesBySessionID = Dictionary(uniqueKeysWithValues: (workspace.root?.leaves() ?? []).map { leaf in
+			let session = sessions.ensureSession(id: leaf.sessionID)
+			return (leaf.sessionID, session.title)
+		})
+		let transcriptsBySessionID = snapshotTranscripts(
+			for: workspace,
+			explicitTranscriptsBySessionID: [:]
+		)
 
 		recentlyClosedWorkspaces.removeAll { $0.workspace.id == workspace.id }
 		recentlyClosedWorkspaces.append(
 			RecentlyClosedWorkspace(
 				workspace: workspace,
 				formerIndex: formerIndex,
-				launchConfigurationsBySessionID: launchConfigurationsBySessionID
+				launchConfigurationsBySessionID: launchConfigurationsBySessionID,
+				titlesBySessionID: titlesBySessionID,
+				transcriptsBySessionID: transcriptsBySessionID
 			)
 		)
 		if recentlyClosedWorkspaces.count > WorkspacePersistenceDefaults.maxRecentlyClosedWorkspaceCount {
@@ -361,7 +403,7 @@ extension WorkspaceStore {
 	}
 	private func restoreNode(
 		_ node: PaneNode,
-		paneSnapshotsBySessionID: [TerminalSessionID: SavedPaneSessionSnapshot],
+		paneSnapshotsBySessionID: [TerminalSessionID: WorkspaceSessionSnapshot],
 		launchConfigurationsBySessionID: inout [TerminalSessionID: TerminalLaunchConfiguration],
 		transcriptsBySessionID: inout [TerminalSessionID: String],
 		titlesBySessionID: inout [TerminalSessionID: String]

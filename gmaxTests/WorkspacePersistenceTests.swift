@@ -302,8 +302,8 @@ struct WorkspacePersistenceTests {
 		let summary = try #require(model.saveWorkspaceToLibrary(workspace.id))
 		let context = persistence.container.viewContext
 
-		let snapshotEntity = try #require(try fetchSnapshotEntity(id: summary.id, in: context))
-		let rootNode = try #require(snapshotEntity.rootNode)
+		let savedWorkspacePlacement = try #require(try fetchSavedWorkspacePlacement(id: summary.id, in: context))
+		let rootNode = try #require(savedWorkspacePlacement.workspace?.rootNode)
 		rootNode.firstChild = nil
 		try context.save()
 
@@ -358,7 +358,7 @@ struct WorkspacePersistenceTests {
 		)
 		let context = persistence.container.viewContext
 
-		let missingSessionEntity = try #require(try fetchPaneSessionSnapshotEntity(id: rightPane.sessionID, in: context))
+		let missingSessionEntity = try #require(try fetchPaneSessionPayloadEntity(id: rightPane.sessionID, in: context))
 		context.delete(missingSessionEntity)
 		try context.save()
 
@@ -419,7 +419,16 @@ struct WorkspacePersistenceTests {
 			)
 		)
 		let persistence = WorkspacePersistenceController.inMemoryForTesting()
-		persistence.save(workspaces: [workspace])
+		let sceneIdentity = WorkspaceSceneIdentity()
+		persistence.saveSceneState(
+			for: sceneIdentity,
+			liveWorkspaces: [workspace],
+			recentlyClosedWorkspaces: [],
+			sessions: TerminalSessionRegistry(
+				workspaces: [workspace],
+				defaultLaunchConfiguration: TestSupport.makeLaunchContextBuilder(defaultCurrentDirectory: "/tmp/gmax-tests").makeLaunchConfiguration()
+			)
+		)
 		let context = persistence.container.viewContext
 
 		let workspaceEntity = try #require(try fetchWorkspaceEntity(id: workspace.id, in: context))
@@ -427,7 +436,7 @@ struct WorkspacePersistenceTests {
 		rootNode.axis = nil
 		try context.save()
 
-		let restoredWorkspaces = persistence.loadWorkspaces()
+		let restoredWorkspaces = persistence.loadWorkspaces(for: sceneIdentity)
 
 		#expect(restoredWorkspaces.isEmpty)
 	}
@@ -452,17 +461,22 @@ private func nodeSignature(from node: PaneNode) -> PaneNodeSignature {
 	}
 }
 
-private func fetchSnapshotEntity(
-	id: WorkspaceSnapshotID,
+private func fetchSavedWorkspacePlacement(
+	id: SavedWorkspaceID,
 	in context: NSManagedObjectContext
-) throws -> WorkspaceSnapshotEntity? {
-	let request = NSFetchRequest<WorkspaceSnapshotEntity>(entityName: "WorkspaceSnapshotEntity")
+) throws -> WorkspacePlacementEntity? {
+	let request = NSFetchRequest<WorkspacePlacementEntity>(entityName: "WorkspacePlacementEntity")
 	request.fetchLimit = 1
-	request.predicate = NSPredicate(format: "id == %@", id.rawValue as CVarArg)
+	request.predicate = NSCompoundPredicate(
+		andPredicateWithSubpredicates: [
+			NSPredicate(format: "id == %@", id.rawValue as CVarArg),
+			NSPredicate(format: "role == %@", WorkspacePlacementRole.library.rawValue),
+		]
+	)
 	return try context.fetch(request).first
 }
 
-private func fetchPaneSessionSnapshotEntity(
+private func fetchPaneSessionPayloadEntity(
 	id: TerminalSessionID,
 	in context: NSManagedObjectContext
 ) throws -> PaneSessionSnapshotEntity? {
