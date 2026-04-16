@@ -123,7 +123,7 @@ Current behavior:
 - else if the selected workspace is empty and publishes `closeEmptyWorkspace`, `Command-W` becomes `Close Workspace`
 - else it falls back to `dismiss()` and becomes `Close Window`
 
-Why this is a gap:
+Why this was called out:
 
 - three different ownership layers are being multiplexed through one command slot
 - the resulting behavior is not obvious from the UI unless someone already understands the focus model
@@ -135,13 +135,19 @@ Why it matters:
 - command ambiguity here will be hard to reason about during future refactors
 - this is exactly the kind of surface where a small regression can feel like an architectural bug
 
-Recommendation:
+Recorded decision:
 
-- keep the current behavior only if this adaptive `Command-W` model is an explicit product decision
-- otherwise separate the questions more clearly:
-  - should pane close be the standard `Command-W` behavior only when a pane terminal truly has focus?
-  - should empty-workspace close be an explicit workspace command instead of sharing the same slot?
-  - should window close defer more aggressively to the native window close path?
+- this adaptive `Command-W` model is an explicit product decision
+- `Command-W` closes an actively focused pane
+- if the actively selected workspace has no panes, `Command-W` closes that workspace
+- if focus is in the sidebar and a workspace listing is focused, `Command-W` closes that workspace
+- if focus is on the only workspace in a window and that workspace has no panes, `Command-W` closes the window
+- if focus is in the inspector, `Command-W` does nothing
+
+Implementation follow-through:
+
+- keep the semantics above fixed
+- simplify the command code until those semantics are expressed directly and read clearly from the command surface
 
 ## 2. The command surface is coherent, but not yet explicit enough about ownership
 

@@ -204,11 +204,23 @@ movement over time, not semantic redesign.
 
 ## Recommended Next Step
 
-Before the next implementation pass, define one explicit target model for these
-three example slices:
+Before the next implementation pass, keep implementation work aligned to this
+already-decided target model for these three example slices:
 
 1. user clicks a pane terminal
 2. user presses `Command-W` with focus in a pane terminal
 3. user invokes a pane-navigation command while the sidebar or inspector has focus
 
-If the target model is crisp for those three flows, the rest of the cleanup should become much easier to stage safely.
+The close-command portion of that target model is already settled:
+
+- `Command-W` closes an actively focused pane
+- if the actively selected workspace has no panes, `Command-W` closes that
+  workspace
+- if focus is in the sidebar and a workspace listing is focused, `Command-W`
+  closes that workspace
+- if focus is on the only workspace in a window and that workspace has no
+  panes, `Command-W` closes the window
+- if focus is in the inspector, `Command-W` does nothing
+
+The remaining work is to make the implementation express those rules more
+directly, not to reopen the decision itself.

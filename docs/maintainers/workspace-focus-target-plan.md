@@ -354,15 +354,17 @@ history and any remaining restoration polish.
 
 ## Immediate Next-Pass Questions
 
-These are the decisions worth carrying into the next implementation pass:
+These are the refinement questions worth carrying into the next implementation
+pass:
 
 1. How thin can the SwiftUI-to-SwiftTerm bridge become while still handling the small amount of responder translation SwiftTerm does not already cover on its own?
 2. How should the existing spatial pane-navigation behavior and the existing next/previous pane-navigation behavior migrate toward more native focus movement over time without losing current behavior?
 3. How should saved-workspace history and any future library-detail surfaces fit around the now-landed payload-plus-placement persistence model?
 
 For the next implementation pass, these should be treated as refinement
-questions, not permission to reopen prompt-versus-scrollback ownership or the
-payload-plus-placement persistence model.
+questions, not permission to reopen already-decided command semantics,
+prompt-versus-scrollback ownership, or the payload-plus-placement persistence
+model.
 
 ## Provisional Design Decisions
 
@@ -389,7 +391,25 @@ Follow-up required:
   unless a future command surface proves SwiftTerm's existing behavior
   insufficient
 
-### 2. Prompt versus scrollback
+### 2. `Command-W` close semantics
+
+Current decision:
+
+- `Command-W` closes an actively focused pane
+- if the actively selected workspace has no panes, `Command-W` closes that
+  workspace
+- if focus is in the sidebar and a workspace listing is focused, `Command-W`
+  closes that workspace
+- if focus is on the only workspace in a window and that workspace has no
+  panes, `Command-W` closes the window
+- if focus is in the inspector, `Command-W` does nothing
+
+This is an explicit product decision, not an accidental implementation detail.
+Future cleanup should simplify the implementation until it expresses this rule
+directly, but should not reopen the semantics themselves unless Gale explicitly
+asks for that redesign.
+
+### 3. Prompt versus scrollback
 
 Current decision:
 
