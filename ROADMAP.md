@@ -23,6 +23,10 @@ Build `gmax` into a finished macOS terminal workspace app:
 - [x] Saved-workspace library with transcript-backed reopen
 - [x] `WindowGroup`-based main shell with frontmost-window command routing
 - [x] Per-scene restoration for selected workspace plus sidebar and inspector visibility
+- [x] Data-driven `WindowGroup` scene identity for per-window workspace restore
+- [x] Scene-scoped restore for live workspaces and recently closed workspaces
+- [x] Unified workspace payload plus placement persistence model
+- [x] Library listings backed by placement metadata with payload-on-demand reopen
 - [x] App settings window for terminal appearance
 - [x] Unified logging baseline plus maintainer logging-validation guide
 - [x] Domain-grouped unit-test surface for workspace lifecycle and persistence
@@ -85,16 +89,20 @@ Build `gmax` into a finished macOS terminal workspace app:
 
 - [ ] Add migration-safe versioning around the Core Data model
 - [x] Restore a more complete session and workspace state on launch
-- [x] Add a separate saved-workspace snapshot library beside the live session store
+- [x] Add a separate saved-workspace library beside the live session store
 - [x] Add explicit `Save Workspace` and `Close to Library` flows
 - [x] Add `Auto-save closed workspaces` and apply it orthogonally to the recently closed stack
 - [x] Add a searchable `Open Workspace...` saved-workspace index
-- [x] Preserve transcript-backed pane scrollback in saved workspace snapshots
+- [x] Preserve transcript-backed pane scrollback in saved workspace saves
 - [x] Separate production, debug, UI-test, and in-memory persistence profiles so day-to-day development and tests do not share one database
 - [ ] Add configurable transcript retention limits for saved workspace history
 - [ ] Add crash-safe and operator-friendly persistence diagnostics
-- [x] Add initial failure-mode coverage for corrupted and partial workspace snapshots so restore degrades safely instead of unpredictably
-- [ ] Continue retiring legacy global-selection and fallback-routing patterns so scene-local window state remains the default foundation for future shell features
+- [x] Add initial failure-mode coverage for corrupted and partial saved-workspace payloads so restore degrades safely instead of unpredictably
+- [x] Restore live and recent workspace state per window scene instead of one app-global live list
+- [x] Unify live, recent, and library persistence around payload plus placement records
+- [x] Add a migration bridge from legacy live and saved workspace records into the placement model
+- [ ] Add explicit saved-workspace revision history retention instead of replacing the current saved payload in place
+- [ ] Finish narrowing remaining scene-command and terminal-bridge cleanup now that window-scoped persistence is in place
 - [ ] Decide which settings and metadata are sync-worthy
 - [ ] Evaluate `NSPersistentCloudKitContainer` for future sync support
 - [ ] Keep sync design scoped to durable product value, not novelty
@@ -105,7 +113,7 @@ Build `gmax` into a finished macOS terminal workspace app:
 
 - [x] Add meaningful unit coverage for pane-tree mutations
 - [x] Add persistence-layer tests for load and save behavior
-- [ ] Add persistence-layer tests for corruption, partial snapshots, and graceful restore failure handling
+- [x] Add persistence-layer tests for corruption, partial payloads, and graceful restore failure handling
 - [x] Add UI coverage for saved-workspace library and workspace-sidebar lifecycle flows
 - [ ] Add broader UI coverage for pane lifecycle flows and multi-window command interactions
 - [ ] Tighten operator-facing logs and error messages throughout the app

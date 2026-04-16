@@ -2,7 +2,8 @@ import OSLog
 import SwiftUI
 
 struct WorkspaceWindowSceneView: View {
-	@StateObject private var workspaceStore = WorkspaceStore()
+	@StateObject private var workspaceStore: WorkspaceStore
+	private let sceneIdentity: WorkspaceSceneIdentity
 	@State private var selectedWorkspaceID: WorkspaceID?
 	@State private var workspacePendingDeletionID: WorkspaceID?
 	@State private var workspacePendingRenameID: WorkspaceID?
@@ -17,6 +18,13 @@ struct WorkspaceWindowSceneView: View {
 	@State private var paneFrames: [PaneID: CGRect] = [:]
 	@State private var paneFocusHistory: [PaneID] = []
 	@FocusState private var focusedTarget: WorkspaceFocusTarget?
+
+	init(sceneIdentity: WorkspaceSceneIdentity = WorkspaceSceneIdentity()) {
+		self.sceneIdentity = sceneIdentity
+		_workspaceStore = StateObject(
+			wrappedValue: WorkspaceStore(sceneIdentity: sceneIdentity)
+		)
+	}
 
 	var body: some View {
 		let openSavedWorkspaceLibrary = {

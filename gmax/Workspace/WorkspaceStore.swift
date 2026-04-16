@@ -8,6 +8,7 @@ final class WorkspaceStore: ObservableObject {
 	@Published var workspaces: [Workspace]
 	@Published var recentlyClosedWorkspaceCount = 0
 
+	let sceneIdentity: WorkspaceSceneIdentity
 	let persistence: WorkspacePersistenceController
 	let launchContextBuilder: TerminalLaunchContextBuilder
 	let sessions: TerminalSessionRegistry
@@ -16,6 +17,7 @@ final class WorkspaceStore: ObservableObject {
 	var recentlyClosedWorkspaces: [RecentlyClosedWorkspace] = []
 
 	init(
+		sceneIdentity: WorkspaceSceneIdentity = WorkspaceSceneIdentity(),
 		workspaces: [Workspace]? = nil,
 		persistence: WorkspacePersistenceController? = nil,
 		launchContextBuilder: TerminalLaunchContextBuilder? = nil
@@ -31,19 +33,50 @@ final class WorkspaceStore: ObservableObject {
 		let persistence = persistence ?? .shared
 		let launchContextBuilder = launchContextBuilder ?? .live()
 		let resolvedWorkspaces: [Workspace]
+		let resolvedRecentlyClosedWorkspaces: [RecentlyClosedWorkspace]
 
 		if let workspaces {
 			resolvedWorkspaces = workspaces
+			resolvedRecentlyClosedWorkspaces = []
 		} else {
 			let shouldRestorePersistedWorkspaces = UserDefaults.standard.bool(
 				forKey: WorkspacePersistenceDefaults.restoreWorkspacesOnLaunchKey
 			)
-			let persistedWorkspaces = shouldRestorePersistedWorkspaces ? persistence.loadWorkspaces() : []
+			let persistedWorkspaces = shouldRestorePersistedWorkspaces
+				? persistence.loadWorkspaces(for: sceneIdentity)
+				: []
+			let persistedRecentlyClosedWorkspaces = shouldRestorePersistedWorkspaces
+				? persistence.loadRecentlyClosedWorkspaces(for: sceneIdentity)
+				: []
 			if persistedWorkspaces.isEmpty {
 				let pane = PaneLeaf()
 				resolvedWorkspaces = [Workspace(title: "Workspace 1", root: .leaf(pane))]
 			} else {
 				resolvedWorkspaces = persistedWorkspaces
+			}
+			resolvedRecentlyClosedWorkspaces = persistedRecentlyClosedWorkspaces.map { persistedWorkspace in
+				RecentlyClosedWorkspace(
+					workspace: persistedWorkspace.revision.workspace,
+					formerIndex: persistedWorkspace.formerIndex,
+					launchConfigurationsBySessionID: Dictionary(
+						uniqueKeysWithValues: persistedWorkspace.revision.paneSnapshotsBySessionID.map {
+							($0.key, $0.value.launchConfiguration)
+						}
+					),
+					titlesBySessionID: Dictionary(
+						uniqueKeysWithValues: persistedWorkspace.revision.paneSnapshotsBySessionID.map {
+							($0.key, $0.value.title)
+						}
+					),
+					transcriptsBySessionID: Dictionary(
+						uniqueKeysWithValues: persistedWorkspace.revision.paneSnapshotsBySessionID.compactMap {
+							guard let transcript = $0.value.transcript else {
+								return nil
+							}
+							return ($0.key, transcript)
+						}
+					)
+				)
 			}
 
 			if shouldRestorePersistedWorkspaces, !persistedWorkspaces.isEmpty {
@@ -55,6 +88,7 @@ final class WorkspaceStore: ObservableObject {
 			}
 		}
 
+		self.sceneIdentity = sceneIdentity
 		self.persistence = persistence
 		self.launchContextBuilder = launchContextBuilder
 		self.sessions = TerminalSessionRegistry(
@@ -63,5 +97,7 @@ final class WorkspaceStore: ObservableObject {
 		)
 		self.paneControllers = TerminalPaneControllerStore()
 		self.workspaces = resolvedWorkspaces
+		self.recentlyClosedWorkspaces = resolvedRecentlyClosedWorkspaces
+		self.recentlyClosedWorkspaceCount = resolvedRecentlyClosedWorkspaces.count
 	}
 }

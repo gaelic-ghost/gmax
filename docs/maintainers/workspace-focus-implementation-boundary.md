@@ -34,6 +34,7 @@ Use this together with:
 - [`workspace-focus-removal-and-redesign-notes.md`](./workspace-focus-removal-and-redesign-notes.md)
 - [`workspace-focus-target-plan.md`](./workspace-focus-target-plan.md)
 - [`workspace-focus-first-pass-plan.md`](./workspace-focus-first-pass-plan.md)
+- [`workspace-window-state-and-persistence-model.md`](./workspace-window-state-and-persistence-model.md)
 - [`swiftterm-surface-investigation.md`](./swiftterm-surface-investigation.md)
 
 ## Documented Framework Behavior We Are Relying On

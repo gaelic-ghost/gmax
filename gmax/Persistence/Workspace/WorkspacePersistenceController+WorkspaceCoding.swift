@@ -10,6 +10,39 @@ import Foundation
 import OSLog
 
 extension WorkspacePersistenceController {
+	nonisolated static func makeNodeEntity(
+		from node: PaneNode?,
+		context: NSManagedObjectContext
+	) -> PaneNodeEntity? {
+		guard let node else {
+			return nil
+		}
+
+		switch node {
+			case .leaf(let leaf):
+				let nodeEntity = PaneNodeEntity(context: context)
+				nodeEntity.id = leaf.id.rawValue
+				nodeEntity.kind = PaneNodeKind.leaf.rawValue
+				nodeEntity.sessionID = leaf.sessionID.rawValue
+				nodeEntity.axis = nil
+				nodeEntity.fraction = 0
+				nodeEntity.firstChild = nil
+				nodeEntity.secondChild = nil
+				return nodeEntity
+
+			case .split(let split):
+				let nodeEntity = PaneNodeEntity(context: context)
+				nodeEntity.id = split.id.rawValue
+				nodeEntity.kind = PaneNodeKind.split.rawValue
+				nodeEntity.sessionID = nil
+				nodeEntity.axis = split.axis.rawValue
+				nodeEntity.fraction = split.fraction
+				nodeEntity.firstChild = makeNodeEntity(from: split.first, context: context)
+				nodeEntity.secondChild = makeNodeEntity(from: split.second, context: context)
+				return nodeEntity
+		}
+	}
+
 	nonisolated static func syncNode(
 		_ node: PaneNode?,
 		context: NSManagedObjectContext,

@@ -1,8 +1,8 @@
 /*
  WorkspacePersistenceController owns the durable workspace repository surface.
- It loads and saves the live workspace list, manages saved workspace snapshots,
- and gives the rest of the app one main-actor entrypoint into Core Data-backed
- workspace persistence.
+ It restores per-window live and recent workspace state, manages saved library
+ entries plus their current revisions, and gives the rest of the app one
+ main-actor entrypoint into Core Data-backed workspace persistence.
  */
 
 import CoreData
@@ -45,77 +45,131 @@ final class WorkspacePersistenceController {
 		return WorkspacePersistenceController(container: container, profile: .inMemory)
 	}
 
-	func loadWorkspaces() -> [Workspace] {
+	func loadWorkspaces(for sceneIdentity: WorkspaceSceneIdentity) -> [Workspace] {
 		let context = container.viewContext
-		let request = NSFetchRequest<WorkspaceEntity>(entityName: "WorkspaceEntity")
-		request.sortDescriptors = [NSSortDescriptor(key: #keyPath(WorkspaceEntity.sortOrder), ascending: true)]
-
-		do {
-			return try context.fetch(request).compactMap { workspaceEntity in
-				let workspace = Workspace(
-					id: WorkspaceID(rawValue: workspaceEntity.id),
-					title: workspaceEntity.title,
-					root: Self.decodeNode(workspaceEntity.rootNode)
-				)
-				guard let root = workspace.root else {
-					Logger.persistence.error("A persisted workspace has no root pane tree. That empty workspace will be discarded during restore. Workspace ID: \(workspace.id.rawValue.uuidString, privacy: .public)")
-					return nil
-				}
-
-				let leaves = root.leaves()
-				guard !leaves.isEmpty else {
-					Logger.persistence.error("A persisted workspace decoded to an empty pane tree. That workspace will be discarded during restore. Workspace ID: \(workspace.id.rawValue.uuidString, privacy: .public)")
-					return nil
-				}
-
-				return Workspace(id: workspace.id, title: workspace.title, root: root)
-			}
-		} catch {
-			Logger.persistence.error("Core Data could not read the saved-workspace list from the workspace store. The app will continue with default workspace state for this launch. Error: \(String(describing: error), privacy: .public)")
-			return []
+		context.performAndWait {
+			try? migrateLegacyPersistenceIfNeeded(for: sceneIdentity, context: context)
 		}
+		return loadPlacements(role: .live, sceneIdentity: sceneIdentity, in: context)
+			.compactMap { placement in
+				guard let revision = workspaceRevision(for: placement.workspace, placement: placement) else {
+					return nil
+				}
+				return revision.workspace
+			}
 	}
 
-	func save(workspaces: [Workspace]) {
+	func loadRecentlyClosedWorkspaces(for sceneIdentity: WorkspaceSceneIdentity) -> [PersistedRecentlyClosedWorkspace] {
+		let context = container.viewContext
+		context.performAndWait {
+			try? migrateLegacyPersistenceIfNeeded(for: sceneIdentity, context: context)
+		}
+		return loadPlacements(role: .recent, sceneIdentity: sceneIdentity, in: context)
+			.compactMap { placement in
+				guard let revision = workspaceRevision(for: placement.workspace, placement: placement) else {
+					return nil
+				}
+				return PersistedRecentlyClosedWorkspace(
+					revision: revision,
+					formerIndex: Int(placement.restoreSortOrder)
+				)
+			}
+	}
+
+	func saveSceneState(
+		for sceneIdentity: WorkspaceSceneIdentity,
+		liveWorkspaces: [Workspace],
+		recentlyClosedWorkspaces: [RecentlyClosedWorkspaceStateInput],
+		sessions: TerminalSessionRegistry,
+		liveTranscriptsByWorkspaceID: [WorkspaceID: [TerminalSessionID: String]] = [:]
+	) {
 		let context = container.viewContext
 		context.performAndWait {
 			do {
-				let existingWorkspaces = try context.fetch(NSFetchRequest<WorkspaceEntity>(entityName: "WorkspaceEntity"))
-				let existingNodes = try context.fetch(NSFetchRequest<PaneNodeEntity>(entityName: "PaneNodeEntity"))
-
-				var workspacesByID = Dictionary(uniqueKeysWithValues: existingWorkspaces.map { ($0.id, $0) })
-				var nodesByID = Dictionary(uniqueKeysWithValues: existingNodes.map { ($0.id, $0) })
+				let livePlacements = loadPlacements(role: .live, sceneIdentity: sceneIdentity, in: context)
+				let recentPlacements = loadPlacements(role: .recent, sceneIdentity: sceneIdentity, in: context)
+				var existingPlacementsByID = Dictionary(uniqueKeysWithValues: (livePlacements + recentPlacements).map { ($0.id, $0) })
+				let existingWorkspaceRequest = NSFetchRequest<WorkspaceEntity>(entityName: "WorkspaceEntity")
+				let existingWorkspaces = try context.fetch(existingWorkspaceRequest)
+				var existingWorkspacesByID = Dictionary(uniqueKeysWithValues: existingWorkspaces.map { ($0.id, $0) })
+				var retainedPlacementIDs: Set<UUID> = []
 				var retainedWorkspaceIDs: Set<UUID> = []
-				var retainedNodeIDs: Set<UUID> = []
 
-				for (sortOrder, workspace) in workspaces.enumerated() {
-					let workspaceEntity = workspacesByID.removeValue(forKey: workspace.id.rawValue)
-						?? WorkspaceEntity(context: context)
-					workspaceEntity.id = workspace.id.rawValue
-					workspaceEntity.title = workspace.title
-					workspaceEntity.sortOrder = Int64(sortOrder)
-					workspaceEntity.rootNode = Self.syncNode(
-						workspace.root,
+				for (sortOrder, workspace) in liveWorkspaces.enumerated() {
+					let workspaceEntity = try upsertWorkspaceEntity(
+						for: workspace,
 						context: context,
-						nodesByID: &nodesByID,
-						retainedNodeIDs: &retainedNodeIDs
+						existingWorkspacesByID: &existingWorkspacesByID,
+						sessions: sessions,
+						transcriptsBySessionID: liveTranscriptsByWorkspaceID[workspace.id] ?? [:]
 					)
-					retainedWorkspaceIDs.insert(workspace.id.rawValue)
+					let placement = existingPlacementsByID.removeValue(forKey: workspace.id.rawValue)
+						?? WorkspacePlacementEntity(context: context)
+					let now = Date()
+					if placement.objectID.isTemporaryID {
+						placement.id = workspace.id.rawValue
+						placement.createdAt = now
+					}
+					placement.role = WorkspacePlacementRole.live.rawValue
+					placement.windowID = sceneIdentity.windowID
+					placement.sortOrder = Int64(sortOrder)
+					placement.restoreSortOrder = Int64(sortOrder)
+					placement.updatedAt = now
+					placement.lastOpenedAt = nil
+					placement.isPinned = false
+					placement.workspace = workspaceEntity
+					refreshListingMetadata(on: placement, from: workspaceEntity)
+					retainedPlacementIDs.insert(placement.id)
+					retainedWorkspaceIDs.insert(workspaceEntity.id)
 				}
 
-				for orphanedWorkspace in workspacesByID.values where !retainedWorkspaceIDs.contains(orphanedWorkspace.id) {
-					context.delete(orphanedWorkspace)
+				for (stackIndex, recentlyClosedWorkspace) in recentlyClosedWorkspaces.enumerated() {
+					let workspaceEntity = try upsertWorkspaceEntity(
+						for: recentlyClosedWorkspace.workspace,
+						context: context,
+						existingWorkspacesByID: &existingWorkspacesByID,
+						sessionSnapshots: makeSessionSnapshots(
+							for: recentlyClosedWorkspace.workspace,
+							launchConfigurationsBySessionID: recentlyClosedWorkspace.launchConfigurationsBySessionID,
+							titlesBySessionID: recentlyClosedWorkspace.titlesBySessionID,
+							transcriptsBySessionID: recentlyClosedWorkspace.transcriptsBySessionID
+						)
+					)
+					let placement = existingPlacementsByID.removeValue(forKey: workspaceEntity.id)
+						?? WorkspacePlacementEntity(context: context)
+					let now = Date()
+					if placement.objectID.isTemporaryID {
+						placement.id = workspaceEntity.id
+						placement.createdAt = now
+					}
+					placement.role = WorkspacePlacementRole.recent.rawValue
+					placement.windowID = sceneIdentity.windowID
+					placement.sortOrder = Int64(stackIndex)
+					placement.restoreSortOrder = Int64(recentlyClosedWorkspace.formerIndex)
+					placement.updatedAt = now
+					placement.lastOpenedAt = nil
+					placement.isPinned = false
+					placement.workspace = workspaceEntity
+					refreshListingMetadata(on: placement, from: workspaceEntity)
+					retainedPlacementIDs.insert(placement.id)
+					retainedWorkspaceIDs.insert(workspaceEntity.id)
 				}
 
-				for orphanedNode in nodesByID.values where !retainedNodeIDs.contains(orphanedNode.id) {
-					context.delete(orphanedNode)
+				for stalePlacement in existingPlacementsByID.values where !retainedPlacementIDs.contains(stalePlacement.id) {
+					context.delete(stalePlacement)
 				}
+
+				try deleteOrphanedWorkspaceRecords(
+					existingWorkspacesByID: existingWorkspacesByID,
+					retainedWorkspaceIDs: retainedWorkspaceIDs,
+					context: context
+				)
 
 				if context.hasChanges {
 					try context.save()
 				}
 			} catch {
-				Logger.persistence.error("Core Data could not save the latest workspace state. The current session remains live, but the last workspace change was not persisted to disk. Error: \(String(describing: error), privacy: .public)")
+				Logger.persistence.error("Core Data could not save the window-scoped workspace state for the active scene. The current session remains live, but this window's latest workspace changes were not persisted to disk. Window ID: \(sceneIdentity.windowID.uuidString, privacy: .public). Error: \(String(describing: error), privacy: .public)")
 				context.rollback()
 			}
 		}
@@ -127,26 +181,351 @@ final class WorkspacePersistenceController {
 		transcriptsBySessionID: [TerminalSessionID: String] = [:],
 		notes: String? = nil,
 		isPinned: Bool? = nil
-	) -> SavedWorkspaceSnapshotSummary? {
+	) -> SavedWorkspaceListing? {
 		let context = container.viewContext
-		var createdSummary: SavedWorkspaceSnapshotSummary?
-		let now = Date()
-		let paneSnapshots = (workspace.root?.leaves() ?? []).map { leaf in
-			let session = sessions.ensureSession(id: leaf.sessionID)
-			let launchConfiguration = TerminalLaunchConfiguration(
-				executable: session.launchConfiguration.executable,
-				arguments: session.launchConfiguration.arguments,
-				environment: session.launchConfiguration.environment,
-				currentDirectory: session.currentDirectory ?? session.launchConfiguration.currentDirectory
-			)
-			let transcript = transcriptsBySessionID[leaf.sessionID]
-			let previewText = transcript.flatMap { transcript in
-				transcript
-					.split(whereSeparator: \.isNewline)
-					.map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
-					.first { !$0.isEmpty }
-					.map { String($0.prefix(160)) }
+		var createdListing: SavedWorkspaceListing?
+		context.performAndWait {
+			do {
+				let savedWorkspaceID = workspace.savedWorkspaceID ?? SavedWorkspaceID()
+				let now = Date()
+				let workspaceEntity = WorkspaceEntity(context: context)
+				workspaceEntity.id = UUID()
+				workspaceEntity.savedWorkspaceID = savedWorkspaceID.rawValue
+				try updateWorkspaceEntity(
+					workspaceEntity,
+					from: workspace,
+					context: context,
+					sessionSnapshots: makeSessionSnapshots(
+						for: workspace,
+						sessions: sessions,
+						transcriptsBySessionID: transcriptsBySessionID
+					),
+					notes: notes,
+					now: now
+				)
+
+				let request = NSFetchRequest<WorkspacePlacementEntity>(entityName: "WorkspacePlacementEntity")
+				request.fetchLimit = 1
+				request.predicate = NSPredicate(format: "id == %@", savedWorkspaceID.rawValue as CVarArg)
+				let placement = try context.fetch(request).first ?? WorkspacePlacementEntity(context: context)
+				if placement.objectID.isTemporaryID {
+					placement.id = savedWorkspaceID.rawValue
+					placement.createdAt = now
+				}
+				placement.role = WorkspacePlacementRole.library.rawValue
+				placement.windowID = nil
+				placement.sortOrder = 0
+				placement.restoreSortOrder = 0
+				placement.updatedAt = now
+				placement.lastOpenedAt = placement.lastOpenedAt
+				placement.isPinned = isPinned ?? placement.isPinned
+				placement.workspace = workspaceEntity
+				refreshListingMetadata(on: placement, from: workspaceEntity)
+
+				if context.hasChanges {
+					try context.save()
+				}
+
+				createdListing = makeSavedWorkspaceListing(from: placement)
+			} catch {
+				Logger.persistence.error("Core Data failed to save a workspace revision into the library. The live workspace remains available, but the saved copy was not written. Workspace title: \(workspace.title, privacy: .public). Error: \(String(describing: error), privacy: .public)")
+				context.rollback()
 			}
+		}
+
+		return createdListing
+	}
+
+	func listWorkspaceSnapshots(matching query: String? = nil) -> [SavedWorkspaceListing] {
+		let context = container.viewContext
+		context.performAndWait {
+			try? migrateLegacyPersistenceIfNeeded(for: WorkspaceSceneIdentity(), context: context)
+		}
+		let request = NSFetchRequest<WorkspacePlacementEntity>(entityName: "WorkspacePlacementEntity")
+		request.sortDescriptors = [
+			NSSortDescriptor(key: #keyPath(WorkspacePlacementEntity.isPinned), ascending: false),
+			NSSortDescriptor(key: #keyPath(WorkspacePlacementEntity.updatedAt), ascending: false)
+		]
+		request.predicate = NSPredicate(format: "role == %@", WorkspacePlacementRole.library.rawValue)
+
+		if let query {
+			let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
+			if !trimmedQuery.isEmpty {
+				request.predicate = NSCompoundPredicate(
+					andPredicateWithSubpredicates: [
+						NSPredicate(format: "role == %@", WorkspacePlacementRole.library.rawValue),
+						NSPredicate(format: "searchText CONTAINS[cd] %@", trimmedQuery),
+					]
+				)
+			}
+		}
+
+		do {
+			return try context.fetch(request).map(makeSavedWorkspaceListing(from:))
+		} catch {
+			Logger.persistence.error("Core Data failed to list saved workspaces from the library. The app will continue, but the library index could not be read. Error: \(String(describing: error), privacy: .public)")
+			return []
+		}
+	}
+
+	func loadWorkspaceSnapshot(id: SavedWorkspaceID) -> WorkspaceRevision? {
+		let context = container.viewContext
+		context.performAndWait {
+			try? migrateLegacyPersistenceIfNeeded(for: WorkspaceSceneIdentity(), context: context)
+		}
+		let request = NSFetchRequest<WorkspacePlacementEntity>(entityName: "WorkspacePlacementEntity")
+		request.fetchLimit = 1
+		request.predicate = NSPredicate(
+			format: "id == %@ AND role == %@",
+			id.rawValue as CVarArg,
+			WorkspacePlacementRole.library.rawValue
+		)
+
+		do {
+			guard let placement = try context.fetch(request).first else {
+				Logger.persistence.error("The saved-workspace library could not find the requested entry during reopen. The entry may have been deleted or the library selection may be stale. Saved workspace ID: \(id.rawValue.uuidString, privacy: .public)")
+				return nil
+			}
+			return workspaceRevision(for: placement.workspace, placement: placement)
+		} catch {
+			Logger.persistence.error("Core Data failed while reading a saved workspace from the library. The live session remains available, but the requested saved revision could not be loaded. Saved workspace ID: \(id.rawValue.uuidString, privacy: .public). Error: \(String(describing: error), privacy: .public)")
+			return nil
+		}
+	}
+
+	@discardableResult
+	func deleteWorkspaceSnapshot(id: SavedWorkspaceID) -> Bool {
+		let context = container.viewContext
+		context.performAndWait {
+			try? migrateLegacyPersistenceIfNeeded(for: WorkspaceSceneIdentity(), context: context)
+		}
+		var didDeleteSavedWorkspace = false
+		context.performAndWait {
+			do {
+				let request = NSFetchRequest<WorkspacePlacementEntity>(entityName: "WorkspacePlacementEntity")
+				request.fetchLimit = 1
+				request.predicate = NSPredicate(
+					format: "id == %@ AND role == %@",
+					id.rawValue as CVarArg,
+					WorkspacePlacementRole.library.rawValue
+				)
+				guard let placement = try context.fetch(request).first else {
+					Logger.persistence.error("The saved-workspace library could not find the entry requested for deletion. The library may already be up to date, or the selection may have gone stale. Saved workspace ID: \(id.rawValue.uuidString, privacy: .public)")
+					return
+				}
+
+				let libraryWorkspaceID = placement.workspace?.id
+				context.delete(placement)
+
+				if let libraryWorkspaceID {
+					try deleteOrphanedWorkspaceRecords(
+						existingWorkspacesByID: [libraryWorkspaceID: try requireWorkspaceEntity(id: libraryWorkspaceID, context: context)],
+						retainedWorkspaceIDs: [],
+						context: context
+					)
+				}
+
+				if context.hasChanges {
+					try context.save()
+				}
+				didDeleteSavedWorkspace = true
+			} catch {
+				Logger.persistence.error("Core Data failed to delete a saved workspace from the library. The entry remains available. Saved workspace ID: \(id.rawValue.uuidString, privacy: .public). Error: \(String(describing: error), privacy: .public)")
+				context.rollback()
+			}
+		}
+		return didDeleteSavedWorkspace
+	}
+
+	func markWorkspaceSnapshotOpened(_ id: SavedWorkspaceID) {
+		let context = container.viewContext
+		context.performAndWait {
+			try? migrateLegacyPersistenceIfNeeded(for: WorkspaceSceneIdentity(), context: context)
+		}
+		context.performAndWait {
+			do {
+				let request = NSFetchRequest<WorkspacePlacementEntity>(entityName: "WorkspacePlacementEntity")
+				request.fetchLimit = 1
+				request.predicate = NSPredicate(
+					format: "id == %@ AND role == %@",
+					id.rawValue as CVarArg,
+					WorkspacePlacementRole.library.rawValue
+				)
+				guard let placement = try context.fetch(request).first else {
+					return
+				}
+				let now = Date()
+				placement.lastOpenedAt = now
+				placement.updatedAt = now
+				if context.hasChanges {
+					try context.save()
+				}
+			} catch {
+				Logger.persistence.error("Core Data failed to update the recency metadata for a saved workspace. The entry remains usable, but its last-opened date is stale. Saved workspace ID: \(id.rawValue.uuidString, privacy: .public). Error: \(String(describing: error), privacy: .public)")
+				context.rollback()
+			}
+		}
+	}
+}
+
+private extension WorkspacePersistenceController {
+	func loadPlacements(
+		role: WorkspacePlacementRole,
+		sceneIdentity: WorkspaceSceneIdentity,
+		in context: NSManagedObjectContext? = nil
+	) -> [WorkspacePlacementEntity] {
+		let context = context ?? container.viewContext
+		let request = NSFetchRequest<WorkspacePlacementEntity>(entityName: "WorkspacePlacementEntity")
+		request.sortDescriptors = [NSSortDescriptor(key: #keyPath(WorkspacePlacementEntity.sortOrder), ascending: true)]
+		switch role {
+			case .library:
+				request.predicate = NSPredicate(format: "role == %@", role.rawValue)
+			case .live, .recent:
+				request.predicate = NSCompoundPredicate(
+					andPredicateWithSubpredicates: [
+						NSPredicate(format: "role == %@", role.rawValue),
+						NSPredicate(format: "windowID == %@", sceneIdentity.windowID as CVarArg),
+					]
+				)
+		}
+
+		do {
+			return try context.fetch(request)
+		} catch {
+			Logger.persistence.error("Core Data failed to fetch workspace placements for scene restoration. Role: \(role.rawValue, privacy: .public). Window ID: \(sceneIdentity.windowID.uuidString, privacy: .public). Error: \(String(describing: error), privacy: .public)")
+			return []
+		}
+	}
+
+	func upsertWorkspaceEntity(
+		for workspace: Workspace,
+		context: NSManagedObjectContext,
+		existingWorkspacesByID: inout [UUID: WorkspaceEntity],
+		sessions: TerminalSessionRegistry,
+		transcriptsBySessionID: [TerminalSessionID: String]
+	) throws -> WorkspaceEntity {
+		let sessionSnapshots = makeSessionSnapshots(
+			for: workspace,
+			sessions: sessions,
+			transcriptsBySessionID: transcriptsBySessionID
+		)
+		return try upsertWorkspaceEntity(
+			for: workspace,
+			context: context,
+			existingWorkspacesByID: &existingWorkspacesByID,
+			sessionSnapshots: sessionSnapshots
+		)
+	}
+
+	func upsertWorkspaceEntity(
+		for workspace: Workspace,
+		context: NSManagedObjectContext,
+		existingWorkspacesByID: inout [UUID: WorkspaceEntity],
+		sessionSnapshots: [WorkspaceSessionSnapshot]
+	) throws -> WorkspaceEntity {
+		let workspaceEntity = existingWorkspacesByID.removeValue(forKey: workspace.id.rawValue)
+			?? WorkspaceEntity(context: context)
+		workspaceEntity.id = workspace.id.rawValue
+		workspaceEntity.savedWorkspaceID = workspace.savedWorkspaceID?.rawValue
+		try updateWorkspaceEntity(
+			workspaceEntity,
+			from: workspace,
+			context: context,
+			sessionSnapshots: sessionSnapshots,
+			notes: workspaceEntity.notes,
+			now: Date()
+		)
+		return workspaceEntity
+	}
+
+	func updateWorkspaceEntity(
+		_ workspaceEntity: WorkspaceEntity,
+		from workspace: Workspace,
+		context: NSManagedObjectContext,
+		sessionSnapshots: [WorkspaceSessionSnapshot],
+		notes: String?,
+		now: Date
+	) throws {
+		let isNewRecord = workspaceEntity.objectID.isTemporaryID
+		if isNewRecord {
+			workspaceEntity.createdAt = now
+		}
+		workspaceEntity.updatedAt = now
+		workspaceEntity.title = workspace.title
+		workspaceEntity.notes = notes
+		workspaceEntity.sortOrder = 0
+		if let existingRootNode = workspaceEntity.rootNode {
+			context.delete(existingRootNode)
+		}
+		for existingSessionSnapshot in (workspaceEntity.sessionSnapshots as? Set<PaneSessionSnapshotEntity>) ?? [] {
+			context.delete(existingSessionSnapshot)
+		}
+		workspaceEntity.rootNode = Self.makeNodeEntity(from: workspace.root, context: context)
+		let sessionSnapshotEntities = sessionSnapshots.map { sessionSnapshot -> PaneSessionSnapshotEntity in
+			let entity = PaneSessionSnapshotEntity(context: context)
+			entity.id = sessionSnapshot.id.rawValue
+			entity.executable = sessionSnapshot.launchConfiguration.executable
+			entity.argumentsData = try? JSONEncoder().encode(sessionSnapshot.launchConfiguration.arguments)
+			entity.environmentData = try? JSONEncoder().encode(sessionSnapshot.launchConfiguration.environment)
+			entity.currentDirectory = sessionSnapshot.launchConfiguration.currentDirectory
+			entity.title = sessionSnapshot.title
+			entity.transcript = sessionSnapshot.transcript
+			entity.transcriptByteCount = Int64(sessionSnapshot.transcriptByteCount)
+			entity.transcriptLineCount = Int64(sessionSnapshot.transcriptLineCount)
+			entity.previewText = sessionSnapshot.previewText
+			entity.workspace = workspaceEntity
+			return entity
+		}
+		workspaceEntity.sessionSnapshots = NSSet(array: sessionSnapshotEntities)
+		workspaceEntity.previewText = sessionSnapshots.lazy.compactMap(\.previewText).first
+		workspaceEntity.searchText = makeSearchText(
+			title: workspace.title,
+			notes: notes,
+			previewText: workspaceEntity.previewText,
+			sessionSnapshots: sessionSnapshots
+		)
+	}
+
+	func makeSessionSnapshots(
+		for workspace: Workspace,
+		sessions: TerminalSessionRegistry,
+		transcriptsBySessionID: [TerminalSessionID: String]
+	) -> [WorkspaceSessionSnapshot] {
+		makeSessionSnapshots(
+			for: workspace,
+			launchConfigurationsBySessionID: Dictionary(
+				uniqueKeysWithValues: (workspace.root?.leaves() ?? []).map { leaf in
+					let session = sessions.ensureSession(id: leaf.sessionID)
+					let launchConfiguration = TerminalLaunchConfiguration(
+						executable: session.launchConfiguration.executable,
+						arguments: session.launchConfiguration.arguments,
+						environment: session.launchConfiguration.environment,
+						currentDirectory: session.currentDirectory ?? session.launchConfiguration.currentDirectory
+					)
+					return (leaf.sessionID, launchConfiguration)
+				}
+			),
+			titlesBySessionID: Dictionary(
+				uniqueKeysWithValues: (workspace.root?.leaves() ?? []).map { leaf in
+					let session = sessions.ensureSession(id: leaf.sessionID)
+					return (leaf.sessionID, session.title)
+				}
+			),
+			transcriptsBySessionID: transcriptsBySessionID
+		)
+	}
+
+	func makeSessionSnapshots(
+		for workspace: Workspace,
+		launchConfigurationsBySessionID: [TerminalSessionID: TerminalLaunchConfiguration],
+		titlesBySessionID: [TerminalSessionID: String],
+		transcriptsBySessionID: [TerminalSessionID: String]
+	) -> [WorkspaceSessionSnapshot] {
+		(workspace.root?.leaves() ?? []).compactMap { leaf in
+			guard let launchConfiguration = launchConfigurationsBySessionID[leaf.sessionID] else {
+				return nil
+			}
+			let transcript = transcriptsBySessionID[leaf.sessionID]
 			let transcriptLineCount = transcript.map { transcript in
 				transcript.isEmpty ? 0 : transcript.reduce(into: 1) { count, character in
 					if character == "\n" {
@@ -154,278 +533,295 @@ final class WorkspacePersistenceController {
 					}
 				}
 			} ?? 0
-			return (
-				sessionID: leaf.sessionID,
-				title: session.title,
+			let previewText = transcript.flatMap(Self.makePreviewText(from:))
+			return WorkspaceSessionSnapshot(
+				id: leaf.sessionID,
+				title: titlesBySessionID[leaf.sessionID] ?? "Shell",
 				launchConfiguration: launchConfiguration,
-				argumentsData: try? JSONEncoder().encode(launchConfiguration.arguments),
-				environmentData: try? JSONEncoder().encode(launchConfiguration.environment),
 				transcript: transcript,
 				transcriptByteCount: transcript?.utf8.count ?? 0,
 				transcriptLineCount: transcriptLineCount,
 				previewText: previewText
 			)
 		}
-
-		var searchComponents: [String] = [workspace.title]
-		if let notes, !notes.isEmpty {
-			searchComponents.append(notes)
-		}
-		for snapshot in paneSnapshots {
-			if let previewText = snapshot.previewText, !previewText.isEmpty {
-				searchComponents.append(previewText)
-			}
-			if let transcript = snapshot.transcript, !transcript.isEmpty {
-				searchComponents.append(transcript)
-			}
-		}
-
-		let flattenedSearchText = searchComponents
-			.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-			.filter { !$0.isEmpty }
-			.joined(separator: "\n")
-		let previewText = paneSnapshots.lazy.compactMap { $0.previewText }.first
-
-		context.performAndWait {
-			do {
-				let request = NSFetchRequest<WorkspaceSnapshotEntity>(entityName: "WorkspaceSnapshotEntity")
-				request.fetchLimit = 1
-				request.predicate = NSPredicate(format: "sourceWorkspaceID == %@", workspace.id.rawValue as CVarArg)
-				let snapshotEntity = try context.fetch(request).first ?? WorkspaceSnapshotEntity(context: context)
-				let snapshotID = snapshotEntity.sourceWorkspaceID == workspace.id.rawValue
-					? WorkspaceSnapshotID(rawValue: snapshotEntity.id)
-					: WorkspaceSnapshotID()
-				if snapshotEntity.sourceWorkspaceID != workspace.id.rawValue {
-					snapshotEntity.id = snapshotID.rawValue
-					snapshotEntity.createdAt = now
-					snapshotEntity.lastOpenedAt = nil
-					snapshotEntity.isPinned = false
-				} else {
-					if let existingRootNode = snapshotEntity.rootNode {
-						context.delete(existingRootNode)
-					}
-					for sessionSnapshot in (snapshotEntity.sessionSnapshots as? Set<PaneSessionSnapshotEntity>) ?? [] {
-						context.delete(sessionSnapshot)
-					}
-					snapshotEntity.rootNode = nil
-					snapshotEntity.sessionSnapshots = nil
-				}
-
-				snapshotEntity.sourceWorkspaceID = workspace.id.rawValue
-				snapshotEntity.title = workspace.title
-				snapshotEntity.updatedAt = now
-				if let isPinned {
-					snapshotEntity.isPinned = isPinned
-				}
-				if let notes {
-					snapshotEntity.notes = notes
-				}
-				var sessionSnapshotsByID: [UUID: PaneSessionSnapshotEntity] = [:]
-				for pendingPaneSnapshot in paneSnapshots {
-					let sessionSnapshotEntity = PaneSessionSnapshotEntity(context: context)
-					sessionSnapshotEntity.id = pendingPaneSnapshot.sessionID.rawValue
-					sessionSnapshotEntity.executable = pendingPaneSnapshot.launchConfiguration.executable
-					sessionSnapshotEntity.argumentsData = pendingPaneSnapshot.argumentsData
-					sessionSnapshotEntity.environmentData = pendingPaneSnapshot.environmentData
-					sessionSnapshotEntity.currentDirectory = pendingPaneSnapshot.launchConfiguration.currentDirectory
-					sessionSnapshotEntity.title = pendingPaneSnapshot.title
-					sessionSnapshotEntity.transcript = pendingPaneSnapshot.transcript
-					sessionSnapshotEntity.transcriptByteCount = Int64(pendingPaneSnapshot.transcriptByteCount)
-					sessionSnapshotEntity.transcriptLineCount = Int64(pendingPaneSnapshot.transcriptLineCount)
-					sessionSnapshotEntity.previewText = pendingPaneSnapshot.previewText
-					sessionSnapshotEntity.snapshot = snapshotEntity
-					sessionSnapshotsByID[sessionSnapshotEntity.id] = sessionSnapshotEntity
-				}
-
-				snapshotEntity.rootNode = try Self.syncSnapshotNode(
-					workspace.root,
-					context: context,
-					sessionSnapshotsByID: sessionSnapshotsByID
-				)
-				snapshotEntity.previewText = previewText
-				snapshotEntity.searchText = flattenedSearchText
-
-				try context.save()
-				createdSummary = SavedWorkspaceSnapshotSummary(
-					id: snapshotID,
-					title: workspace.title,
-					createdAt: snapshotEntity.createdAt,
-					updatedAt: now,
-					lastOpenedAt: snapshotEntity.lastOpenedAt,
-					isPinned: snapshotEntity.isPinned,
-					previewText: previewText,
-					paneCount: workspace.root?.leaves().count ?? 0
-				)
-			} catch {
-				Logger.persistence.error("Core Data failed to create a saved workspace snapshot. The live workspace remains open, but the snapshot was not written. Workspace title: \(workspace.title, privacy: .public). Error: \(String(describing: error), privacy: .public)")
-				context.rollback()
-			}
-		}
-
-		return createdSummary
 	}
 
-	func listWorkspaceSnapshots(matching query: String? = nil) -> [SavedWorkspaceSnapshotSummary] {
-		let context = container.viewContext
-		let request = NSFetchRequest<WorkspaceSnapshotEntity>(entityName: "WorkspaceSnapshotEntity")
-		request.sortDescriptors = [
-			NSSortDescriptor(key: #keyPath(WorkspaceSnapshotEntity.isPinned), ascending: false),
-			NSSortDescriptor(key: #keyPath(WorkspaceSnapshotEntity.updatedAt), ascending: false)
-		]
-
-		if let query {
-			let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
-			if !trimmedQuery.isEmpty {
-				request.predicate = NSPredicate(format: "searchText CONTAINS[cd] %@", trimmedQuery)
-			}
-		}
-
-		do {
-			return try context.fetch(request).map { entity in
-				return SavedWorkspaceSnapshotSummary(
-					id: WorkspaceSnapshotID(rawValue: entity.id),
-					title: entity.title,
-					createdAt: entity.createdAt,
-					updatedAt: entity.updatedAt,
-					lastOpenedAt: entity.lastOpenedAt,
-					isPinned: entity.isPinned,
-					previewText: entity.previewText,
-					paneCount: Self.decodeSnapshotNode(entity.rootNode)?.leaves().count ?? 0
-				)
-			}
-		} catch {
-			Logger.persistence.error("Core Data failed to list saved workspace snapshots. The app will continue, but the saved-workspace index could not be read. Error: \(String(describing: error), privacy: .public)")
-			return []
-		}
-	}
-
-	func loadWorkspaceSnapshot(id: WorkspaceSnapshotID) -> SavedWorkspaceSnapshot? {
-		let context = container.viewContext
-		let request = NSFetchRequest<WorkspaceSnapshotEntity>(entityName: "WorkspaceSnapshotEntity")
-		request.fetchLimit = 1
-		request.predicate = NSPredicate(format: "id == %@", id.rawValue as CVarArg)
-
-		do {
-			guard let entity = try context.fetch(request).first else {
-				Logger.persistence.error("The saved-workspace library could not find the requested snapshot during reopen. The snapshot may have been deleted or the library index may be stale. Snapshot ID: \(id.rawValue.uuidString, privacy: .public)")
-				return nil
-			}
-
-			let workspace = Workspace(
-				title: entity.title,
-				root: Self.decodeSnapshotNode(entity.rootNode)
-			)
-
-				guard let root = workspace.root else {
-					Logger.persistence.error("A saved workspace snapshot decoded into an unusable pane layout during reopen because it had no root pane tree. The snapshot remains on disk, but the app could not rebuild a restorable workspace from it. Snapshot ID: \(id.rawValue.uuidString, privacy: .public)")
-					return nil
-				}
-
-				let leaves = root.leaves()
-				guard !leaves.isEmpty else {
-					Logger.persistence.error("A saved workspace snapshot decoded into an unusable pane layout during reopen because its pane tree was empty. The snapshot remains on disk, but the app could not rebuild a restorable workspace from it. Snapshot ID: \(id.rawValue.uuidString, privacy: .public)")
-					return nil
-				}
-
-				let normalizedWorkspace = Workspace(title: workspace.title, root: root)
-
-				let paneSnapshots = entity.sessionSnapshots as? Set<PaneSessionSnapshotEntity> ?? []
-			let paneSnapshotsBySessionID: [TerminalSessionID: SavedPaneSessionSnapshot] = Dictionary(
-				uniqueKeysWithValues: paneSnapshots.compactMap { sessionSnapshot in
-					guard let argumentsData = sessionSnapshot.argumentsData else {
-						Logger.persistence.error("A saved workspace pane session snapshot is missing its encoded argument list. That pane history will be skipped during restore. Session snapshot ID: \(sessionSnapshot.id.uuidString, privacy: .public)")
-						return nil
-					}
-					do {
-						let arguments = try JSONDecoder().decode([String].self, from: argumentsData)
-						let environment = try sessionSnapshot.environmentData.map {
-							try JSONDecoder().decode([String]?.self, from: $0)
-						} ?? nil
-						let paneSnapshot = SavedPaneSessionSnapshot(
-							id: TerminalSessionID(rawValue: sessionSnapshot.id),
-							title: sessionSnapshot.title,
-							launchConfiguration: TerminalLaunchConfiguration(
-								executable: sessionSnapshot.executable,
-								arguments: arguments,
-								environment: environment,
-								currentDirectory: sessionSnapshot.currentDirectory
-							),
-							transcript: sessionSnapshot.transcript,
-							transcriptByteCount: Int(sessionSnapshot.transcriptByteCount),
-							transcriptLineCount: Int(sessionSnapshot.transcriptLineCount),
-							previewText: sessionSnapshot.previewText
-						)
-						return (paneSnapshot.id, paneSnapshot)
-					} catch {
-						Logger.persistence.error("A saved workspace pane session snapshot could not be decoded. That pane history will be skipped during restore. Session snapshot ID: \(sessionSnapshot.id.uuidString, privacy: .public). Error: \(String(describing: error), privacy: .public)")
-						return nil
-					}
-				}
-			)
-
-			return SavedWorkspaceSnapshot(
-				id: WorkspaceSnapshotID(rawValue: entity.id),
-				title: entity.title,
-				createdAt: entity.createdAt,
-				updatedAt: entity.updatedAt,
-				lastOpenedAt: entity.lastOpenedAt,
-				isPinned: entity.isPinned,
-				notes: entity.notes,
-				previewText: entity.previewText,
-				workspace: normalizedWorkspace,
-				paneSnapshotsBySessionID: paneSnapshotsBySessionID
-			)
-		} catch {
-			Logger.persistence.error("Core Data failed while reading a saved-workspace snapshot for reopen. The live session remains available, but the requested snapshot could not be loaded from the library store. Snapshot ID: \(id.rawValue.uuidString, privacy: .public). Error: \(String(describing: error), privacy: .public)")
+	func workspaceRevision(
+		for workspaceEntity: WorkspaceEntity?,
+		placement: WorkspacePlacementEntity
+	) -> WorkspaceRevision? {
+		guard let workspaceEntity else {
+			Logger.persistence.error("A workspace placement is missing its referenced workspace payload. That placement will be skipped during restore. Placement ID: \(placement.id.uuidString, privacy: .public)")
 			return nil
 		}
-	}
-
-	@discardableResult
-	func deleteWorkspaceSnapshot(id: WorkspaceSnapshotID) -> Bool {
-		let context = container.viewContext
-		var didDeleteSnapshot = false
-		context.performAndWait {
-			do {
-				let request = NSFetchRequest<WorkspaceSnapshotEntity>(entityName: "WorkspaceSnapshotEntity")
-				request.fetchLimit = 1
-				request.predicate = NSPredicate(format: "id == %@", id.rawValue as CVarArg)
-				guard let entity = try context.fetch(request).first else {
-					Logger.persistence.error("The saved-workspace library could not find the snapshot requested for deletion. The library may already be up to date, or the selection may have gone stale. Snapshot ID: \(id.rawValue.uuidString, privacy: .public)")
-					return
-				}
-				context.delete(entity)
-				if context.hasChanges {
-					try context.save()
-				}
-				didDeleteSnapshot = true
-			} catch {
-				Logger.persistence.error("Core Data failed to delete a saved workspace snapshot. The snapshot remains in the library. Snapshot ID: \(id.rawValue.uuidString, privacy: .public). Error: \(String(describing: error), privacy: .public)")
-				context.rollback()
-			}
+		let workspace = Workspace(
+			id: WorkspaceID(rawValue: workspaceEntity.id),
+			title: workspaceEntity.title,
+			root: Self.decodeNode(workspaceEntity.rootNode),
+			savedWorkspaceID: workspaceEntity.savedWorkspaceID.map(SavedWorkspaceID.init(rawValue:))
+		)
+		guard let root = workspace.root else {
+			Logger.persistence.error("A persisted workspace payload decoded without a root pane tree. That payload will be skipped during restore. Workspace payload ID: \(workspaceEntity.id.uuidString, privacy: .public)")
+			return nil
 		}
-		return didDeleteSnapshot
+		guard !root.leaves().isEmpty else {
+			Logger.persistence.error("A persisted workspace payload decoded into an empty pane tree. That payload will be skipped during restore. Workspace payload ID: \(workspaceEntity.id.uuidString, privacy: .public)")
+			return nil
+		}
+
+		let sessionSnapshots = decodeSessionSnapshots(from: workspaceEntity)
+		return WorkspaceRevision(
+			id: workspaceEntity.id,
+			savedWorkspaceID: workspaceEntity.savedWorkspaceID.map(SavedWorkspaceID.init(rawValue:)),
+			title: workspaceEntity.title,
+			createdAt: workspaceEntity.createdAt,
+			updatedAt: workspaceEntity.updatedAt,
+			lastOpenedAt: placement.lastOpenedAt,
+			isPinned: placement.isPinned,
+			notes: workspaceEntity.notes,
+			previewText: workspaceEntity.previewText,
+			workspace: Workspace(
+				id: WorkspaceID(rawValue: workspaceEntity.id),
+				title: workspace.title,
+				root: root,
+				savedWorkspaceID: workspace.savedWorkspaceID
+			),
+			paneSnapshotsBySessionID: sessionSnapshots
+		)
 	}
 
-	func markWorkspaceSnapshotOpened(_ id: WorkspaceSnapshotID) {
-		let context = container.viewContext
-		context.performAndWait {
+	func decodeSessionSnapshots(from workspaceEntity: WorkspaceEntity) -> [TerminalSessionID: WorkspaceSessionSnapshot] {
+		let snapshotEntities = workspaceEntity.sessionSnapshots as? Set<PaneSessionSnapshotEntity> ?? []
+		return Dictionary(
+			uniqueKeysWithValues: snapshotEntities.compactMap { sessionSnapshot in
+				guard let argumentsData = sessionSnapshot.argumentsData else {
+					Logger.persistence.error("A persisted pane session payload is missing its encoded argument list. That pane payload will be skipped during restore. Session payload ID: \(sessionSnapshot.id.uuidString, privacy: .public)")
+					return nil
+				}
+				do {
+					let arguments = try JSONDecoder().decode([String].self, from: argumentsData)
+					let environment = try sessionSnapshot.environmentData.map {
+						try JSONDecoder().decode([String]?.self, from: $0)
+					} ?? nil
+					let sessionSnapshotValue = WorkspaceSessionSnapshot(
+						id: TerminalSessionID(rawValue: sessionSnapshot.id),
+						title: sessionSnapshot.title,
+						launchConfiguration: TerminalLaunchConfiguration(
+							executable: sessionSnapshot.executable,
+							arguments: arguments,
+							environment: environment,
+							currentDirectory: sessionSnapshot.currentDirectory
+						),
+						transcript: sessionSnapshot.transcript,
+						transcriptByteCount: Int(sessionSnapshot.transcriptByteCount),
+						transcriptLineCount: Int(sessionSnapshot.transcriptLineCount),
+						previewText: sessionSnapshot.previewText
+					)
+					return (sessionSnapshotValue.id, sessionSnapshotValue)
+				} catch {
+					Logger.persistence.error("A persisted pane session payload could not be decoded. That pane payload will be skipped during restore. Session payload ID: \(sessionSnapshot.id.uuidString, privacy: .public). Error: \(String(describing: error), privacy: .public)")
+					return nil
+				}
+			}
+		)
+	}
+
+	func refreshListingMetadata(on placement: WorkspacePlacementEntity, from workspaceEntity: WorkspaceEntity) {
+		placement.title = workspaceEntity.title
+		placement.previewText = workspaceEntity.previewText
+		placement.searchText = workspaceEntity.searchText
+		placement.paneCount = Int64(Self.decodeNode(workspaceEntity.rootNode)?.leaves().count ?? 0)
+	}
+
+	func makeSavedWorkspaceListing(from placement: WorkspacePlacementEntity) -> SavedWorkspaceListing {
+		SavedWorkspaceListing(
+			id: SavedWorkspaceID(rawValue: placement.id),
+			title: placement.title,
+			createdAt: placement.createdAt,
+			updatedAt: placement.updatedAt,
+			lastOpenedAt: placement.lastOpenedAt,
+			isPinned: placement.isPinned,
+			previewText: placement.previewText,
+			paneCount: Int(placement.paneCount)
+		)
+	}
+
+	func makeSearchText(
+		title: String,
+		notes: String?,
+		previewText: String?,
+		sessionSnapshots: [WorkspaceSessionSnapshot]
+	) -> String {
+		let pieces = [title, notes, previewText]
+			.compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+			.filter { !$0.isEmpty }
+		let transcriptPieces = sessionSnapshots.compactMap(\.transcript).filter { !$0.isEmpty }
+		return (pieces + transcriptPieces).joined(separator: "\n")
+	}
+
+	func deleteOrphanedWorkspaceRecords(
+		existingWorkspacesByID: [UUID: WorkspaceEntity],
+		retainedWorkspaceIDs: Set<UUID>,
+		context: NSManagedObjectContext
+	) throws {
+		for workspaceEntity in existingWorkspacesByID.values where !retainedWorkspaceIDs.contains(workspaceEntity.id) {
+			let livePlacements = (workspaceEntity.placements as? Set<WorkspacePlacementEntity>) ?? []
+			let hasLiveReference = livePlacements.contains { placement in
+				guard !placement.isDeleted else {
+					return false
+				}
+				guard let role = WorkspacePlacementRole(rawValue: placement.role) else {
+					return false
+				}
+				return role == .live || role == .recent || role == .library
+			}
+			guard !hasLiveReference else {
+				continue
+			}
+			context.delete(workspaceEntity)
+		}
+	}
+
+	func requireWorkspaceEntity(id: UUID, context: NSManagedObjectContext) throws -> WorkspaceEntity {
+		let request = NSFetchRequest<WorkspaceEntity>(entityName: "WorkspaceEntity")
+		request.fetchLimit = 1
+		request.predicate = NSPredicate(format: "id == %@", id as CVarArg)
+		guard let entity = try context.fetch(request).first else {
+			throw CocoaError(.validationMissingMandatoryProperty)
+		}
+		return entity
+	}
+
+	static func makePreviewText(from transcript: String) -> String? {
+		transcript
+			.split(whereSeparator: \.isNewline)
+			.map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
+			.first { !$0.isEmpty }
+			.map { String($0.prefix(160)) }
+	}
+
+	func migrateLegacyPersistenceIfNeeded(
+		for sceneIdentity: WorkspaceSceneIdentity,
+		context: NSManagedObjectContext
+	) throws {
+		let placementCountRequest = NSFetchRequest<WorkspacePlacementEntity>(entityName: "WorkspacePlacementEntity")
+		let existingPlacementCount = try context.count(for: placementCountRequest)
+		guard existingPlacementCount == 0 else {
+			return
+		}
+
+		var migratedAnything = false
+		let now = Date()
+
+		let legacyWorkspaceRequest = NSFetchRequest<WorkspaceEntity>(entityName: "WorkspaceEntity")
+		legacyWorkspaceRequest.sortDescriptors = [NSSortDescriptor(key: #keyPath(WorkspaceEntity.sortOrder), ascending: true)]
+		let legacyWorkspaceEntities = try context.fetch(legacyWorkspaceRequest)
+		for (sortOrder, workspaceEntity) in legacyWorkspaceEntities.enumerated() where workspaceEntity.savedWorkspaceID == nil {
+			let placement = WorkspacePlacementEntity(context: context)
+			placement.id = workspaceEntity.id
+			placement.role = WorkspacePlacementRole.live.rawValue
+			placement.windowID = sceneIdentity.windowID
+			placement.sortOrder = Int64(sortOrder)
+			placement.restoreSortOrder = Int64(sortOrder)
+			placement.createdAt = workspaceEntity.createdAt.timeIntervalSinceReferenceDate == 0 ? now : workspaceEntity.createdAt
+			placement.updatedAt = workspaceEntity.updatedAt.timeIntervalSinceReferenceDate == 0 ? now : workspaceEntity.updatedAt
+			placement.lastOpenedAt = nil
+			placement.isPinned = false
+			placement.workspace = workspaceEntity
+
+			if workspaceEntity.createdAt.timeIntervalSinceReferenceDate == 0 {
+				workspaceEntity.createdAt = now
+			}
+			if workspaceEntity.updatedAt.timeIntervalSinceReferenceDate == 0 {
+				workspaceEntity.updatedAt = now
+			}
+			refreshListingMetadata(on: placement, from: workspaceEntity)
+			migratedAnything = true
+		}
+
+		let legacySnapshotRequest = NSFetchRequest<WorkspaceSnapshotEntity>(entityName: "WorkspaceSnapshotEntity")
+		let legacySnapshotEntities = try context.fetch(legacySnapshotRequest)
+		for snapshotEntity in legacySnapshotEntities {
+			let workspaceEntity = WorkspaceEntity(context: context)
+			workspaceEntity.id = UUID()
+			workspaceEntity.savedWorkspaceID = snapshotEntity.id
+			workspaceEntity.createdAt = snapshotEntity.createdAt
+			workspaceEntity.updatedAt = snapshotEntity.updatedAt
+			workspaceEntity.title = snapshotEntity.title
+			workspaceEntity.notes = snapshotEntity.notes
+			workspaceEntity.previewText = snapshotEntity.previewText
+			workspaceEntity.searchText = snapshotEntity.searchText
+			workspaceEntity.sortOrder = 0
+			workspaceEntity.rootNode = Self.makeNodeEntity(
+				from: Self.decodeSnapshotNode(snapshotEntity.rootNode),
+				context: context
+			)
+			let legacySessionSnapshots = decodeLegacySessionSnapshots(from: snapshotEntity)
+			let sessionSnapshotEntities = legacySessionSnapshots.map { sessionSnapshot -> PaneSessionSnapshotEntity in
+				let entity = PaneSessionSnapshotEntity(context: context)
+				entity.id = sessionSnapshot.id.rawValue
+				entity.executable = sessionSnapshot.launchConfiguration.executable
+				entity.argumentsData = try? JSONEncoder().encode(sessionSnapshot.launchConfiguration.arguments)
+				entity.environmentData = try? JSONEncoder().encode(sessionSnapshot.launchConfiguration.environment)
+				entity.currentDirectory = sessionSnapshot.launchConfiguration.currentDirectory
+				entity.title = sessionSnapshot.title
+				entity.transcript = sessionSnapshot.transcript
+				entity.transcriptByteCount = Int64(sessionSnapshot.transcriptByteCount)
+				entity.transcriptLineCount = Int64(sessionSnapshot.transcriptLineCount)
+				entity.previewText = sessionSnapshot.previewText
+				entity.workspace = workspaceEntity
+				return entity
+			}
+			workspaceEntity.sessionSnapshots = NSSet(array: sessionSnapshotEntities)
+
+			let placement = WorkspacePlacementEntity(context: context)
+			placement.id = snapshotEntity.id
+			placement.role = WorkspacePlacementRole.library.rawValue
+			placement.windowID = nil
+			placement.sortOrder = 0
+			placement.restoreSortOrder = 0
+			placement.createdAt = snapshotEntity.createdAt
+			placement.updatedAt = snapshotEntity.updatedAt
+			placement.lastOpenedAt = snapshotEntity.lastOpenedAt
+			placement.isPinned = snapshotEntity.isPinned
+			placement.workspace = workspaceEntity
+			refreshListingMetadata(on: placement, from: workspaceEntity)
+			migratedAnything = true
+		}
+
+		if migratedAnything, context.hasChanges {
+			try context.save()
+			Logger.persistence.notice("Migrated legacy workspace persistence records into the window-scoped placement model. Window ID: \(sceneIdentity.windowID.uuidString, privacy: .public). Legacy live workspace count: \(legacyWorkspaceEntities.count). Legacy saved workspace count: \(legacySnapshotEntities.count)")
+		}
+	}
+
+	func decodeLegacySessionSnapshots(from snapshotEntity: WorkspaceSnapshotEntity) -> [WorkspaceSessionSnapshot] {
+		let sessionSnapshots = snapshotEntity.sessionSnapshots as? Set<PaneSessionSnapshotEntity> ?? []
+		return sessionSnapshots.compactMap { sessionSnapshot in
+			guard let argumentsData = sessionSnapshot.argumentsData else {
+				return nil
+			}
 			do {
-				let request = NSFetchRequest<WorkspaceSnapshotEntity>(entityName: "WorkspaceSnapshotEntity")
-				request.fetchLimit = 1
-				request.predicate = NSPredicate(format: "id == %@", id.rawValue as CVarArg)
-				guard let entity = try context.fetch(request).first else {
-					return
-				}
-				let now = Date()
-				entity.lastOpenedAt = now
-				entity.updatedAt = now
-				if context.hasChanges {
-					try context.save()
-				}
+				let arguments = try JSONDecoder().decode([String].self, from: argumentsData)
+				let environment = try sessionSnapshot.environmentData.map {
+					try JSONDecoder().decode([String]?.self, from: $0)
+				} ?? nil
+				return WorkspaceSessionSnapshot(
+					id: TerminalSessionID(rawValue: sessionSnapshot.id),
+					title: sessionSnapshot.title,
+					launchConfiguration: TerminalLaunchConfiguration(
+						executable: sessionSnapshot.executable,
+						arguments: arguments,
+						environment: environment,
+						currentDirectory: sessionSnapshot.currentDirectory
+					),
+					transcript: sessionSnapshot.transcript,
+					transcriptByteCount: Int(sessionSnapshot.transcriptByteCount),
+					transcriptLineCount: Int(sessionSnapshot.transcriptLineCount),
+					previewText: sessionSnapshot.previewText
+				)
 			} catch {
-				Logger.persistence.error("Core Data failed to update the last-opened date for a saved workspace snapshot. The snapshot remains usable, but its recency metadata is stale. Snapshot ID: \(id.rawValue.uuidString, privacy: .public). Error: \(String(describing: error), privacy: .public)")
-				context.rollback()
+				return nil
 			}
 		}
 	}

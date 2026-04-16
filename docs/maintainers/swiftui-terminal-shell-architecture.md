@@ -20,7 +20,7 @@ The source tree is now organized to match the current ownership boundaries in th
 - `gmaxApp.swift` keeps app bootstrap and scene declarations
 - `gmaxApp.swift` and the scene roots hold app bootstrap, menu commands, and UI-test launch behavior
 - `Workspace/` keeps workspace state plus pane and workspace management split by concern
-- `Persistence/Workspace/` keeps Core Data setup, persistence profiles, snapshot helpers, and workspace storage split by concern
+- `Persistence/Workspace/` keeps Core Data setup, persistence profiles, workspace payload and placement storage, and migration helpers split by concern
 - `Terminal/` keeps the SwiftUI representable boundary, coordinator, AppKit host, and terminal-session plumbing
 - `Scenes/WorkspaceWindowGroup/` keeps top-level workspace-window scene composition and scene-bound presentation surfaces
 - `Scenes/Settings/` keeps the settings entry view plus the terminal appearance and workspace sections
@@ -47,7 +47,16 @@ Why this shape is preferred now:
 - it makes scene-local state restoration a better fit for the real UX
 - it keeps the app aligned with SwiftUI's expected routing for frontmost-window commands
 
-The shared `WorkspaceStore` remains app-global, but selection and presentation state that should vary by window is scene-local.
+The current code now uses a data-driven `WindowGroup` scene identity plus
+scene-owned `WorkspaceStore` instances:
+
+- each window scene restores its own live and recent workspace state
+- the saved workspace library remains the app-wide repository surface
+- the persistence boundary is now one payload model plus one placement model
+
+See
+[`workspace-window-state-and-persistence-model.md`](./workspace-window-state-and-persistence-model.md)
+for the detailed persistence model and follow-through notes.
 
 ## Frontmost-Window Command Routing
 
@@ -55,8 +64,9 @@ Menu commands now route through the frontmost shell window's scene context inste
 
 The current preferred model is:
 
-- keep shared shell data in one `WorkspaceStore`
-- keep per-window selection and presentation state in a scene-local context object
+- let each window scene own its own `WorkspaceStore`, initialized with that
+  scene's restored `WorkspaceSceneIdentity`
+- keep per-window selection and presentation state in scene-local state
 - expose that context through `focusedSceneValue`
 - have `Commands` read it through `@FocusedValue`
 - keep destructive confirmations owned by the scene context instead of burying them inside one sidebar or content subview
@@ -171,7 +181,6 @@ struct Workspace {
     var id: WorkspaceID
     var title: String
     var root: PaneNode
-    var focusedPaneID: PaneID?
 }
 
 enum PaneNode {
@@ -232,7 +241,7 @@ Workspace persistence should be treated as three distinct layers with different 
 
 - live session persistence for the workspaces currently open in the window
 - recently closed persistence for fast undo-style recovery
-- saved workspace library persistence for durable snapshots that can be listed, searched, reopened, or managed later
+- saved workspace library persistence for durable saved entries that can be listed, searched, reopened, or managed later
 
 These layers should stay separate in both the app model and the persistence model.
 
@@ -240,47 +249,46 @@ Why this separation matters:
 
 - live session state answers "what is open right now"
 - recently closed answers "what did the user just close and may want to undo"
-- saved library answers "what snapshots should exist independently of the current live session"
-
-Overloading one Core Data entity with mixed `open`, `closed`, `archived`, or `saved` status flags would technically work, but it would blur the product rules quickly and make restore behavior harder to reason about.
+- saved library answers "what saved workspaces should exist independently of the current live session"
 
 The current implementation is:
 
-- keep the `WorkspaceEntity` / `PaneNodeEntity` graph for the live session
-- keep the in-memory recently closed stack in `WorkspaceStore` for low-latency undo
-- use a separate snapshot graph in `WorkspacePersistenceController` for the saved library
+- `WorkspaceEntity` is the canonical workspace payload row
+- `WorkspacePlacementEntity` tracks whether that payload is `.live`, `.recent`,
+  or `.library`, and which scene identity owns the live or recent placement
+- the in-memory recently closed stack in `WorkspaceStore` is restored from and
+  persisted back to `.recent` placements
+- the saved library is browsed through lightweight listing metadata denormalized
+  onto `.library` placements
 
 ## Saved Workspace Library
 
-The saved workspace library should be a durable snapshot index, not a second name for the live session.
+The saved workspace library should be a durable saved-workspace index, not a
+second name for the live session.
 
-A saved workspace snapshot should store:
+A saved workspace entry should store or reference:
 
 - workspace title
 - save timestamps such as created and updated dates
 - optional user metadata such as notes or pinned state
 - the recursive pane tree layout
-- the focused pane identity within the saved layout
 - per-pane launch context such as shell command and working directory
 - per-pane preserved transcript text for restore and search
 - a flattened search field derived from title, notes, and transcript content
 
-The first recommended implementation is a second Core Data graph inside `WorkspacePersistenceController`, parallel to the live session graph.
+The current implementation is one payload-plus-placement model inside
+`WorkspacePersistenceController`, not a second parallel saved-workspace graph.
 
-Preferred snapshot entity direction:
-
-- `WorkspaceSnapshotEntity`
-- `PaneSnapshotNodeEntity`
-- `PaneSessionSnapshotEntity`
-
-This is now the active direction in the app, not just a proposed one. It gives us a clean path to:
+This gives us a clean path to:
 
 - `Save Workspace`
 - `Close to Library`
 - `Open Workspace...`
 - searchable saved-workspace lists
-- pinning or starring snapshots
-- future import/export if we later add file-based snapshots
+- pinning or starring saved entries
+- future import/export if we later add file-based saved workspace bundles
+- future saved revision history if we decide to retain older payloads per
+  library entry
 
 ## Transcript-Backed Scrollback Persistence
 
@@ -291,7 +299,9 @@ This distinction is important:
 - transcript-backed persistence preserves readable shell history and command output
 - full terminal-state persistence would try to preserve emulator details such as alternate-screen state, cursor state, or TUI presentation exactly
 
-SwiftTerm already gives us a strong path for transcript-backed persistence through its scrollback and buffer inspection APIs, and that path is now what the app uses for saved-workspace snapshots.
+SwiftTerm already gives us a strong path for transcript-backed persistence
+through its scrollback and buffer inspection APIs, and that path is now what
+the app uses for both live recent-close restore and library saves.
 
 The current restore model is:
 
@@ -392,8 +402,8 @@ The command model should map to these layers clearly:
 - `Close Workspace`: remove from live session, then apply the settings matrix above
 - `Undo Close Workspace`: restore from the recently closed stack only
 - `Save Workspace`: explicitly persist the current live workspace into the saved library without closing it
-- `Open Workspace...`: browse and reopen snapshots from the saved library
-- `Delete Saved Workspace`: remove a snapshot from the saved library without affecting any currently live workspace
+- `Open Workspace...`: browse and reopen saved workspaces from the saved library
+- `Delete Saved Workspace`: remove a saved workspace from the saved library without affecting any currently live workspace
 
 This means `Undo Close Workspace` and `Open Workspace...` should remain distinct:
 
@@ -431,94 +441,27 @@ That test grouping should be preserved as the app grows so workspace, persistenc
 
 ## Implementation Plan
 
-The saved-workspace work should be shipped in phases so we can get durable value early without blocking on perfect terminal replay.
+The older saved-workspace implementation sketch in this section has been
+superseded.
 
-### Phase 1: Persistence And Model Foundation
+The structural persistence work that actually landed is:
 
-Add a parallel saved-workspace snapshot graph inside `WorkspacePersistenceController` rather than overloading the live workspace entities.
+- one canonical `WorkspaceEntity` payload model
+- one `WorkspacePlacementEntity` model for `.live`, `.recent`, and `.library`
+- one data-driven `WindowGroup` scene identity for per-window restore
 
-Planned work:
+Use
+[`workspace-window-state-and-persistence-model.md`](./workspace-window-state-and-persistence-model.md)
+as the current source of truth for persistence structure and follow-through
+work.
 
-- add `WorkspaceSnapshotEntity`
-- add `PaneSnapshotNodeEntity`
-- add `PaneSessionSnapshotEntity`
-- add persistence APIs for save, list, load, and delete operations on snapshots
-- keep the existing live-session save and load APIs unchanged
+The remaining medium-term persistence work is about:
 
-This phase is a durable building-block change.
-
-### Phase 2: WorkspaceStore Actions
-
-Add high-level saved-workspace actions to `WorkspaceStore`.
-
-Planned work:
-
-- `saveWorkspaceToLibrary(_:)`
-- `closeWorkspaceToLibrary(_:)`
-- `openSavedWorkspace(_:)`
-- `deleteSavedWorkspace(_:)`
-- apply the close-behavior settings matrix when `Close Workspace` runs
-
-This phase should keep the current `Undo Close Workspace` stack separate from the saved library.
-
-### Phase 3: Transcript Capture
-
-Add transcript-backed scrollback persistence as the first saved-history implementation.
-
-Planned work:
-
-- add transcript extraction helpers at the terminal/session boundary
-- capture transcript text per pane when saving a snapshot
-- save launch context per pane alongside the transcript
-- define a retention policy for transcript size
-- keep transcript persistence explicitly text-backed rather than emulator-state-backed
-
-Recommended first policy shape:
-
-- configurable transcript retention limit
-- implementation enforced with a byte cap even if the UI expresses it in lines or preset sizes
-- save enough metadata for fast preview text and search indexing
-
-### Phase 4: Commands And Settings
-
-Expose the saved-workspace model through commands and preferences.
-
-Planned work:
-
-- add `Auto-save closed workspaces`
-- keep `Keep recently closed workspaces`
-- keep `Restore workspaces on launch`
-- add `Save Workspace`
-- reserve `Open Workspace...` for the library picker
-- keep `Undo Close Workspace` stack-based and separate
-
-The command and setting semantics should match the matrix above exactly.
-
-### Phase 5: Initial Library UI
-
-Add a first-pass saved-workspace browser.
-
-Planned work:
-
-- add a searchable saved-workspace picker
-- show title, modified date, and a lightweight preview
-- reopen a snapshot into the live session
-- delete a saved snapshot from the library
-- support pinning or starring if the snapshot metadata already exists
-
-The first UI does not need import/export and does not need replay-grade restoration.
-
-### Phase 6: Higher-Fidelity Restore, If Still Needed
-
-Only after the snapshot library is working well should we evaluate replay-style terminal restoration.
-
-That later phase would explore:
-
-- recording terminal output bytes instead of only transcript text
-- optional timing-aware replay
-- restoring a pane with a more faithful visual history before launching a fresh shell
-
-This should stay explicitly out of scope for the first saved-workspace release.
+- saved revision history retention
+- transcript retention policy
+- migration cleanup
+- any later higher-fidelity replay work if transcript-backed restore proves
+  insufficient
 
 ## Split Behavior
 
@@ -556,7 +499,7 @@ Sketch:
 ```swift
 struct PaneNodeView: View {
     let node: PaneNode
-    let focusedPaneID: PaneID?
+    let focusedTarget: WorkspaceFocusTarget?
     let onFocusPane: (PaneID) -> Void
     let onSplit: (PaneID, SplitDirection) -> Void
 
@@ -1475,11 +1418,11 @@ Focus changes should be deterministic after each mutation.
 Preferred rules:
 
 - splitting a pane focuses the newly created pane
-- focusing a pane only changes `focusedPaneID` for that workspace
+- focusing a pane changes the scene-owned pane focus target for that window
 - closing a focused pane should move focus to the nearest surviving sibling in the repaired tree
 - closing a non-focused pane should preserve focus if still valid
 
-The shell model should own those rules, not the views.
+The scene should own those rules, not the persistence model.
 
 Sketch:
 
@@ -1502,7 +1445,7 @@ extension WorkspaceStore {
             return
         }
 
-        workspaces[workspaceIndex].focusedPaneID = newPane.id
+        focusedTarget = .pane(newPane.id)
     }
 }
 ```
@@ -1536,14 +1479,18 @@ That should only happen if concrete use cases demand it.
 
 ## Workspace Store Responsibilities
 
-The workspace store should remain the sole owner of:
+The workspace store should remain the owner of:
 
 - workspace list
-- selected workspace
 - pane-tree mutations
-- focus rules
 - session creation and release decisions
 - persistence triggers for layout changes
+
+The scene should remain the owner of:
+
+- selected workspace
+- focus rules
+- sidebar and inspector presentation state
 
 The view layer should not:
 
@@ -1597,11 +1544,11 @@ extension WorkspaceStore {
     var focusedPane: PaneLeaf? {
         guard
             let workspace = selectedWorkspace,
-            let focusedPaneID = workspace.focusedPaneID
+            case .pane(let paneID) = focusedTarget
         else {
             return nil
         }
-        return workspace.root.findPane(id: focusedPaneID)
+        return workspace.root.findPane(id: paneID)
     }
 }
 ```
@@ -1666,7 +1613,7 @@ Suggested ownership:
 
 ## Focus Model
 
-The focused pane should be part of workspace state.
+The focused pane should not be persisted as part of workspace state anymore.
 
 This allows:
 
@@ -1677,8 +1624,9 @@ This allows:
 
 Recommended rule:
 
-- each workspace stores its own `focusedPaneID`
-- the shell derives the active pane inspector from the selected workspace plus that workspace's focused pane
+- the scene owns the active `WorkspaceFocusTarget`
+- the shell derives the active pane inspector from the selected workspace plus
+  that scene-owned focused pane target
 
 ## Directional Pane Navigation
 

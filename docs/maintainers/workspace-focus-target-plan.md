@@ -2,8 +2,9 @@
 
 ## Purpose
 
-This note proposes the next design pass for workspace focus in `gmax` after the
-first structural implementation pass landed.
+This note records the pass-two target model for workspace focus in `gmax` after
+the first structural implementation pass landed and the window-scoped
+persistence foundation followed it.
 
 It starts from the framework model first:
 
@@ -18,6 +19,7 @@ Use this together with:
 - [`workspace-focus-removal-and-redesign-notes.md`](./workspace-focus-removal-and-redesign-notes.md)
 - [`workspace-focus-implementation-boundary.md`](./workspace-focus-implementation-boundary.md)
 - [`workspace-focus-first-pass-plan.md`](./workspace-focus-first-pass-plan.md)
+- [`workspace-window-state-and-persistence-model.md`](./workspace-window-state-and-persistence-model.md)
 - [`swiftterm-surface-investigation.md`](./swiftterm-surface-investigation.md)
 - [`workspace-window-scene-command-focus-map.md`](./workspace-window-scene-command-focus-map.md)
 - [`swiftui-command-and-focus-architecture.md`](./swiftui-command-and-focus-architecture.md)
@@ -139,7 +141,7 @@ The list of currently open workspaces in the sidebar should likely be scene stat
 
 That means the app may need to distinguish between:
 
-- saved workspace snapshots or library entries
+- saved workspace library entries
   - app-wide persisted resources
 - open workspaces in a specific window
   - scene-local runtime state with scene restoration
@@ -150,6 +152,9 @@ If that split is correct, a new window should get either:
 - or a restored scene-local workspace set
 
 but not automatically mirror another live window’s current sidebar contents.
+
+The detailed persistence note for this split now lives in
+[`workspace-window-state-and-persistence-model.md`](./workspace-window-state-and-persistence-model.md).
 
 ## Things That Should Not Be First-Class Custom Focus Targets
 
@@ -262,7 +267,7 @@ That suggests a scene-level focus state, likely something like:
 
 ### Logical target enum
 
-A likely first proposal:
+A likely first shape:
 
 ```swift
 enum WorkspaceFocusTarget: Hashable {
@@ -310,31 +315,26 @@ Adjust view structure so each logical focus target has a clean owning view:
 Keep scene-owned native focus as the source of truth, then remove or narrow the
 remaining terminal bridge behavior that still follows derived pane focus.
 
-### Phase 4: re-evaluate scene-local restoration and persistence
+### Phase 4: follow through on scene-local restoration and persistence
 
-Now that runtime focus is no longer model-owned, decide how per-window open
-workspace state, recent-close behavior, and any restoration metadata should be
-persisted without collapsing window-local state back into app-global state.
+Now that runtime focus is no longer model-owned, keep the persistence model
+aligned with scene-local window ownership and follow through on saved-workspace
+history and any remaining restoration polish.
 
 ## Immediate Next-Pass Questions
 
-These are the decisions worth making before the next implementation pass:
+These are the decisions worth carrying into the next implementation pass:
 
-1. Is the pane, not the embedded terminal control, the main command target?
-2. Does any product requirement actually need `gmax` to distinguish more than
-   SwiftTerm already distinguishes internally?
-3. Should pane commands disable whenever focus moves to the sidebar or inspector?
-4. Should modal presentations remain scene-owned at the workspace window root?
-5. Is the smallest useful logical target set just `sidebar`, `pane(PaneID)`, and `inspector`?
-6. Is the list of open workspaces in a window scene-local state that must restore independently per window?
-7. If so, what is the app-wide persisted thing: saved workspace library entries, reusable templates, or some other snapshot type, rather than the live sidebar contents of every window?
-8. Are rename and delete commands scene-level commands that operate on the selected workspace in the active window, regardless of whether the user reached them from sidebar or content?
+1. How thin can the SwiftUI-to-SwiftTerm bridge become while still handling the small amount of responder translation SwiftTerm does not already cover on its own?
+2. How should the existing spatial pane-navigation behavior and the existing next/previous pane-navigation behavior migrate toward more native focus movement over time without losing current behavior?
+3. How should saved-workspace history and any future library-detail surfaces fit around the now-landed payload-plus-placement persistence model?
 
 ## Provisional Design Decisions
 
-This section records the current intended direction before implementation. These
-decisions should be treated as the working target model unless a later
-investigation shows a concrete framework constraint.
+This section records the current target model after the structural first pass
+and the initial persistence follow-through landed. These decisions should be
+treated as the working model unless a later investigation shows a concrete
+framework constraint.
 
 ### 1. Pane versus embedded terminal as the main command target
 
@@ -414,6 +414,11 @@ Current decision:
 
 - the set of open workspaces is scene-local state and should restore independently per window
 
+Status:
+
+- implemented through a data-driven `WindowGroup` scene identity plus `.live`
+  and `.recent` placement queries scoped to that scene identity
+
 Each `WindowGroup` window should maintain its own:
 
 - open workspace set
@@ -440,6 +445,12 @@ Opening a saved workspace from the library should:
 - add it into the active window’s scene-local open workspace state
 - make it available in that window’s sidebar
 
+Status:
+
+- implemented with stable `.library` placement rows, lightweight library
+  listings, and cloned live working copies when the user opens a saved
+  workspace from the library
+
 ### 7a. Recently closed workspaces
 
 Current decision:
@@ -460,6 +471,12 @@ On window close:
 - the same persistence setting should apply to these recent items
 - if persisted, they should be restored with the rest of that window’s scene-local state
 
+Status:
+
+- the current implementation already restores the recent-close stack from
+  `.recent` placements for the active scene identity
+- retention limits and eviction policy are still follow-through work
+
 ### 8. Rename and delete command ownership
 
 Current decision:
@@ -472,13 +489,43 @@ That means:
 - scene state should own their presentation
 - sidebar and content can both contribute the context that identifies the active workspace, but the scene remains the owner of the command and modal behavior
 
+### 9. Pane navigation policy
+
+Current decision:
+
+- pane navigation should remain spatial
+- next/previous pane traversal should remain available alongside spatial movement
+
+The long-term goal is not to change the user-visible navigation model. The
+long-term goal is to migrate more of that behavior onto native focus movement
+and interaction primitives once the cleanest framework path is clearer.
+
+That means the next pass should preserve the current command behavior while
+treating the implementation as a candidate for future native-focus narrowing,
+not as a reason to redesign pane navigation semantics.
+
+### 10. SwiftTerm bridge boundary
+
+Current decision:
+
+- the bridge from `gmax` into SwiftTerm should be as small and thin as possible
+
+That means:
+
+- let SwiftTerm continue owning terminal-native input, selection, find, copy,
+  and internal responder behavior wherever it already does so cleanly
+- keep any remaining `gmax` bridge logic narrowly focused on pane activation,
+  host lifecycle, and the smallest responder translation SwiftTerm still needs
+- avoid adding new wrapper-owned terminal behavior unless a concrete product
+  need proves SwiftTerm's existing surface insufficient
+
 ## Outstanding Investigation
 
 One meaningful technical question remains open:
 
 - should the embedded SwiftTerm view need any extension at all beyond letting
   SwiftTerm continue owning its internal prompt and scrollback interaction
-  model?
+  model and keeping the remaining host bridge intentionally thin?
 
 This needs investigation before finalizing the pane-level implementation shape.
 

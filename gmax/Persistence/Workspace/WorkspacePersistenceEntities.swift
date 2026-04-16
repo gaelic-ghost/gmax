@@ -21,8 +21,16 @@ enum SnapshotPersistenceError: Error {
 final class WorkspaceEntity: NSManagedObject {
 	@NSManaged var id: UUID
 	@NSManaged var title: String
+	@NSManaged var createdAt: Date
+	@NSManaged var updatedAt: Date
+	@NSManaged var notes: String?
+	@NSManaged var previewText: String?
+	@NSManaged var searchText: String?
+	@NSManaged var savedWorkspaceID: UUID?
 	@NSManaged var sortOrder: Int64
 	@NSManaged var rootNode: PaneNodeEntity?
+	@NSManaged var placements: NSSet?
+	@NSManaged var sessionSnapshots: NSSet?
 }
 
 @objc(PaneNodeEntity)
@@ -37,6 +45,24 @@ final class PaneNodeEntity: NSManagedObject {
 	@NSManaged var firstParent: PaneNodeEntity?
 	@NSManaged var secondChild: PaneNodeEntity?
 	@NSManaged var secondParent: PaneNodeEntity?
+}
+
+@objc(WorkspacePlacementEntity)
+final class WorkspacePlacementEntity: NSManagedObject {
+	@NSManaged var id: UUID
+	@NSManaged var role: String
+	@NSManaged var windowID: UUID?
+	@NSManaged var sortOrder: Int64
+	@NSManaged var restoreSortOrder: Int64
+	@NSManaged var createdAt: Date
+	@NSManaged var updatedAt: Date
+	@NSManaged var lastOpenedAt: Date?
+	@NSManaged var isPinned: Bool
+	@NSManaged var title: String
+	@NSManaged var previewText: String?
+	@NSManaged var searchText: String?
+	@NSManaged var paneCount: Int64
+	@NSManaged var workspace: WorkspaceEntity?
 }
 
 @objc(WorkspaceSnapshotEntity)
@@ -81,5 +107,6 @@ final class PaneSessionSnapshotEntity: NSManagedObject {
 	@NSManaged var transcriptByteCount: Int64
 	@NSManaged var transcriptLineCount: Int64
 	@NSManaged var previewText: String?
+	@NSManaged var workspace: WorkspaceEntity?
 	@NSManaged var snapshot: WorkspaceSnapshotEntity?
 }

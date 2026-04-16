@@ -7,8 +7,14 @@ struct gmaxApp: App {
 	}
 
 	var body: some Scene {
-		WindowGroup("gmax exploration", id: "main-window") {
-			WorkspaceWindowSceneView()
+		WindowGroup(
+			"gmax exploration",
+			id: "main-window",
+			for: WorkspaceSceneIdentity.self
+		) { sceneIdentity in
+			WorkspaceWindowSceneView(sceneIdentity: sceneIdentity.wrappedValue)
+		} defaultValue: {
+			WorkspaceSceneIdentity()
 		}
 		.defaultLaunchBehavior(.presented)
 		.restorationBehavior(UITestLaunchBehavior.isEnabled ? .disabled : .automatic)
