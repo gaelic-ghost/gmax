@@ -33,7 +33,7 @@ focus movement, and command behavior at region boundaries.
 
 The main custom pieces were:
 
-- `Workspace.focusedPaneID` in [`gmax/Workspace/WorkspaceLayout.swift`](../../gmax/Workspace/WorkspaceLayout.swift)
+- `Workspace.focusedPaneID` in [`gmax/Scenes/WorkspaceWindowGroup/WorkspaceLayout.swift`](../../gmax/Scenes/WorkspaceWindowGroup/WorkspaceLayout.swift)
   - Removed in the first cleanup pass.
   - Live pane focus and persisted pane focus no longer live in the workspace
     model.

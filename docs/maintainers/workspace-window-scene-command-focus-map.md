@@ -20,9 +20,9 @@ Primary repo surfaces:
 - [`gmax/Scenes/WorkspaceWindowGroup/NavigationSplitView/ContentPanel/ContentPaneLeafView.swift`](../../gmax/Scenes/WorkspaceWindowGroup/NavigationSplitView/ContentPanel/ContentPaneLeafView.swift)
 - [`gmax/Scenes/WorkspaceWindowGroup/NavigationSplitView/DetailPanel/DetailPane.swift`](../../gmax/Scenes/WorkspaceWindowGroup/NavigationSplitView/DetailPanel/DetailPane.swift)
 - [`gmax/Views/Sheets/SavedWorkspaceLibrarySheet.swift`](../../gmax/Views/Sheets/SavedWorkspaceLibrarySheet.swift)
-- [`gmax/Workspace/WorkspaceStore.swift`](../../gmax/Workspace/WorkspaceStore.swift)
-- [`gmax/Workspace/WorkspaceStore+PaneActions.swift`](../../gmax/Workspace/WorkspaceStore+PaneActions.swift)
-- [`gmax/Workspace/WorkspaceStore+WorkspaceActions.swift`](../../gmax/Workspace/WorkspaceStore+WorkspaceActions.swift)
+- [`gmax/Scenes/WorkspaceWindowGroup/WorkspaceStore.swift`](../../gmax/Scenes/WorkspaceWindowGroup/WorkspaceStore.swift)
+- [`gmax/Scenes/WorkspaceWindowGroup/WorkspaceStore+PaneActions.swift`](../../gmax/Scenes/WorkspaceWindowGroup/WorkspaceStore+PaneActions.swift)
+- [`gmax/Scenes/WorkspaceWindowGroup/WorkspaceStore+WorkspaceActions.swift`](../../gmax/Scenes/WorkspaceWindowGroup/WorkspaceStore+WorkspaceActions.swift)
 
 Primary Apple references:
 
@@ -382,5 +382,5 @@ If this surface is reworked later, these are the questions to answer first:
 ## Suggested Companion Reading
 
 - Preferred defaults: [`swiftui-command-and-focus-architecture.md`](./swiftui-command-and-focus-architecture.md)
-- Current workspace state model: [`../../gmax/Workspace/WorkspaceStore.swift`](../../gmax/Workspace/WorkspaceStore.swift)
+- Current workspace state model: [`../../gmax/Scenes/WorkspaceWindowGroup/WorkspaceStore.swift`](../../gmax/Scenes/WorkspaceWindowGroup/WorkspaceStore.swift)
 - Current persistence behavior: [`../../gmax/Persistence/Workspace/WorkspacePersistenceController.swift`](../../gmax/Persistence/Workspace/WorkspacePersistenceController.swift)

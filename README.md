@@ -71,7 +71,8 @@ The maintainer-facing architecture note lives at [docs/maintainers/swiftui-termi
 ## Repository Layout
 
 - `gmax/`: app source root
-- `gmax/Workspace/`: workspace domain models, pane-tree structure, and workspace mutation/state surfaces
+- `gmax/Scenes/WorkspaceWindowGroup/`: workspace-window runtime state, pane-tree structure, focus targets, and workspace mutation surfaces
+- `gmax/Persistence/Workspace/`: workspace persistence controllers, entities, profiles, and saved-workspace snapshot types
 - `gmax/Persistence/Workspace/`: Core Data setup, workspace coding, persistence profiles, and live plus saved workspace storage
 - `gmax/Terminal/`: SwiftTerm hosting boundary, terminal launch/session plumbing, and pane controllers
 - `gmax/Scenes/WorkspaceWindowGroup/`: top-level workspace window scene composition and menu commands
