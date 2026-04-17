@@ -330,8 +330,8 @@ Why this is preferred over inventing a second ad hoc persistence path:
   data-driven `WindowGroup` is persisted and restored
 - the value is already scoped to one window instance
 - the identity stays lightweight and scene-oriented
-- lightweight window UI state can remain separate from the scene identity
-  instead of carrying a duplicate copy of that identity
+- `SceneStorage` can remain focused on small UI state rather than carrying a
+  duplicate copy of the scene identity
 
 Current recommendation remains:
 
@@ -339,17 +339,17 @@ Current recommendation remains:
   identity
 - let SwiftUI persist and restore that value for each window instance
 - do not create a second ad hoc scene-identity persistence path
-- do not mirror that identity into a second persistence layer
-- keep lightweight per-window UI state keyed by that durable window identity
+- do not mirror that identity into `SceneStorage`
+- continue using `SceneStorage` only for lightweight per-window UI state
 
 That gives us a durable, documented per-window identity without needing a plain
 SwiftUI "window identifier" API that does not seem to exist in the current
 surface, and without building a second persistence layer around that identity
 ourselves.
 
-### What lightweight per-window UI state should hold
+### What `SceneStorage` should hold
 
-The window-local restore state should remain lightweight.
+`SceneStorage` should remain lightweight.
 
 Good candidates:
 
@@ -373,7 +373,7 @@ Bad candidates:
 On scene restore:
 
 1. read the restored scene identity from the data-driven `WindowGroup`
-2. read lightweight per-window UI state keyed by the restored scene identity
+2. read lightweight UI state from `SceneStorage`
 3. fetch `.live` placements for that scene identity
 4. fetch `.recent` placements for that scene identity
 5. restore the scene-local live workspace list and recent-close stack from
@@ -442,8 +442,7 @@ Relevant Apple docs:
 Practical guidance:
 
 - use the data-driven `WindowGroup` binding as the durable window identity
-- use a lightweight window-local restore surface for selected workspace,
-  sidebar visibility, and inspector visibility
+- use `SceneStorage` for lightweight UI restoration keys
 - use `.task` or `.task(id:)` for the actual scene rehydration path
 - use `.onChange(of: scenePhase)` for save, flush, or prewarm decisions that
   belong to the whole scene

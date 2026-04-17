@@ -228,10 +228,9 @@ Evidence:
 
 Current examples:
 
-- explicit window-local keys like:
-  - `"workspaceWindow.<window-id>.selectedWorkspaceID"`
-  - `"workspaceWindow.<window-id>.isInspectorVisible"`
-  - `"workspaceWindow.<window-id>.isSidebarVisible"`
+- `@SceneStorage("workspaceWindow.selectedWorkspaceID")`
+- `@SceneStorage("workspaceWindow.isInspectorVisible")`
+- `@SceneStorage("workspaceWindow.isSidebarVisible")`
 - toolbar accessibility identifiers like:
   - `workspaceWindow.openSavedWorkspacesButton`
   - `workspaceWindow.newWorkspaceButton`
@@ -243,7 +242,7 @@ Current examples:
 Why this is a gap:
 
 - the repo has already renamed the scene and model vocabulary toward `Workspace...`
-- the window-local UI-state keys and toolbar accessibility identifiers now match that
+- the scene-storage keys and toolbar accessibility identifiers now match that
   vocabulary instead of carrying the older main-shell naming
 - the remaining naming drift is now much smaller and easier to audit directly
 
