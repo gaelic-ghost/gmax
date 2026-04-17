@@ -9,7 +9,6 @@ import XCTest
 
 class GmaxUITestCase: XCTestCase {
 	private enum UIProbe {
-		static let captureAccessibilityHierarchyEnvironmentKey = "GMAX_UI_TEST_CAPTURE_AX_DEBUG"
 		static let initialWorkspaceTitle = "Workspace 1"
 		static let sidebarWorkspaceListIdentifier = "sidebar.workspaceList"
 	}
@@ -42,11 +41,10 @@ class GmaxUITestCase: XCTestCase {
 		guard workspaceList.waitForExistence(timeout: 5) else {
 			recordMainShellLaunchDiagnostics(in: app)
 
-			let hierarchyDetails = accessibilityHierarchyFailureDetails(in: app)
 			XCTFail(
 				"""
 				The main shell should expose the workspace sidebar after launch.
-				\(hierarchyDetails)
+				A screenshot attachment was recorded for diagnosis instead of dumping the full accessibility hierarchy, because AX tree dumps can trigger macOS permission prompts and destabilize UI automation.
 				"""
 			)
 			return
@@ -58,28 +56,6 @@ class GmaxUITestCase: XCTestCase {
 		appScreenshot.name = "Main shell launch failure screenshot"
 		appScreenshot.lifetime = .keepAlways
 		add(appScreenshot)
-	}
-
-	private func accessibilityHierarchyFailureDetails(in app: XCUIApplication) -> String {
-		guard shouldCaptureAccessibilityHierarchy else {
-			return """
-			
-			Accessibility hierarchy capture is disabled for normal shell-driven UI tests because \
-			requesting the full hierarchy can trigger macOS permission prompts and destabilize XCUITest.
-			Use XCTest attachments and manual Accessibility Inspector checks for ordinary diagnosis.
-			Set \(UIProbe.captureAccessibilityHierarchyEnvironmentKey)=1 when you explicitly want the full hierarchy dump.
-			"""
-		}
-
-		return """
-		
-		Current accessibility hierarchy:
-		\(app.debugDescription)
-		"""
-	}
-
-	private var shouldCaptureAccessibilityHierarchy: Bool {
-		ProcessInfo.processInfo.environment[UIProbe.captureAccessibilityHierarchyEnvironmentKey] == "1"
 	}
 
 	func attemptToPresentMainShellWindow(in app: XCUIApplication) {
