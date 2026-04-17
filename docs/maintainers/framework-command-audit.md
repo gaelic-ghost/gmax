@@ -119,9 +119,9 @@ Evidence:
 
 Current behavior:
 
-- if a pane leaf publishes `closeFocusedPane`, `Command-W` becomes `Close Pane`
-- else if the selected workspace is empty and publishes `closeEmptyWorkspace`, `Command-W` becomes `Close Workspace`
-- else it falls back to `dismiss()` and becomes `Close Window`
+- if the active focus target is a pane, `Command-W` becomes `Close Pane`
+- else the scene resolves close behavior from the active focus target plus the selected workspace state
+- window close remains the final scene-owned fallback when no narrower close target applies
 
 Why this was called out:
 

@@ -2,6 +2,7 @@ import OSLog
 import SwiftUI
 
 extension FocusedValues {
+	@Entry var activeWorkspaceFocusTarget: WorkspaceFocusTarget?
 	@Entry var selectedWorkspaceSelection: Binding<WorkspaceID?>?
 	@Entry var openSavedWorkspaceLibrary: (() -> Void)?
 	@Entry var presentWorkspaceRename: ((WorkspaceID) -> Void)?
@@ -9,12 +10,12 @@ extension FocusedValues {
 	@Entry var moveFocusedPaneFocus: ((PaneFocusDirection) -> Void)?
 	@Entry var splitFocusedPane: ((SplitDirection) -> Void)?
 	@Entry var closeFocusedPane: (() -> Void)?
-	@Entry var closeEmptyWorkspace: (() -> Void)?
 }
 
 struct WorkspaceWindowSceneCommands: Commands {
 	@Environment(\.dismiss) private var dismiss
 	@FocusedObject private var workspaceStore: WorkspaceStore?
+	@FocusedValue(\.activeWorkspaceFocusTarget) private var activeWorkspaceFocusTarget
 	@FocusedValue(\.selectedWorkspaceSelection) private var selectedWorkspaceSelection
 	@FocusedValue(\.openSavedWorkspaceLibrary) private var openSavedWorkspaceLibrary
 	@FocusedValue(\.presentWorkspaceRename) private var presentWorkspaceRename
@@ -22,15 +23,50 @@ struct WorkspaceWindowSceneCommands: Commands {
 	@FocusedValue(\.moveFocusedPaneFocus) private var moveFocusedPaneFocus
 	@FocusedValue(\.splitFocusedPane) private var splitFocusedPane
 	@FocusedValue(\.closeFocusedPane) private var closeFocusedPane
-	@FocusedValue(\.closeEmptyWorkspace) private var closeEmptyWorkspace
 
 	var body: some Commands {
 		let workspaces = workspaceStore?.workspaces ?? []
 		let selectedWorkspaceID = selectedWorkspaceSelection?.wrappedValue
 		let selectedWorkspace = selectedWorkspaceID.flatMap { selectedWorkspaceID in workspaces.first { $0.id == selectedWorkspaceID } }
+		let isOnlyWorkspaceInWindow = workspaces.count == 1
+		let isSelectedWorkspaceEmpty = selectedWorkspace?.root == nil
 		let canSplitFocusedPane = splitFocusedPane != nil
 		let canDeleteSelectedWorkspace = selectedWorkspace != nil && workspaces.count > 1
 		let canCycleWorkspaces = workspaces.count > 1
+		let closeWorkspaceAction: (() -> Void)? = {
+			guard let workspaceStore, let selectedWorkspaceID else {
+				return nil
+			}
+
+			return {
+				selectedWorkspaceSelection?.wrappedValue = workspaceStore.closeWorkspace(selectedWorkspaceID)
+			}
+		}()
+		let resolvedCloseCommand: (title: String, action: (() -> Void)?) = switch activeWorkspaceFocusTarget {
+			case .pane:
+				("Close Pane", closeFocusedPane)
+
+			case .sidebar:
+				if isOnlyWorkspaceInWindow, isSelectedWorkspaceEmpty {
+					("Close Window", dismiss.callAsFunction)
+				} else {
+					("Close Workspace", closeWorkspaceAction)
+				}
+
+			case .inspector:
+				("Close Window", nil)
+
+			case nil:
+				if isSelectedWorkspaceEmpty {
+					if isOnlyWorkspaceInWindow {
+						("Close Window", dismiss.callAsFunction)
+					} else {
+						("Close Workspace", closeWorkspaceAction)
+					}
+				} else {
+					("Close Window", dismiss.callAsFunction)
+				}
+		}
 
 		SidebarCommands()
 		InspectorCommands()
@@ -77,16 +113,11 @@ struct WorkspaceWindowSceneCommands: Commands {
 
 			Divider()
 
-			Button(closeFocusedPane != nil ? "Close Pane" : closeEmptyWorkspace != nil ? "Close Workspace" : "Close Window") {
-				if let closeFocusedPane {
-					closeFocusedPane()
-				} else if let closeEmptyWorkspace {
-					closeEmptyWorkspace()
-				} else {
-					dismiss()
-				}
+			Button(resolvedCloseCommand.title) {
+				resolvedCloseCommand.action?()
 			}
 			.keyboardShortcut("w", modifiers: [.command])
+			.disabled(resolvedCloseCommand.action == nil)
 		}
 
 		CommandMenu("Workspace") {

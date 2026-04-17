@@ -99,6 +99,7 @@ The main scene publishes command context in two layers.
 The scene root publishes:
 
 - `.focusedSceneObject(workspaceStore)`
+- `.focusedSceneValue(\.activeWorkspaceFocusTarget, focusedTarget)`
 - `.focusedSceneValue(\.selectedWorkspaceSelection, $selectedWorkspaceID)`
 - `.focusedSceneValue(\.openSavedWorkspaceLibrary, openSavedWorkspaceLibrary)`
 - `.focusedSceneValue(\.presentWorkspaceRename, presentWorkspaceRename)`
@@ -106,6 +107,7 @@ The scene root publishes:
 
 Those values represent scene-scoped state and scene-scoped actions:
 
+- which logical workspace focus target is active in this window
 - which workspace is selected in this window
 - how to open the saved workspace sheet in this window
 - how to present rename and deletion flows in this window
@@ -117,14 +119,13 @@ These values are available to scene commands while the window scene is active, r
 
 The content subtree publishes narrower values:
 
-- `ContentPane` publishes `.focusedSceneValue(\.closeEmptyWorkspace, ...)` only when the selected workspace has no pane tree.
 - `ContentPaneLeafView` publishes `.focusedValue(\.closeFocusedPane, isFocused ? onClose : nil)` only for the focused pane leaf.
 
 That creates a layered command context:
 
 - scene-wide workspace selection and presentation actions come from the scene root
 - pane-specific close behavior comes from the focused pane
-- empty-workspace close behavior comes from the content surface for an empty workspace
+- scene commands derive empty-workspace close behavior from the active focus target plus selected workspace state
 
 This is one of the most important current design choices in the repo.
 
@@ -132,19 +133,18 @@ This is one of the most important current design choices in the repo.
 
 `WorkspaceWindowSceneCommands.swift` extends `FocusedValues` with six entries:
 
+- `activeWorkspaceFocusTarget`
 - `selectedWorkspaceSelection`
 - `openSavedWorkspaceLibrary`
 - `presentWorkspaceRename`
 - `presentWorkspaceDeletion`
 - `closeFocusedPane`
-- `closeEmptyWorkspace`
 
-The first four are effectively scene-scoped command dependencies.
+The first five are effectively scene-scoped command dependencies.
 
-The last two are context-sensitive close actions:
+The last one is a context-sensitive close action:
 
 - close the currently focused pane if a pane subtree owns focus
-- close the selected empty workspace if the content surface is empty
 
 The file currently mixes the `FocusedValues` key declarations and the command implementation in one place. That is workable, but it means this file is both the key registry and the concrete menu surface.
 
@@ -158,6 +158,7 @@ The file currently mixes the `FocusedValues` key declarations and the command im
 
 The command set then derives a local view of the active scene:
 
+- `activeWorkspaceFocusTarget`
 - `workspaces`
 - `selectedWorkspaceID`
 - `selectedWorkspace`
@@ -246,13 +247,25 @@ When the command layer sees that focused value, `Command-W` becomes `Close Pane`
 
 ### 3. Empty workspace close or window close
 
-When the selected workspace is empty, `ContentPane` publishes `closeEmptyWorkspace`.
+When there is no focused pane close action, the scene command layer resolves
+close behavior from:
 
-If there is no focused pane close action but there is an empty-workspace close action, `Command-W` becomes `Close Workspace`.
+- `activeWorkspaceFocusTarget`
+- the selected workspace
+- whether the selected workspace is empty
+- whether the current window contains only one workspace
 
-If neither focused value exists, the command falls back to `dismiss()`, and the menu item becomes `Close Window`.
+That produces the recorded product behavior:
 
-This means `Command-W` is currently a three-way context-sensitive close action assembled from focused values plus a final scene-level dismiss fallback.
+- `Command-W` closes the selected workspace when the active workspace is empty
+- `Command-W` closes the selected workspace when the sidebar is the active focus target
+- `Command-W` closes the window when the selected workspace is the only workspace in the window and it is empty
+- `Command-W` does nothing when the inspector is the active focus target
+
+This means `Command-W` is still a context-sensitive close action, but the
+scene now resolves that behavior directly from scene focus and workspace state
+instead of relying on a separate `closeEmptyWorkspace` publication path from
+`ContentPane`.
 
 That behavior is coherent, but it is also one of the highest-risk surfaces in the current architecture because it combines:
 

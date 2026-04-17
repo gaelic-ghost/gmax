@@ -319,6 +319,7 @@ struct WorkspaceWindowSceneView: View {
 			)
 		}
 		.focusedSceneObject(workspaceStore)
+		.focusedSceneValue(\.activeWorkspaceFocusTarget, focusedTarget)
 		.focusedSceneValue(\.selectedWorkspaceSelection, $selectedWorkspaceID)
 		.focusedSceneValue(\.openSavedWorkspaceLibrary, openSavedWorkspaceLibrary)
 		.focusedSceneValue(\.presentWorkspaceRename, presentWorkspaceRename)
