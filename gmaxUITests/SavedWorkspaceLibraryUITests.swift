@@ -189,4 +189,23 @@ final class SavedWorkspaceLibraryUITests: GmaxUITestCase {
 			"The saved-workspace library sheet should dismiss after the cancel action."
 		)
 	}
+
+	@MainActor
+	func testCommandWDismissesSavedWorkspaceLibraryBeforeClosingWorkspace() throws {
+		let app = launchApp()
+
+		createWorkspace(titled: "Workspace 2", in: app)
+		selectWorkspace("Workspace 2", in: app)
+		openSavedWorkspaceLibrary(in: app)
+
+		app.typeKey("w", modifierFlags: .command)
+
+		XCTAssertTrue(
+			waitForNonExistence(timeout: 2) {
+				self.savedWorkspaceLibraryCancelButton(in: app)
+			},
+			"Command-W should dismiss the frontmost saved-workspace library sheet before it mutates the selected workspace underneath it."
+		)
+		assertWorkspaceExists("Workspace 2", in: app)
+	}
 }

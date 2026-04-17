@@ -4,6 +4,7 @@ import SwiftUI
 extension FocusedValues {
 	@Entry var activeWorkspaceFocusTarget: WorkspaceFocusTarget?
 	@Entry var selectedWorkspaceSelection: Binding<WorkspaceID?>?
+	@Entry var dismissPresentedWorkspaceModal: (() -> Void)?
 	@Entry var openSavedWorkspaceLibrary: (() -> Void)?
 	@Entry var presentWorkspaceRename: ((WorkspaceID) -> Void)?
 	@Entry var presentWorkspaceDeletion: ((WorkspaceID) -> Void)?
@@ -17,6 +18,7 @@ struct WorkspaceWindowSceneCommands: Commands {
 	@FocusedObject private var workspaceStore: WorkspaceStore?
 	@FocusedValue(\.activeWorkspaceFocusTarget) private var activeWorkspaceFocusTarget
 	@FocusedValue(\.selectedWorkspaceSelection) private var selectedWorkspaceSelection
+	@FocusedValue(\.dismissPresentedWorkspaceModal) private var dismissPresentedWorkspaceModal
 	@FocusedValue(\.openSavedWorkspaceLibrary) private var openSavedWorkspaceLibrary
 	@FocusedValue(\.presentWorkspaceRename) private var presentWorkspaceRename
 	@FocusedValue(\.presentWorkspaceDeletion) private var presentWorkspaceDeletion
@@ -42,30 +44,38 @@ struct WorkspaceWindowSceneCommands: Commands {
 				selectedWorkspaceSelection?.wrappedValue = workspaceStore.closeWorkspace(selectedWorkspaceID)
 			}
 		}()
-		let resolvedCloseCommand: (title: String, action: (() -> Void)?) = switch activeWorkspaceFocusTarget {
-			case .pane:
-				("Close Pane", closeFocusedPane)
+		let resolvedCloseCommand: (title: String, action: (() -> Void)?) = if let dismissPresentedWorkspaceModal {
+			("Close", dismissPresentedWorkspaceModal)
+		} else {
+			switch activeWorkspaceFocusTarget {
+				case .pane:
+					("Close Pane", closeFocusedPane)
 
-			case .sidebar:
-				if isOnlyWorkspaceInWindow, isSelectedWorkspaceEmpty {
-					("Close Window", dismiss.callAsFunction)
-				} else {
-					("Close Workspace", closeWorkspaceAction)
-				}
-
-			case .inspector:
-				("Close Window", nil)
-
-			case nil:
-				if isSelectedWorkspaceEmpty {
+				case .sidebar:
 					if isOnlyWorkspaceInWindow {
-						("Close Window", dismiss.callAsFunction)
+						if isSelectedWorkspaceEmpty {
+							("Close Window", dismiss.callAsFunction)
+						} else {
+							("Close Workspace", closeWorkspaceAction)
+						}
 					} else {
 						("Close Workspace", closeWorkspaceAction)
 					}
-				} else {
-					("Close Window", dismiss.callAsFunction)
-				}
+				
+				case .inspector:
+					("Close Window", nil)
+
+				case nil:
+					if isSelectedWorkspaceEmpty {
+						if isOnlyWorkspaceInWindow {
+							("Close Window", dismiss.callAsFunction)
+						} else {
+							("Close Workspace", closeWorkspaceAction)
+						}
+					} else {
+						("Close Window", dismiss.callAsFunction)
+					}
+			}
 		}
 
 		SidebarCommands()

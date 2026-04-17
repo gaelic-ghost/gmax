@@ -67,7 +67,7 @@ It owns:
 - the saved-workspace-library sheet state
 - split-view column visibility
 - inspector visibility
-- per-window scene restoration state through `@SceneStorage`
+- per-window lightweight UI restoration state keyed by `sceneIdentity.windowID`
 
 This is an important boundary: the scene root owns window-local selection and presentation state, while `WorkspaceStore` owns the workspace graph, pane graph, sessions, and persistence-facing mutations.
 
@@ -332,17 +332,18 @@ The app currently overloads one close shortcut across:
 
 That behavior is understandable once mapped, but it is not obvious from the implementation at a glance, and it combines multiple responsibility layers in a single command branch.
 
-### Scene-storage keys still use old naming
+### Window-scoped UI state now uses explicit scene-identity keys
 
-`WorkspaceWindowSceneView` still stores per-window restoration under:
+`WorkspaceWindowSceneView` now persists lightweight window UI state under
+window-specific keys derived from `sceneIdentity.windowID`, for example:
 
-- `"workspaceWindow.selectedWorkspaceID"`
-- `"workspaceWindow.isInspectorVisible"`
-- `"workspaceWindow.isSidebarVisible"`
+- `"workspaceWindow.<window-id>.selectedWorkspaceID"`
+- `"workspaceWindow.<window-id>.isInspectorVisible"`
+- `"workspaceWindow.<window-id>.isSidebarVisible"`
 
-These keys now match the current workspace-window terminology instead of the
-older main-shell naming that made the scene root look more transitional than it
-really is.
+This replaced the raw shared `@SceneStorage("workspaceWindow...")` keys after
+the multi-window selection audit showed that selection needed a more explicit
+window-local boundary.
 
 ### Scene command file owns both keys and commands
 

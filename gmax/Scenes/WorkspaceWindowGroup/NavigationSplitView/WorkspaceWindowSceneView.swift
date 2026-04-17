@@ -2,9 +2,17 @@ import OSLog
 import SwiftUI
 
 private enum WorkspaceWindowSceneStorageKey {
-	static let selectedWorkspaceID = "workspaceWindow.selectedWorkspaceID"
-	static let isInspectorVisible = "workspaceWindow.isInspectorVisible"
-	static let isSidebarVisible = "workspaceWindow.isSidebarVisible"
+	static func selectedWorkspaceID(for sceneIdentity: WorkspaceSceneIdentity) -> String {
+		"workspaceWindow.\(sceneIdentity.windowID.uuidString).selectedWorkspaceID"
+	}
+
+	static func isInspectorVisible(for sceneIdentity: WorkspaceSceneIdentity) -> String {
+		"workspaceWindow.\(sceneIdentity.windowID.uuidString).isInspectorVisible"
+	}
+
+	static func isSidebarVisible(for sceneIdentity: WorkspaceSceneIdentity) -> String {
+		"workspaceWindow.\(sceneIdentity.windowID.uuidString).isSidebarVisible"
+	}
 }
 
 struct WorkspaceWindowSceneView: View {
@@ -17,9 +25,6 @@ struct WorkspaceWindowSceneView: View {
 	@State private var isSavedWorkspaceLibraryPresented = false
 	@State private var columnVisibility: NavigationSplitViewVisibility = .all
 	@State private var isInspectorVisible = true
-	@SceneStorage(WorkspaceWindowSceneStorageKey.selectedWorkspaceID) private var restoredSelectedWorkspaceID: String?
-	@SceneStorage(WorkspaceWindowSceneStorageKey.isInspectorVisible) private var restoredInspectorVisible = true
-	@SceneStorage(WorkspaceWindowSceneStorageKey.isSidebarVisible) private var restoredSidebarVisible = true
 	@State private var hasAppliedSceneState = false
 	@State private var paneFrames: [PaneID: CGRect] = [:]
 	@State private var paneFocusHistory: [PaneID] = []
@@ -30,6 +35,18 @@ struct WorkspaceWindowSceneView: View {
 		_workspaceStore = StateObject(
 			wrappedValue: WorkspaceStore(sceneIdentity: sceneIdentity)
 		)
+	}
+
+	private var selectedWorkspaceStorageKey: String {
+		WorkspaceWindowSceneStorageKey.selectedWorkspaceID(for: sceneIdentity)
+	}
+
+	private var inspectorVisibilityStorageKey: String {
+		WorkspaceWindowSceneStorageKey.isInspectorVisible(for: sceneIdentity)
+	}
+
+	private var sidebarVisibilityStorageKey: String {
+		WorkspaceWindowSceneStorageKey.isSidebarVisible(for: sceneIdentity)
 	}
 
 	var body: some View {
@@ -89,6 +106,23 @@ struct WorkspaceWindowSceneView: View {
 		}
 		let pendingDeletionWorkspace = workspacePendingDeletionID.flatMap { workspaceID in workspaceStore.workspaces.first { $0.id == workspaceID } }
 		let pendingRenameWorkspace = workspacePendingRenameID.flatMap { workspaceID in workspaceStore.workspaces.first { $0.id == workspaceID } }
+		let dismissPresentedWorkspaceModal: (() -> Void)? = {
+			if isSavedWorkspaceLibraryPresented {
+				return {
+					Logger.diagnostics.notice(
+						"Dismissed the saved-workspace library sheet from the active shell window without reopening a workspace."
+					)
+					isSavedWorkspaceLibraryPresented = false
+				}
+			}
+			if pendingRenameWorkspace != nil {
+				return dismissWorkspaceRename
+			}
+			if pendingDeletionWorkspace != nil {
+				return dismissWorkspaceDeletion
+			}
+			return nil
+		}()
 		let selectedWorkspace = selectedWorkspaceID.flatMap { selectedWorkspaceID in
 			workspaceStore.workspaces.first { $0.id == selectedWorkspaceID }
 		}
@@ -327,6 +361,7 @@ struct WorkspaceWindowSceneView: View {
 		.focusedSceneObject(workspaceStore)
 		.focusedSceneValue(\.activeWorkspaceFocusTarget, focusedTarget)
 		.focusedSceneValue(\.selectedWorkspaceSelection, $selectedWorkspaceID)
+		.focusedSceneValue(\.dismissPresentedWorkspaceModal, dismissPresentedWorkspaceModal)
 		.focusedSceneValue(\.openSavedWorkspaceLibrary, openSavedWorkspaceLibrary)
 		.focusedSceneValue(\.presentWorkspaceRename, presentWorkspaceRename)
 		.focusedSceneValue(\.presentWorkspaceDeletion, presentWorkspaceDeletion)
@@ -386,11 +421,14 @@ struct WorkspaceWindowSceneView: View {
 			}
 
 			hasAppliedSceneState = true
-			let restoredSelection = restoredSelectedWorkspaceID
+			let defaults = UserDefaults.standard
+			let restoredSelection = defaults.string(forKey: selectedWorkspaceStorageKey)
 				.flatMap(UUID.init(uuidString:))
 				.map { WorkspaceID(rawValue: $0) }
 			selectedWorkspaceID = restoredSelection ?? workspaceStore.workspaces.first?.id
 			normalizeSelection()
+			let restoredSidebarVisible = defaults.object(forKey: sidebarVisibilityStorageKey) as? Bool ?? true
+			let restoredInspectorVisible = defaults.object(forKey: inspectorVisibilityStorageKey) as? Bool ?? true
 			columnVisibility = restoredSidebarVisible ? .all : .doubleColumn
 			isInspectorVisible = restoredInspectorVisible
 			Logger.diagnostics.notice(
@@ -403,7 +441,12 @@ struct WorkspaceWindowSceneView: View {
 			)
 		}
 		.onChange(of: selectedWorkspaceID?.rawValue.uuidString) { _, newValue in
-			restoredSelectedWorkspaceID = newValue
+			let defaults = UserDefaults.standard
+			if let newValue {
+				defaults.set(newValue, forKey: selectedWorkspaceStorageKey)
+			} else {
+				defaults.removeObject(forKey: selectedWorkspaceStorageKey)
+			}
 		}
 		.onChange(of: focusedTarget) { _, newValue in
 			guard case .pane(let paneID) = newValue, activePaneIDs.contains(paneID) else {
@@ -429,13 +472,13 @@ struct WorkspaceWindowSceneView: View {
 			}
 		}
 		.onChange(of: isInspectorVisible) { _, newValue in
-			restoredInspectorVisible = newValue
+			UserDefaults.standard.set(newValue, forKey: inspectorVisibilityStorageKey)
 			if !newValue, focusedTarget == .inspector {
 				focusPaneTarget(inspectedPaneID)
 			}
 		}
 		.onChange(of: columnVisibility) { _, newValue in
-			restoredSidebarVisible = newValue == .all
+			UserDefaults.standard.set(newValue == .all, forKey: sidebarVisibilityStorageKey)
 		}
 	}
 }
