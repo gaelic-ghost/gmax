@@ -1,8 +1,7 @@
 /*
- WorkspacePersistenceEntities defines the Core Data managed object surface for
- workspace persistence. These entities model the stored workspace list, pane
- trees, saved workspace snapshots, and per-pane session snapshot payloads used
- by the workspace persistence controller.
+ WorkspacePersistenceEntities defines the active Core Data managed object
+ surface for workspace persistence. These entities model the current payload
+ plus placement store used by live, recent, and library workspace state.
  */
 
 import CoreData
@@ -11,10 +10,6 @@ import Foundation
 enum PaneNodeKind: String {
 	case leaf
 	case split
-}
-
-enum SnapshotPersistenceError: Error {
-	case missingSessionSnapshot(sessionID: UUID)
 }
 
 @objc(WorkspaceEntity)
@@ -65,36 +60,6 @@ final class WorkspacePlacementEntity: NSManagedObject {
 	@NSManaged var workspace: WorkspaceEntity?
 }
 
-@objc(WorkspaceSnapshotEntity)
-final class WorkspaceSnapshotEntity: NSManagedObject {
-	@NSManaged var id: UUID
-	@NSManaged var sourceWorkspaceID: UUID?
-	@NSManaged var title: String
-	@NSManaged var createdAt: Date
-	@NSManaged var updatedAt: Date
-	@NSManaged var lastOpenedAt: Date?
-	@NSManaged var isPinned: Bool
-	@NSManaged var notes: String?
-	@NSManaged var previewText: String?
-	@NSManaged var searchText: String?
-	@NSManaged var rootNode: PaneSnapshotNodeEntity?
-	@NSManaged var sessionSnapshots: NSSet?
-}
-
-@objc(PaneSnapshotNodeEntity)
-final class PaneSnapshotNodeEntity: NSManagedObject {
-	@NSManaged var id: UUID
-	@NSManaged var kind: String
-	@NSManaged var sessionSnapshotID: UUID?
-	@NSManaged var axis: String?
-	@NSManaged var fraction: Double
-	@NSManaged var workspaceRoot: WorkspaceSnapshotEntity?
-	@NSManaged var firstChild: PaneSnapshotNodeEntity?
-	@NSManaged var firstParent: PaneSnapshotNodeEntity?
-	@NSManaged var secondChild: PaneSnapshotNodeEntity?
-	@NSManaged var secondParent: PaneSnapshotNodeEntity?
-}
-
 @objc(PaneSessionSnapshotEntity)
 final class PaneSessionSnapshotEntity: NSManagedObject {
 	@NSManaged var id: UUID
@@ -108,5 +73,4 @@ final class PaneSessionSnapshotEntity: NSManagedObject {
 	@NSManaged var transcriptLineCount: Int64
 	@NSManaged var previewText: String?
 	@NSManaged var workspace: WorkspaceEntity?
-	@NSManaged var snapshot: WorkspaceSnapshotEntity?
 }

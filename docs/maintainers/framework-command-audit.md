@@ -228,22 +228,23 @@ Evidence:
 
 Current examples:
 
-- `@SceneStorage("mainShell.selectedWorkspaceID")`
-- `@SceneStorage("mainShell.isInspectorVisible")`
-- `@SceneStorage("mainShell.isSidebarVisible")`
+- `@SceneStorage("workspaceWindow.selectedWorkspaceID")`
+- `@SceneStorage("workspaceWindow.isInspectorVisible")`
+- `@SceneStorage("workspaceWindow.isSidebarVisible")`
 - toolbar accessibility identifiers like:
-  - `mainShell.openSavedWorkspacesButton`
-  - `mainShell.newWorkspaceButton`
-  - `mainShell.toggleInspectorButton`
+  - `workspaceWindow.openSavedWorkspacesButton`
+  - `workspaceWindow.newWorkspaceButton`
+  - `workspaceWindow.toggleInspectorButton`
 - UI-test helper names like:
-  - `assertMainShellIsVisible`
-  - `attemptToPresentMainShellWindow`
+  - `assertWorkspaceWindowIsVisible`
+  - `attemptToPresentWorkspaceWindow`
 
 Why this is a gap:
 
 - the repo has already renamed the scene and model vocabulary toward `Workspace...`
-- these older names now make the code feel more transitional than it really is
-- test and accessibility naming drift makes future audits noisier and weakens conceptual clarity
+- the scene-storage keys and toolbar accessibility identifiers now match that
+  vocabulary instead of carrying the older main-shell naming
+- the remaining naming drift is now much smaller and easier to audit directly
 
 Recommendation:
 

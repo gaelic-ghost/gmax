@@ -101,6 +101,7 @@ Build `gmax` into a finished macOS terminal workspace app:
 - [x] Restore live and recent workspace state per window scene instead of one app-global live list
 - [x] Unify live, recent, and library persistence around payload plus placement records
 - [x] Add a migration bridge from legacy live and saved workspace records into the placement model
+- [x] Quarantine legacy migration entities and helpers away from the active payload-plus-placement persistence files
 - [ ] Add explicit saved-workspace revision history retention instead of replacing the current saved payload in place
 - [ ] Finish narrowing remaining scene-command and terminal-bridge cleanup now that window-scoped persistence is in place
 - [ ] Decide which settings and metadata are sync-worthy

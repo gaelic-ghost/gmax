@@ -26,20 +26,20 @@ class GmaxUITestCase: XCTestCase {
 		}
 		app.launch()
 		app.activate()
-		assertMainShellIsVisible(in: app)
+		assertWorkspaceWindowIsVisible(in: app)
 		return app
 	}
 
-	func assertMainShellIsVisible(in app: XCUIApplication) {
+	func assertWorkspaceWindowIsVisible(in app: XCUIApplication) {
 		let workspaceList = app.descendants(matching: .any)[UIProbe.sidebarWorkspaceListIdentifier]
 		if workspaceList.waitForExistence(timeout: 2) {
 			return
 		}
 
-		attemptToPresentMainShellWindow(in: app)
+		attemptToPresentWorkspaceWindow(in: app)
 
 		guard workspaceList.waitForExistence(timeout: 5) else {
-			recordMainShellLaunchDiagnostics(in: app)
+			recordWorkspaceWindowLaunchDiagnostics(in: app)
 
 			XCTFail(
 				"""
@@ -51,14 +51,14 @@ class GmaxUITestCase: XCTestCase {
 		}
 	}
 
-	private func recordMainShellLaunchDiagnostics(in app: XCUIApplication) {
+	private func recordWorkspaceWindowLaunchDiagnostics(in app: XCUIApplication) {
 		let appScreenshot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
-		appScreenshot.name = "Main shell launch failure screenshot"
+		appScreenshot.name = "Workspace window launch failure screenshot"
 		appScreenshot.lifetime = .keepAlways
 		add(appScreenshot)
 	}
 
-	func attemptToPresentMainShellWindow(in app: XCUIApplication) {
+	func attemptToPresentWorkspaceWindow(in app: XCUIApplication) {
 		app.typeKey("n", modifierFlags: .command)
 	}
 
@@ -205,15 +205,15 @@ class GmaxUITestCase: XCTestCase {
 	}
 
 	func toggleInspectorButton(in app: XCUIApplication) -> XCUIElement {
-		app.buttons["mainShell.toggleInspectorButton"]
+		app.buttons["workspaceWindow.toggleInspectorButton"]
 	}
 
 	func openSavedWorkspacesButton(in app: XCUIApplication) -> XCUIElement {
-		app.buttons["mainShell.openSavedWorkspacesButton"]
+		app.buttons["workspaceWindow.openSavedWorkspacesButton"]
 	}
 
 	func newWorkspaceButton(in app: XCUIApplication) -> XCUIElement {
-		app.buttons["mainShell.newWorkspaceButton"]
+		app.buttons["workspaceWindow.newWorkspaceButton"]
 	}
 
 	func focusFirstVisiblePane(in app: XCUIApplication) {

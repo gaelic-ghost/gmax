@@ -64,7 +64,7 @@ The shell uses a split-tree model rather than a flat grid:
 
 SwiftTerm is hosted through AppKit using `NSViewRepresentable`, so live terminal output stays inside the hosted terminal view instead of driving SwiftUI body churn.
 
-Persistence is handled with Core Data using relational live-workspace records plus a parallel saved-workspace snapshot graph. The app now also keeps production, debug, UI-test, and in-memory persistence profiles separate so local development and automated tests do not trample the same database. That gives the app a cleaner path toward undo-friendly workspace closure, searchable reopen, richer restoration, and future sync-friendly expansion if that becomes worthwhile.
+Persistence is handled with Core Data using one canonical workspace payload plus placement records for live, recent, and library roles. The old snapshot graph is now quarantined as a legacy-only migration surface instead of remaining mixed into the active runtime model. The app also keeps production, debug, UI-test, and in-memory persistence profiles separate so local development and automated tests do not trample the same database. That gives the app a cleaner path toward undo-friendly workspace closure, searchable reopen, richer restoration, and future sync-friendly expansion if that becomes worthwhile.
 
 The maintainer-facing architecture note lives at [docs/maintainers/swiftui-terminal-shell-architecture.md](docs/maintainers/swiftui-terminal-shell-architecture.md).
 
@@ -72,8 +72,7 @@ The maintainer-facing architecture note lives at [docs/maintainers/swiftui-termi
 
 - `gmax/`: app source root
 - `gmax/Scenes/WorkspaceWindowGroup/`: workspace-window runtime state, pane-tree structure, focus targets, and workspace mutation surfaces
-- `gmax/Persistence/Workspace/`: workspace persistence controllers, entities, profiles, and saved-workspace snapshot types
-- `gmax/Persistence/Workspace/`: Core Data setup, workspace coding, persistence profiles, and live plus saved workspace storage
+- `gmax/Persistence/Workspace/`: Core Data setup, workspace coding, persistence profiles, payload-plus-placement storage, and explicitly quarantined legacy migration helpers
 - `gmax/Terminal/`: SwiftTerm hosting boundary, terminal launch/session plumbing, and pane controllers
 - `gmax/Scenes/WorkspaceWindowGroup/`: top-level workspace window scene composition and menu commands
 - `gmax/Scenes/Settings/`: settings window and section views
@@ -163,7 +162,7 @@ The current shell exposes a command-first keyboard model across the `File`, `Wor
 - `cmd-shift-d`: split the focused pane downward
 - `cmd-option-left/right/up/down`: move focus directionally
 - `cmd-option-[` and `cmd-option-]`: move focus in pane order
-- `cmd-w`: close the focused pane when a pane is focused, close the selected empty workspace when the empty-workspace content is focused, otherwise use the standard window close command
+- `cmd-w`: close the focused pane when a pane is focused, close the selected workspace when the selected workspace is empty, do nothing when the inspector is focused, otherwise use the standard window close command
 - `cmd-option-w`: close the selected workspace directly
 
 ## Status

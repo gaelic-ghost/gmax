@@ -112,9 +112,10 @@ placement entity:
 - the library sheet now loads listing values first, then fetches the payload on
   demand when the user opens that saved workspace
 
-The old `WorkspaceSnapshotEntity` graph still exists only as a migration bridge
-for older databases. The runtime model no longer uses it as the primary saved
-workspace surface.
+The old `WorkspaceSnapshotEntity` graph still exists only as a quarantined
+legacy migration surface for older databases. The runtime model no longer uses
+it as the primary saved workspace surface, and the compatibility code now
+lives in dedicated legacy-only files instead of the active persistence path.
 
 ## Core Simplification
 
@@ -713,6 +714,8 @@ The compatibility bridge that landed in this pass does the following:
 
 The old snapshot entities remain only as a migration bridge and should
 eventually become removable once legacy-store support is no longer needed.
+That bridge is now intentionally isolated in the legacy migration files rather
+than mixed into the active payload-plus-placement controller path.
 
 ## Recommended Next Follow-Through
 

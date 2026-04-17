@@ -336,11 +336,13 @@ That behavior is understandable once mapped, but it is not obvious from the impl
 
 `WorkspaceWindowSceneView` still stores per-window restoration under:
 
-- `"mainShell.selectedWorkspaceID"`
-- `"mainShell.isInspectorVisible"`
-- `"mainShell.isSidebarVisible"`
+- `"workspaceWindow.selectedWorkspaceID"`
+- `"workspaceWindow.isInspectorVisible"`
+- `"workspaceWindow.isSidebarVisible"`
 
-Those keys still work, but they no longer match the current terminology and make the scene root look more transitional than it actually is.
+These keys now match the current workspace-window terminology instead of the
+older main-shell naming that made the scene root look more transitional than it
+really is.
 
 ### Scene command file owns both keys and commands
 
