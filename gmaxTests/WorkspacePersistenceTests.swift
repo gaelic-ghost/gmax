@@ -447,6 +447,7 @@ private indirect enum PaneNodeSignature: Equatable {
 	case split(axis: PaneSplit.Axis, fraction: Double, first: PaneNodeSignature, second: PaneNodeSignature)
 }
 
+@MainActor
 private func nodeSignature(from node: PaneNode) -> PaneNodeSignature {
 	switch node {
 		case .leaf:
@@ -461,6 +462,7 @@ private func nodeSignature(from node: PaneNode) -> PaneNodeSignature {
 	}
 }
 
+@MainActor
 private func fetchSavedWorkspacePlacement(
 	id: SavedWorkspaceID,
 	in context: NSManagedObjectContext
@@ -476,6 +478,7 @@ private func fetchSavedWorkspacePlacement(
 	return try context.fetch(request).first
 }
 
+@MainActor
 private func fetchPaneSessionPayloadEntity(
 	id: TerminalSessionID,
 	in context: NSManagedObjectContext
@@ -486,6 +489,7 @@ private func fetchPaneSessionPayloadEntity(
 	return try context.fetch(request).first
 }
 
+@MainActor
 private func fetchWorkspaceEntity(
 	id: WorkspaceID,
 	in context: NSManagedObjectContext

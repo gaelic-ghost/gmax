@@ -9,6 +9,7 @@ import CoreGraphics
 import Testing
 @testable import gmax
 
+@MainActor
 struct PaneTreeMutationTests {
 	@Test func splitReturnsFalseWhenThePaneDoesNotExist() throws {
 		let existingPane = PaneLeaf()
@@ -224,6 +225,7 @@ struct PaneTreeMutationTests {
 	}
 }
 
+@MainActor
 private func extractLeaf(from node: PaneNode) -> PaneLeaf? {
 	guard case .leaf(let leaf) = node else {
 		return nil
@@ -231,6 +233,7 @@ private func extractLeaf(from node: PaneNode) -> PaneLeaf? {
 	return leaf
 }
 
+@MainActor
 private func extractSplit(from node: PaneNode) -> PaneSplit? {
 	guard case .split(let split) = node else {
 		return nil

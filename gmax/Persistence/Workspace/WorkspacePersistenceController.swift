@@ -47,27 +47,31 @@ final class WorkspacePersistenceController {
 
 	func loadWorkspaces(for sceneIdentity: WorkspaceSceneIdentity) -> [Workspace] {
 		let context = container.viewContext
-		return loadPlacements(role: .live, sceneIdentity: sceneIdentity, in: context)
-			.compactMap { placement in
-				guard let revision = workspaceRevision(for: placement.workspace, placement: placement) else {
-					return nil
+		return context.performAndWait {
+			Self.loadPlacements(role: .live, sceneIdentity: sceneIdentity, in: context)
+				.compactMap { placement in
+					guard let revision = Self.workspaceRevision(for: placement.workspace, placement: placement) else {
+						return nil
+					}
+					return revision.workspace
 				}
-				return revision.workspace
-			}
+		}
 	}
 
 	func loadRecentlyClosedWorkspaces(for sceneIdentity: WorkspaceSceneIdentity) -> [PersistedRecentlyClosedWorkspace] {
 		let context = container.viewContext
-		return loadPlacements(role: .recent, sceneIdentity: sceneIdentity, in: context)
-			.compactMap { placement in
-				guard let revision = workspaceRevision(for: placement.workspace, placement: placement) else {
-					return nil
+		return context.performAndWait {
+			Self.loadPlacements(role: .recent, sceneIdentity: sceneIdentity, in: context)
+				.compactMap { placement in
+					guard let revision = Self.workspaceRevision(for: placement.workspace, placement: placement) else {
+						return nil
+					}
+					return PersistedRecentlyClosedWorkspace(
+						revision: revision,
+						formerIndex: Int(placement.restoreSortOrder)
+					)
 				}
-				return PersistedRecentlyClosedWorkspace(
-					revision: revision,
-					formerIndex: Int(placement.restoreSortOrder)
-				)
-			}
+		}
 	}
 
 	func saveSceneState(
@@ -77,11 +81,23 @@ final class WorkspacePersistenceController {
 		sessions: TerminalSessionRegistry,
 		liveTranscriptsByWorkspaceID: [WorkspaceID: [TerminalSessionID: String]] = [:]
 	) {
+		let liveSessionSnapshotsByWorkspaceID = Dictionary(
+			uniqueKeysWithValues: liveWorkspaces.map { workspace in
+				(
+					workspace.id,
+					Self.makeSessionSnapshots(
+						for: workspace,
+						sessions: sessions,
+						transcriptsBySessionID: liveTranscriptsByWorkspaceID[workspace.id] ?? [:]
+					)
+				)
+			}
+		)
 		let context = container.viewContext
 		context.performAndWait {
 			do {
-				let livePlacements = loadPlacements(role: .live, sceneIdentity: sceneIdentity, in: context)
-				let recentPlacements = loadPlacements(role: .recent, sceneIdentity: sceneIdentity, in: context)
+				let livePlacements = Self.loadPlacements(role: .live, sceneIdentity: sceneIdentity, in: context)
+				let recentPlacements = Self.loadPlacements(role: .recent, sceneIdentity: sceneIdentity, in: context)
 				var existingPlacementsByID = Dictionary(uniqueKeysWithValues: (livePlacements + recentPlacements).map { ($0.id, $0) })
 				let existingWorkspaceRequest = NSFetchRequest<WorkspaceEntity>(entityName: "WorkspaceEntity")
 				let existingWorkspaces = try context.fetch(existingWorkspaceRequest)
@@ -90,12 +106,11 @@ final class WorkspacePersistenceController {
 				var retainedWorkspaceIDs: Set<UUID> = []
 
 				for (sortOrder, workspace) in liveWorkspaces.enumerated() {
-					let workspaceEntity = try upsertWorkspaceEntity(
+					let workspaceEntity = try Self.upsertWorkspaceEntity(
 						for: workspace,
 						context: context,
 						existingWorkspacesByID: &existingWorkspacesByID,
-						sessions: sessions,
-						transcriptsBySessionID: liveTranscriptsByWorkspaceID[workspace.id] ?? [:]
+						sessionSnapshots: liveSessionSnapshotsByWorkspaceID[workspace.id] ?? []
 					)
 					let placement = existingPlacementsByID.removeValue(forKey: workspace.id.rawValue)
 						?? WorkspacePlacementEntity(context: context)
@@ -112,17 +127,17 @@ final class WorkspacePersistenceController {
 					placement.lastOpenedAt = nil
 					placement.isPinned = false
 					placement.workspace = workspaceEntity
-					refreshListingMetadata(on: placement, from: workspaceEntity)
+					Self.refreshListingMetadata(on: placement, from: workspaceEntity)
 					retainedPlacementIDs.insert(placement.id)
 					retainedWorkspaceIDs.insert(workspaceEntity.id)
 				}
 
 				for (stackIndex, recentlyClosedWorkspace) in recentlyClosedWorkspaces.enumerated() {
-					let workspaceEntity = try upsertWorkspaceEntity(
+					let workspaceEntity = try Self.upsertWorkspaceEntity(
 						for: recentlyClosedWorkspace.workspace,
 						context: context,
 						existingWorkspacesByID: &existingWorkspacesByID,
-						sessionSnapshots: makeSessionSnapshots(
+						sessionSnapshots: Self.makeSessionSnapshots(
 							for: recentlyClosedWorkspace.workspace,
 							launchConfigurationsBySessionID: recentlyClosedWorkspace.launchConfigurationsBySessionID,
 							titlesBySessionID: recentlyClosedWorkspace.titlesBySessionID,
@@ -144,7 +159,7 @@ final class WorkspacePersistenceController {
 					placement.lastOpenedAt = nil
 					placement.isPinned = false
 					placement.workspace = workspaceEntity
-					refreshListingMetadata(on: placement, from: workspaceEntity)
+					Self.refreshListingMetadata(on: placement, from: workspaceEntity)
 					retainedPlacementIDs.insert(placement.id)
 					retainedWorkspaceIDs.insert(workspaceEntity.id)
 				}
@@ -153,7 +168,7 @@ final class WorkspacePersistenceController {
 					context.delete(stalePlacement)
 				}
 
-				try deleteOrphanedWorkspaceRecords(
+				try Self.deleteOrphanedWorkspaceRecords(
 					existingWorkspacesByID: existingWorkspacesByID,
 					retainedWorkspaceIDs: retainedWorkspaceIDs,
 					context: context
@@ -176,24 +191,24 @@ final class WorkspacePersistenceController {
 		notes: String? = nil,
 		isPinned: Bool? = nil
 	) -> SavedWorkspaceListing? {
+		let sessionSnapshots = Self.makeSessionSnapshots(
+			for: workspace,
+			sessions: sessions,
+			transcriptsBySessionID: transcriptsBySessionID
+		)
 		let context = container.viewContext
-		var createdListing: SavedWorkspaceListing?
-		context.performAndWait {
+		return context.performAndWait {
 			do {
 				let savedWorkspaceID = workspace.savedWorkspaceID ?? SavedWorkspaceID()
 				let now = Date()
 				let workspaceEntity = WorkspaceEntity(context: context)
 				workspaceEntity.id = UUID()
 				workspaceEntity.savedWorkspaceID = savedWorkspaceID.rawValue
-				try updateWorkspaceEntity(
+				try Self.updateWorkspaceEntity(
 					workspaceEntity,
 					from: workspace,
 					context: context,
-					sessionSnapshots: makeSessionSnapshots(
-						for: workspace,
-						sessions: sessions,
-						transcriptsBySessionID: transcriptsBySessionID
-					),
+					sessionSnapshots: sessionSnapshots,
 					notes: notes,
 					now: now
 				)
@@ -214,78 +229,78 @@ final class WorkspacePersistenceController {
 				placement.lastOpenedAt = placement.lastOpenedAt
 				placement.isPinned = isPinned ?? placement.isPinned
 				placement.workspace = workspaceEntity
-				refreshListingMetadata(on: placement, from: workspaceEntity)
+				Self.refreshListingMetadata(on: placement, from: workspaceEntity)
 
 				if context.hasChanges {
 					try context.save()
 				}
 
-				createdListing = makeSavedWorkspaceListing(from: placement)
+				return Self.makeSavedWorkspaceListing(from: placement)
 			} catch {
 				Logger.persistence.error("Core Data failed to save a workspace revision into the library. The live workspace remains available, but the saved copy was not written. Workspace title: \(workspace.title, privacy: .public). Error: \(String(describing: error), privacy: .public)")
 				context.rollback()
+				return nil
 			}
 		}
-
-		return createdListing
 	}
 
 	func listSavedWorkspaces(matching query: String? = nil) -> [SavedWorkspaceListing] {
 		let context = container.viewContext
-		let request = NSFetchRequest<WorkspacePlacementEntity>(entityName: "WorkspacePlacementEntity")
-		request.sortDescriptors = [
-			NSSortDescriptor(key: #keyPath(WorkspacePlacementEntity.isPinned), ascending: false),
-			NSSortDescriptor(key: #keyPath(WorkspacePlacementEntity.updatedAt), ascending: false)
-		]
-		request.predicate = NSPredicate(format: "role == %@", WorkspacePlacementRole.library.rawValue)
+		let trimmedQuery = query?.trimmingCharacters(in: .whitespacesAndNewlines)
 
-		if let query {
-			let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
-			if !trimmedQuery.isEmpty {
-				request.predicate = NSCompoundPredicate(
-					andPredicateWithSubpredicates: [
-						NSPredicate(format: "role == %@", WorkspacePlacementRole.library.rawValue),
-						NSPredicate(format: "searchText CONTAINS[cd] %@", trimmedQuery),
-					]
-				)
+		return context.performAndWait {
+			do {
+				let request = NSFetchRequest<WorkspacePlacementEntity>(entityName: "WorkspacePlacementEntity")
+				request.sortDescriptors = [
+					NSSortDescriptor(key: #keyPath(WorkspacePlacementEntity.isPinned), ascending: false),
+					NSSortDescriptor(key: #keyPath(WorkspacePlacementEntity.updatedAt), ascending: false)
+				]
+				request.predicate = NSPredicate(format: "role == %@", WorkspacePlacementRole.library.rawValue)
+
+				if let trimmedQuery, !trimmedQuery.isEmpty {
+					request.predicate = NSCompoundPredicate(
+						andPredicateWithSubpredicates: [
+							NSPredicate(format: "role == %@", WorkspacePlacementRole.library.rawValue),
+							NSPredicate(format: "searchText CONTAINS[cd] %@", trimmedQuery),
+						]
+					)
+				}
+
+				return try context.fetch(request).map(Self.makeSavedWorkspaceListing(from:))
+			} catch {
+				Logger.persistence.error("Core Data failed to list saved workspaces from the library. The app will continue, but the library index could not be read. Error: \(String(describing: error), privacy: .public)")
+				return []
 			}
-		}
-
-		do {
-			return try context.fetch(request).map(makeSavedWorkspaceListing(from:))
-		} catch {
-			Logger.persistence.error("Core Data failed to list saved workspaces from the library. The app will continue, but the library index could not be read. Error: \(String(describing: error), privacy: .public)")
-			return []
 		}
 	}
 
 	func loadSavedWorkspace(id: SavedWorkspaceID) -> WorkspaceRevision? {
 		let context = container.viewContext
-		let request = NSFetchRequest<WorkspacePlacementEntity>(entityName: "WorkspacePlacementEntity")
-		request.fetchLimit = 1
-		request.predicate = NSPredicate(
-			format: "id == %@ AND role == %@",
-			id.rawValue as CVarArg,
-			WorkspacePlacementRole.library.rawValue
-		)
-
-		do {
-			guard let placement = try context.fetch(request).first else {
-				Logger.persistence.error("The saved-workspace library could not find the requested entry during reopen. The entry may have been deleted or the library selection may be stale. Saved workspace ID: \(id.rawValue.uuidString, privacy: .public)")
+		return context.performAndWait {
+			do {
+				let request = NSFetchRequest<WorkspacePlacementEntity>(entityName: "WorkspacePlacementEntity")
+				request.fetchLimit = 1
+				request.predicate = NSPredicate(
+					format: "id == %@ AND role == %@",
+					id.rawValue as CVarArg,
+					WorkspacePlacementRole.library.rawValue
+				)
+				guard let placement = try context.fetch(request).first else {
+					Logger.persistence.error("The saved-workspace library could not find the requested entry during reopen. The entry may have been deleted or the library selection may be stale. Saved workspace ID: \(id.rawValue.uuidString, privacy: .public)")
+					return nil
+				}
+				return Self.workspaceRevision(for: placement.workspace, placement: placement)
+			} catch {
+				Logger.persistence.error("Core Data failed while reading a saved workspace from the library. The live session remains available, but the requested saved revision could not be loaded. Saved workspace ID: \(id.rawValue.uuidString, privacy: .public). Error: \(String(describing: error), privacy: .public)")
 				return nil
 			}
-			return workspaceRevision(for: placement.workspace, placement: placement)
-		} catch {
-			Logger.persistence.error("Core Data failed while reading a saved workspace from the library. The live session remains available, but the requested saved revision could not be loaded. Saved workspace ID: \(id.rawValue.uuidString, privacy: .public). Error: \(String(describing: error), privacy: .public)")
-			return nil
 		}
 	}
 
 	@discardableResult
 	func deleteSavedWorkspace(id: SavedWorkspaceID) -> Bool {
 		let context = container.viewContext
-		var didDeleteSavedWorkspace = false
-		context.performAndWait {
+		return context.performAndWait {
 			do {
 				let request = NSFetchRequest<WorkspacePlacementEntity>(entityName: "WorkspacePlacementEntity")
 				request.fetchLimit = 1
@@ -296,15 +311,15 @@ final class WorkspacePersistenceController {
 				)
 				guard let placement = try context.fetch(request).first else {
 					Logger.persistence.error("The saved-workspace library could not find the entry requested for deletion. The library may already be up to date, or the selection may have gone stale. Saved workspace ID: \(id.rawValue.uuidString, privacy: .public)")
-					return
+					return false
 				}
 
 				let libraryWorkspaceID = placement.workspace?.id
 				context.delete(placement)
 
 				if let libraryWorkspaceID {
-					try deleteOrphanedWorkspaceRecords(
-						existingWorkspacesByID: [libraryWorkspaceID: try requireWorkspaceEntity(id: libraryWorkspaceID, context: context)],
+					try Self.deleteOrphanedWorkspaceRecords(
+						existingWorkspacesByID: [libraryWorkspaceID: try Self.requireWorkspaceEntity(id: libraryWorkspaceID, context: context)],
 						retainedWorkspaceIDs: [],
 						context: context
 					)
@@ -313,13 +328,13 @@ final class WorkspacePersistenceController {
 				if context.hasChanges {
 					try context.save()
 				}
-				didDeleteSavedWorkspace = true
+				return true
 			} catch {
 				Logger.persistence.error("Core Data failed to delete a saved workspace from the library. The entry remains available. Saved workspace ID: \(id.rawValue.uuidString, privacy: .public). Error: \(String(describing: error), privacy: .public)")
 				context.rollback()
+				return false
 			}
 		}
-		return didDeleteSavedWorkspace
 	}
 
 	func markSavedWorkspaceOpened(_ id: SavedWorkspaceID) {
@@ -351,12 +366,11 @@ final class WorkspacePersistenceController {
 }
 
 extension WorkspacePersistenceController {
-	func loadPlacements(
+	private nonisolated static func loadPlacements(
 		role: WorkspacePlacementRole,
 		sceneIdentity: WorkspaceSceneIdentity,
-		in context: NSManagedObjectContext? = nil
+		in context: NSManagedObjectContext
 	) -> [WorkspacePlacementEntity] {
-		let context = context ?? container.viewContext
 		let request = NSFetchRequest<WorkspacePlacementEntity>(entityName: "WorkspacePlacementEntity")
 		request.sortDescriptors = [NSSortDescriptor(key: #keyPath(WorkspacePlacementEntity.sortOrder), ascending: true)]
 		switch role {
@@ -379,27 +393,7 @@ extension WorkspacePersistenceController {
 		}
 	}
 
-	func upsertWorkspaceEntity(
-		for workspace: Workspace,
-		context: NSManagedObjectContext,
-		existingWorkspacesByID: inout [UUID: WorkspaceEntity],
-		sessions: TerminalSessionRegistry,
-		transcriptsBySessionID: [TerminalSessionID: String]
-	) throws -> WorkspaceEntity {
-		let sessionSnapshots = makeSessionSnapshots(
-			for: workspace,
-			sessions: sessions,
-			transcriptsBySessionID: transcriptsBySessionID
-		)
-		return try upsertWorkspaceEntity(
-			for: workspace,
-			context: context,
-			existingWorkspacesByID: &existingWorkspacesByID,
-			sessionSnapshots: sessionSnapshots
-		)
-	}
-
-	func upsertWorkspaceEntity(
+	private nonisolated static func upsertWorkspaceEntity(
 		for workspace: Workspace,
 		context: NSManagedObjectContext,
 		existingWorkspacesByID: inout [UUID: WorkspaceEntity],
@@ -420,7 +414,7 @@ extension WorkspacePersistenceController {
 		return workspaceEntity
 	}
 
-	func updateWorkspaceEntity(
+	private nonisolated static func updateWorkspaceEntity(
 		_ workspaceEntity: WorkspaceEntity,
 		from workspace: Workspace,
 		context: NSManagedObjectContext,
@@ -468,7 +462,7 @@ extension WorkspacePersistenceController {
 		)
 	}
 
-	func makeSessionSnapshots(
+	private static func makeSessionSnapshots(
 		for workspace: Workspace,
 		sessions: TerminalSessionRegistry,
 		transcriptsBySessionID: [TerminalSessionID: String]
@@ -497,7 +491,7 @@ extension WorkspacePersistenceController {
 		)
 	}
 
-	func makeSessionSnapshots(
+	private nonisolated static func makeSessionSnapshots(
 		for workspace: Workspace,
 		launchConfigurationsBySessionID: [TerminalSessionID: TerminalLaunchConfiguration],
 		titlesBySessionID: [TerminalSessionID: String],
@@ -528,7 +522,7 @@ extension WorkspacePersistenceController {
 		}
 	}
 
-	func workspaceRevision(
+	private nonisolated static func workspaceRevision(
 		for workspaceEntity: WorkspaceEntity?,
 		placement: WorkspacePlacementEntity
 	) -> WorkspaceRevision? {
@@ -572,7 +566,7 @@ extension WorkspacePersistenceController {
 		)
 	}
 
-	func decodeSessionSnapshots(from workspaceEntity: WorkspaceEntity) -> [TerminalSessionID: WorkspaceSessionSnapshot] {
+	private nonisolated static func decodeSessionSnapshots(from workspaceEntity: WorkspaceEntity) -> [TerminalSessionID: WorkspaceSessionSnapshot] {
 		let snapshotEntities = workspaceEntity.sessionSnapshots as? Set<PaneSessionSnapshotEntity> ?? []
 		return Dictionary(
 			uniqueKeysWithValues: snapshotEntities.compactMap { sessionSnapshot in
@@ -608,14 +602,14 @@ extension WorkspacePersistenceController {
 		)
 	}
 
-	func refreshListingMetadata(on placement: WorkspacePlacementEntity, from workspaceEntity: WorkspaceEntity) {
+	private nonisolated static func refreshListingMetadata(on placement: WorkspacePlacementEntity, from workspaceEntity: WorkspaceEntity) {
 		placement.title = workspaceEntity.title
 		placement.previewText = workspaceEntity.previewText
 		placement.searchText = workspaceEntity.searchText
 		placement.paneCount = Int64(Self.decodeNode(workspaceEntity.rootNode)?.leaves().count ?? 0)
 	}
 
-	func makeSavedWorkspaceListing(from placement: WorkspacePlacementEntity) -> SavedWorkspaceListing {
+	private nonisolated static func makeSavedWorkspaceListing(from placement: WorkspacePlacementEntity) -> SavedWorkspaceListing {
 		SavedWorkspaceListing(
 			id: SavedWorkspaceID(rawValue: placement.id),
 			title: placement.title,
@@ -628,7 +622,7 @@ extension WorkspacePersistenceController {
 		)
 	}
 
-	func makeSearchText(
+	private nonisolated static func makeSearchText(
 		title: String,
 		notes: String?,
 		previewText: String?,
@@ -641,7 +635,7 @@ extension WorkspacePersistenceController {
 		return (pieces + transcriptPieces).joined(separator: "\n")
 	}
 
-	func deleteOrphanedWorkspaceRecords(
+	private nonisolated static func deleteOrphanedWorkspaceRecords(
 		existingWorkspacesByID: [UUID: WorkspaceEntity],
 		retainedWorkspaceIDs: Set<UUID>,
 		context: NSManagedObjectContext
@@ -664,7 +658,7 @@ extension WorkspacePersistenceController {
 		}
 	}
 
-	func requireWorkspaceEntity(id: UUID, context: NSManagedObjectContext) throws -> WorkspaceEntity {
+	private nonisolated static func requireWorkspaceEntity(id: UUID, context: NSManagedObjectContext) throws -> WorkspaceEntity {
 		let request = NSFetchRequest<WorkspaceEntity>(entityName: "WorkspaceEntity")
 		request.fetchLimit = 1
 		request.predicate = NSPredicate(format: "id == %@", id as CVarArg)
@@ -674,7 +668,7 @@ extension WorkspacePersistenceController {
 		return entity
 	}
 
-	static func makePreviewText(from transcript: String) -> String? {
+	private nonisolated static func makePreviewText(from transcript: String) -> String? {
 		transcript
 			.split(whereSeparator: \.isNewline)
 			.map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }

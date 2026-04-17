@@ -318,7 +318,7 @@ Automated tests can confirm only part of the story:
 
 They will not prove VoiceOver or Full Keyboard Access quality by themselves.
 
-For shell-driven XCUITest runs, avoid treating the full accessibility hierarchy as normal persisted test output. In this repository, routine UI-test failures should prefer XCTest-supported attachments such as screenshots plus stable accessibility identifiers and human-readable failure messages. Capture the full `XCUIApplication.debugDescription` tree only as an explicit opt-in diagnostic step, because requesting that tree can trigger macOS accessibility or file-access prompts that destabilize automated runs. When deeper structure inspection is needed, prefer a manual Accessibility Inspector pass over making the AX tree a default test artifact.
+For shell-driven XCUITest runs, keep failure diagnostics minimal and text-first. Avoid automatic hierarchy or capture-based debug output, and prefer stable accessibility identifiers plus human-readable failure messages. When deeper structure inspection is needed, prefer a manual Accessibility Inspector pass instead of expanding the automated test harness.
 
 ## Manual Accessibility Pass
 

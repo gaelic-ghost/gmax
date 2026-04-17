@@ -39,23 +39,14 @@ class GmaxUITestCase: XCTestCase {
 		attemptToPresentWorkspaceWindow(in: app)
 
 		guard workspaceList.waitForExistence(timeout: 5) else {
-			recordWorkspaceWindowLaunchDiagnostics(in: app)
-
 			XCTFail(
 				"""
 				The main shell should expose the workspace sidebar after launch.
-				A screenshot attachment was recorded for diagnosis instead of dumping the full accessibility hierarchy, because AX tree dumps can trigger macOS permission prompts and destabilize UI automation.
+				The UI test harness intentionally avoids accessibility-tree and screenshot diagnostics here because they can trigger external permission flows and destabilize UI automation.
 				"""
 			)
 			return
 		}
-	}
-
-	private func recordWorkspaceWindowLaunchDiagnostics(in app: XCUIApplication) {
-		let appScreenshot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
-		appScreenshot.name = "Workspace window launch failure screenshot"
-		appScreenshot.lifetime = .keepAlways
-		add(appScreenshot)
 	}
 
 	func attemptToPresentWorkspaceWindow(in app: XCUIApplication) {

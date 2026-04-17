@@ -95,7 +95,7 @@ extension WorkspacePersistenceController {
 	) -> NSPersistentContainer {
 		let container = NSPersistentContainer(name: "WorkspaceStore", managedObjectModel: model)
 		container.persistentStoreDescriptions = [description]
-		container.viewContext.mergePolicy = NSMergeByPropertyObjectTrumpMergePolicy
+		container.viewContext.mergePolicy = NSMergePolicy(merge: .mergeByPropertyObjectTrumpMergePolicyType)
 		container.viewContext.automaticallyMergesChangesFromParent = true
 		container.viewContext.name = contextName
 		return container
