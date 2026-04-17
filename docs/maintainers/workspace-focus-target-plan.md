@@ -314,14 +314,15 @@ settled.
 
 ### Phase 1: define next-pass ownership boundaries
 
-Decide:
+Keep these ownership boundaries fixed:
 
-- whether sidebar, pane, and inspector are the only logical window focus targets
-- whether any future product requirement truly needs more than SwiftTerm's
-  existing internal prompt-versus-scrollback behavior
-- whether modals remain scene-owned
-- whether the set of open workspaces belongs to scene-local state rather than global persistence
-- whether the active workspace is defined entirely by scene selection, or by some more local panel-specific rule
+- sidebar, pane, and inspector are the only custom logical window focus targets
+  we currently model explicitly
+- SwiftTerm continues owning prompt-versus-scrollback behavior inside the pane
+- modals remain scene-owned
+- the set of open workspaces belongs to scene-local state rather than global
+  persistence
+- the active workspace is defined by scene selection for the current window
 
 ### Phase 2: reshape views
 
@@ -423,7 +424,7 @@ That means:
 - `Close Pane` should close the pane in both cases
 - lower-level text selection, copy, edit, and input behavior may differ inside the pane
 
-### 3. Pane commands versus sidebar or inspector focus
+### 4. Pane commands versus sidebar or inspector focus
 
 Current decision:
 
@@ -431,7 +432,7 @@ Current decision:
 
 This is important because sidebar focus should make sidebar-relevant commands possible. For example, if the user is navigating the sidebar list with the keyboard and has a workspace row focused or selected there, `Close Workspace` should act on that selected workspace rather than acting like a pane command.
 
-### 4. Modal ownership
+### 5. Modal ownership
 
 Current decision:
 
@@ -443,7 +444,7 @@ Rationale:
 - modal state is important enough to keep centralized
 - the app should require the user to resolve or dismiss the modal before continuing normal interaction in the window
 
-### 5. Smallest useful logical focus-target set
+### 6. Smallest useful logical focus-target set
 
 Current decision:
 
@@ -463,7 +464,7 @@ For now, the likely scene-level custom focus targets are still:
 
 while individual `WorkspaceListing` rows are likely native focus participants inside the sidebar’s built-in list behavior rather than extra custom enum cases.
 
-### 6. Open workspaces in a window
+### 7. Open workspaces in a window
 
 Current decision:
 

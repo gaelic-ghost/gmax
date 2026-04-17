@@ -164,23 +164,27 @@ If `gmax` moves toward native SwiftUI focus:
 - AppKit bridge code only translates native focus into terminal first responder where needed
 - the model owns workspace structure and selection, not transient keyboard focus
 
-That reduces custom coordination, but it does not remove responsibility. The app would still need to steward:
+That reduces custom coordination, but it does not remove responsibility. The
+app still needs to steward:
 
 - how pane focus is restored after splits and closes
 - what region should receive focus when a workspace becomes empty
-- whether sidebar, content, and inspector participate in one shared graph or partially isolated focus regions
 - how command enablement behaves when focus sits in the sidebar, in a pane terminal, or in inspector content
 
-## Open Design Questions
+## Recorded Design Decisions
 
-- Should the inspector ever become a command target for pane-oriented commands,
-  or should those commands disable whenever focus leaves content?
-- Does the embedded terminal need a dedicated AppKit focus adapter object, or
-  can the pane wrapper own that translation directly?
-- How should per-window open-workspace state and recent-close state restore
-  independently without turning live window contents back into app-global state?
-- Should pane focus and workspace selection always move together, or can they
-  diverge temporarily?
+- The inspector is a real focus region, but pane-oriented commands disable when
+  focus leaves content and moves there.
+- The embedded terminal should not regain a broad AppKit focus adapter layer.
+  The remaining bridge should stay narrow and only translate native responder
+  behavior where SwiftTerm still needs help.
+- Per-window open-workspace state and recent-close state restore independently
+  through the scene-scoped payload-plus-placement persistence model rather than
+  through app-global live window state.
+- Pane focus and workspace selection stay aligned at the workspace-window
+  level. Changing the selected workspace resets pane focus into that window's
+  active workspace context rather than letting pane focus drift across
+  workspaces.
 
 Prompt-versus-scrollback is intentionally no longer an open question here.
 SwiftTerm owns that internal terminal interaction behavior, and `gmax` should
