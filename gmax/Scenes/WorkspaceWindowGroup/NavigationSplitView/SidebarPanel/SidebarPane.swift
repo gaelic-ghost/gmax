@@ -20,19 +20,19 @@ struct SidebarPane: View {
 		List(selection: $selection) {
 			ForEach(model.workspaces) { workspace in
 				let paneCount = workspace.root?.leaves().count ?? 0
+				let paneCountDescription = paneCount == 1 ? "1 pane" : "\(paneCount) panes"
 				NavigationLink(value: workspace.id) {
 					VStack(alignment: .leading, spacing: 4) {
 						Text(workspace.title)
 							.accessibilityIdentifier("sidebar.workspaceTitle.\(workspace.title)")
-						Text(paneCount == 1 ? "1 pane" : "\(paneCount) panes")
+						Text(paneCountDescription)
 							.font(.caption)
 							.foregroundStyle(.secondary)
 							.accessibilityIdentifier("sidebar.workspacePaneCount.\(workspace.title)")
 					}
 				}
 					.accessibilityElement(children: .combine)
-					.accessibilityLabel(workspace.title)
-					.accessibilityValue(paneCount == 1 ? "1 pane" : "\(paneCount) panes")
+					.accessibilityLabel("\(workspace.title), \(paneCountDescription)")
 					.accessibilityIdentifier("sidebar.workspaceRow.\(workspace.title)")
 					.contextMenu {
 						workspaceActions(for: workspace)

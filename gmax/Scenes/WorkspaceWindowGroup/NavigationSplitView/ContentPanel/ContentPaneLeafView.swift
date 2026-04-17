@@ -55,6 +55,7 @@ struct ContentPaneLeafView: View {
 		.accessibilityLabel(accessibilityLabel)
 		.accessibilityValue(accessibilityValue)
 		.accessibilityHint(paneActionsHint)
+		.accessibilityIdentifier("contentPane.leaf.\(pane.id.rawValue.uuidString)")
 		.accessibilityRespondsToUserInteraction(true)
 		.accessibilityAddTraits(isFocused ? .isSelected : [])
 		.accessibilityAction(named: Text("Split Right")) {

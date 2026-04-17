@@ -27,7 +27,7 @@ final class WorkspaceSidebarUITests: GmaxUITestCase {
 		)
 
 		sidebarDeleteWorkspaceCancelButton(in: app).click()
-		XCTAssertFalse(
+		XCTAssertTrue(
 			waitForNonExistence(timeout: 2) {
 				self.sidebarDeleteWorkspaceCancelButton(in: app)
 			},

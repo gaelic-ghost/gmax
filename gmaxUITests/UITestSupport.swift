@@ -76,7 +76,7 @@ class GmaxUITestCase: XCTestCase {
 	}
 
 	func assertWorkspaceDoesNotExist(_ title: String, in app: XCUIApplication) {
-		XCTAssertFalse(
+		XCTAssertTrue(
 			waitForNonExistence(timeout: 2) {
 				self.sidebarWorkspaceRow(titled: title, in: app)
 			},
@@ -180,6 +180,10 @@ class GmaxUITestCase: XCTestCase {
 		return workspaceList.staticTexts["sidebar.workspacePaneCount.\(title)"]
 	}
 
+	func sidebarWorkspaceRowLabel(titled title: String, in scope: XCUIElement) -> String {
+		sidebarWorkspaceRow(titled: title, in: scope).label
+	}
+
 	func savedWorkspaceLibraryRow(titled title: String, in app: XCUIApplication) -> XCUIElement {
 		let libraryList = app.descendants(matching: .any)["savedWorkspaceLibrary.list"]
 		let identifiedTitle = libraryList.staticTexts["savedWorkspaceLibrary.title.\(title)"]
@@ -210,6 +214,17 @@ class GmaxUITestCase: XCTestCase {
 
 	func newWorkspaceButton(in app: XCUIApplication) -> XCUIElement {
 		app.buttons["mainShell.newWorkspaceButton"]
+	}
+
+	func focusFirstVisiblePane(in app: XCUIApplication) {
+		let pane = app.descendants(matching: .any)
+			.matching(NSPredicate(format: "identifier BEGINSWITH %@", "contentPane.leaf."))
+			.firstMatch
+		XCTAssertTrue(
+			pane.waitForExistence(timeout: 5),
+			"The workspace content area should expose at least one pane before the test tries to focus it."
+		)
+		pane.click()
 	}
 
 	@discardableResult

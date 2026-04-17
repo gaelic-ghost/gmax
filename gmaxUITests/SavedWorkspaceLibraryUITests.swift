@@ -30,21 +30,17 @@ final class SavedWorkspaceLibraryUITests: GmaxUITestCase {
 	func testPaneSplitButtonsAndContextualCloseUpdateInspectorPaneCount() throws {
 		let app = launchApp()
 		let workspaceRow = sidebarWorkspaceRow(titled: "Workspace 1", in: app)
-		let paneCountLabel = sidebarWorkspacePaneCount(titled: "Workspace 1", in: app)
 
 		XCTAssertTrue(
 			workspaceRow.waitForExistence(timeout: 5),
 			"The selected workspace should be visible in the sidebar before pane lifecycle actions are tested."
 		)
-		XCTAssertTrue(
-			paneCountLabel.waitForExistence(timeout: 5),
-			"The selected workspace row should expose its pane-count label in the sidebar."
-		)
 		XCTAssertEqual(
-			paneCountLabel.label,
-			"1 pane",
-			"A fresh workspace row should report that it begins with one pane."
+			sidebarWorkspaceRowLabel(titled: "Workspace 1", in: app),
+			"Workspace 1, 1 pane",
+			"A fresh workspace row should expose its title and pane count together through the row label."
 		)
+		focusFirstVisiblePane(in: app)
 
 		chooseMenuBarAction(
 			menuBarItem: "Pane",
@@ -52,10 +48,11 @@ final class SavedWorkspaceLibraryUITests: GmaxUITestCase {
 			in: app
 		)
 		XCTAssertEqual(
-			paneCountLabel.label,
-			"2 panes",
-			"Splitting right should add a second pane and update the selected workspace count."
+			sidebarWorkspaceRowLabel(titled: "Workspace 1", in: app),
+			"Workspace 1, 2 panes",
+			"Splitting right should update the selected workspace row label with the new pane count."
 		)
+		focusFirstVisiblePane(in: app)
 
 		chooseMenuBarAction(
 			menuBarItem: "Pane",
@@ -63,15 +60,16 @@ final class SavedWorkspaceLibraryUITests: GmaxUITestCase {
 			in: app
 		)
 		XCTAssertEqual(
-			paneCountLabel.label,
-			"3 panes",
-			"Splitting down should add a third pane and update the selected workspace count."
+			sidebarWorkspaceRowLabel(titled: "Workspace 1", in: app),
+			"Workspace 1, 3 panes",
+			"Splitting down should update the selected workspace row label with the new pane count."
 		)
+		focusFirstVisiblePane(in: app)
 
 		app.typeKey("w", modifierFlags: .command)
 		XCTAssertEqual(
-			paneCountLabel.label,
-			"2 panes",
+			sidebarWorkspaceRowLabel(titled: "Workspace 1", in: app),
+			"Workspace 1, 2 panes",
 			"The contextual close command should close only the focused pane when the workspace still has multiple panes."
 		)
 	}
@@ -86,7 +84,11 @@ final class SavedWorkspaceLibraryUITests: GmaxUITestCase {
 			"The toolbar should start in the visible-inspector state for a fresh shell window."
 		)
 
-		toggleInspectorButton(in: app).click()
+		chooseMenuBarAction(
+			menuBarItem: "View",
+			action: "Hide Inspector",
+			in: app
+		)
 		XCTAssertTrue(
 			toggleInspectorButton(in: app).waitForExistence(timeout: 5),
 			"The inspector toggle should remain available after hiding the inspector."
@@ -97,7 +99,11 @@ final class SavedWorkspaceLibraryUITests: GmaxUITestCase {
 			"Hiding the inspector from the toolbar should flip the control into the show-inspector state."
 		)
 
-		toggleInspectorButton(in: app).click()
+		chooseMenuBarAction(
+			menuBarItem: "View",
+			action: "Show Inspector",
+			in: app
+		)
 		XCTAssertEqual(
 			toggleInspectorButton(in: app).label,
 			"Hide Inspector",
@@ -157,7 +163,7 @@ final class SavedWorkspaceLibraryUITests: GmaxUITestCase {
 			app.staticTexts["savedWorkspaceLibrary.emptyState"].waitForExistence(timeout: 5),
 			"The saved-workspace library should return to its empty state after deleting the only snapshot."
 		)
-		XCTAssertFalse(
+		XCTAssertTrue(
 			waitForNonExistence(timeout: 2) {
 				self.savedWorkspaceLibraryRow(titled: "Workspace 2", in: app)
 			},
@@ -176,7 +182,7 @@ final class SavedWorkspaceLibraryUITests: GmaxUITestCase {
 		)
 
 		savedWorkspaceLibraryCancelButton(in: app).click()
-		XCTAssertFalse(
+		XCTAssertTrue(
 			waitForNonExistence(timeout: 2) {
 				self.savedWorkspaceLibraryCancelButton(in: app)
 			},
