@@ -113,4 +113,15 @@ struct WorkspaceLifecycleTests {
 		#expect(nextSelectedWorkspaceID == nil)
 		#expect(model.workspaces.isEmpty)
 	}
+
+	@Test func defaultWorkspaceStoreBootstrapDoesNotRequireLaunchingAShellProcess() {
+		let persistence = WorkspacePersistenceController.inMemoryForTesting()
+
+		let model = WorkspaceStore(
+			persistence: persistence
+		)
+
+		#expect(model.workspaces.count == 1)
+		#expect(model.workspaces[0].title == "Workspace 1")
+	}
 }

@@ -23,13 +23,7 @@ struct TerminalLaunchContextBuilder {
 		let swiftTermEnvironment = parseEnvironmentEntries(
 			Terminal.getEnvironmentVariables(termName: "xterm-256color")
 		)
-		let capturedEnvironment = capturedLoginShellEnvironment(
-			shellExecutable: shellExecutable,
-			processInfo: processInfo,
-			currentDirectory: defaultCurrentDirectory
-		)
-		let capturedOrInheritedEnvironment = capturedEnvironment ?? processInfo.environment
-		let baseEnvironment = capturedOrInheritedEnvironment
+		let baseEnvironment = processInfo.environment
 			.merging(swiftTermEnvironment, uniquingKeysWith: { _, new in new })
 			.merging(stableTerminalEnvironment(), uniquingKeysWith: { _, new in new })
 
@@ -80,53 +74,6 @@ struct TerminalLaunchContextBuilder {
 		}
 
 		return fileManager.homeDirectoryForCurrentUser.path
-	}
-
-	private static func capturedLoginShellEnvironment(
-		shellExecutable: String,
-		processInfo: ProcessInfo,
-		currentDirectory: String
-	) -> [String: String]? {
-		let process = Process()
-		let outputPipe = Pipe()
-		let errorPipe = Pipe()
-
-		process.executableURL = URL(fileURLWithPath: shellExecutable, isDirectory: false)
-		process.arguments = ["-l", "-c", "env -0"]
-		process.environment = processInfo.environment
-		process.currentDirectoryURL = URL(fileURLWithPath: currentDirectory, isDirectory: true)
-		process.standardOutput = outputPipe
-		process.standardError = errorPipe
-
-		do {
-			try process.run()
-		} catch {
-			return nil
-		}
-
-		let outputData = outputPipe.fileHandleForReading.readDataToEndOfFile()
-		process.waitUntilExit()
-
-		guard process.terminationStatus == 0 else {
-			return nil
-		}
-
-		return parseEnvironmentData(outputData)
-	}
-
-	private static func parseEnvironmentData(_ data: Data) -> [String: String] {
-		var environment: [String: String] = [:]
-		for entryData in data.split(separator: 0) {
-			let entry = String(decoding: entryData, as: UTF8.self)
-			guard let separatorIndex = entry.firstIndex(of: "=") else {
-				continue
-			}
-
-			let key = String(entry[..<separatorIndex])
-			let value = String(entry[entry.index(after: separatorIndex)...])
-			environment[key] = value
-		}
-		return environment
 	}
 
 	private static func parseEnvironmentEntries(_ entries: [String]) -> [String: String] {
