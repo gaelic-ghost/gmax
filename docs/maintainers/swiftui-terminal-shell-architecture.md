@@ -19,16 +19,11 @@
 
 ## Purpose
 
-This note captures the current preferred architecture for a macOS terminal shell built with SwiftUI around SwiftTerm.
+This note is background context for the broader shell architecture.
 
-The immediate product shape is:
-
-- a three-column `NavigationSplitView`
-- a left sidebar listing workspaces
-- a center content column showing the selected workspace's pane layout
-- a right detail column showing badges and inspector-style metadata for the actively focused pane in the selected workspace
-
-This document is intentionally maintainer-facing. It describes the durable primitives we want to build on, the tradeoffs we already considered, and the implementation direction we should preserve while the product grows.
+It is no longer the active planning surface for focus, command, or persistence
+work. Keep it for high-level product-shape context and earlier architectural
+tradeoff history, not for day-to-day planning.
 
 ## Current Source Organization
 

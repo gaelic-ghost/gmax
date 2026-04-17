@@ -9,7 +9,6 @@
 - [ ] Add broader save and restore coverage for stale or more deeply corrupted persisted layouts beyond the current missing-session and corrupted-pane-tree cases.
 - [ ] Add broader UI coverage for pane lifecycle flows and multi-window command routing beyond the current sidebar and saved-workspace suites.
 - [ ] Revisit frontmost-window command-routing UITest coverage with a minimal same-app window-focus strategy; the first inspector-toggle shortcut hid only the frontmost shell window, but macOS XCTest still failed to make the background shell window consume the second shortcut reliably.
-- [ ] REMOVE legacy global-selection and fallback-routing anti-patterns so scene-local window state stays authoritative and future features do not build on retired backchannels.
 - [ ] Tighten operator-facing logs and error messages around persistence, restore, and shell relaunch failures.
 - [ ] Keep resiliency and recovery behavior explicit during feature work, especially where persistence, restore, and pane lifecycle flows can fail partially.
 - [ ] Walk the first internal-build release checklist for `v0.1.0`.
