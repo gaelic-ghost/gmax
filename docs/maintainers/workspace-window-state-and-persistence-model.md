@@ -112,10 +112,9 @@ placement entity:
 - the library sheet now loads listing values first, then fetches the payload on
   demand when the user opens that saved workspace
 
-The old `WorkspaceSnapshotEntity` graph still exists only as a quarantined
-legacy migration surface for older databases. The runtime model no longer uses
-it as the primary saved workspace surface, and the compatibility code now
-lives in dedicated legacy-only files instead of the active persistence path.
+The old `WorkspaceSnapshotEntity` graph is gone from the active codebase.
+The runtime model no longer carries a compatibility bridge for older databases;
+the only persistence model we build on now is the payload-plus-placement store.
 
 ## Core Simplification
 
@@ -699,23 +698,18 @@ The likely shape is:
 - lightweight listing metadata denormalized onto the stable library placement so
   the library UI stays fast
 
-## Migration Status
+## Current Status
 
-The compatibility bridge that landed in this pass does the following:
+The current persistence model does the following:
 
-1. introduces the new placement role enum and placement entity
-2. treats `WorkspaceEntity` as the canonical payload entity
-3. migrates legacy live `WorkspaceEntity` records into `.live` placements
-4. migrates legacy `WorkspaceSnapshotEntity` records into payload plus
-   `.library` placements
-5. restores recent-close state from `.recent` placements
-6. updates `WorkspaceStore` and scene restore so the live sidebar hydrates from
-   scene-identity-scoped placements rather than from one app-wide live list
-
-The old snapshot entities remain only as a migration bridge and should
-eventually become removable once legacy-store support is no longer needed.
-That bridge is now intentionally isolated in the legacy migration files rather
-than mixed into the active payload-plus-placement controller path.
+1. uses `WorkspaceEntity` as the canonical payload entity
+2. uses `WorkspacePlacementEntity` to describe whether that payload is
+   `.live`, `.recent`, or `.library`
+3. restores live and recently closed workspaces from scene-identity-scoped
+   placements
+4. restores saved library entries from `.library` placements
+5. keeps scene-local UI restoration in `@SceneStorage` instead of mixing that
+   state into the persistence store
 
 ## Recommended Next Follow-Through
 
@@ -725,7 +719,6 @@ are:
 1. what exact saved-revision retention policy should back save-over-time
    behavior
 2. whether library history needs user-facing browse, restore, or diff surfaces
-3. when the legacy snapshot migration bridge can be removed
 
 Everything else can now evolve incrementally without changing the underlying
 payload-plus-placement model again.

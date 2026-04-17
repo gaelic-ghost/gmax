@@ -1,7 +1,6 @@
 /*
  WorkspacePersistenceController+WorkspaceCoding owns translation between the
- in-memory workspace model and the active Core Data payload graph. Legacy
- snapshot-graph translation lives in the dedicated legacy migration extension.
+ in-memory workspace model and the active Core Data payload graph.
  */
 
 import CoreData

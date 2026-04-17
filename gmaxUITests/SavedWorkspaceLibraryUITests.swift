@@ -126,19 +126,19 @@ final class SavedWorkspaceLibraryUITests: GmaxUITestCase {
 		assertWorkspaceDoesNotExist("Workspace 2", in: app)
 
 		openSavedWorkspaceLibrary(in: app)
-		let snapshotTitle = savedWorkspaceLibraryRow(titled: "Workspace 2", in: app)
+		let savedWorkspaceTitle = savedWorkspaceLibraryRow(titled: "Workspace 2", in: app)
 		XCTAssertTrue(
-			snapshotTitle.waitForExistence(timeout: 5),
+			savedWorkspaceTitle.waitForExistence(timeout: 5),
 			"The saved-workspace library should list the workspace that was closed into the library."
 		)
 
-		snapshotTitle.click()
+		savedWorkspaceTitle.click()
 		savedWorkspaceLibraryOpenButton(in: app).click()
 		assertWorkspaceExists("Workspace 2", in: app)
 	}
 
 	@MainActor
-	func testSavedWorkspaceLibraryCanDeleteSnapshot() throws {
+		func testSavedWorkspaceLibraryCanDeleteSavedWorkspace() throws {
 		let app = launchApp()
 
 		createWorkspace(titled: "Workspace 2", in: app)
@@ -150,24 +150,24 @@ final class SavedWorkspaceLibraryUITests: GmaxUITestCase {
 		)
 
 		openSavedWorkspaceLibrary(in: app)
-		let snapshotTitle = savedWorkspaceLibraryRow(titled: "Workspace 2", in: app)
+		let savedWorkspaceTitle = savedWorkspaceLibraryRow(titled: "Workspace 2", in: app)
 		XCTAssertTrue(
-			snapshotTitle.waitForExistence(timeout: 5),
-			"The saved-workspace library should list the snapshot before deletion."
+			savedWorkspaceTitle.waitForExistence(timeout: 5),
+			"The saved-workspace library should list the saved workspace before deletion."
 		)
 
-		snapshotTitle.click()
+		savedWorkspaceTitle.click()
 		savedWorkspaceLibraryDeleteButton(in: app).click()
 
 		XCTAssertTrue(
 			app.staticTexts["savedWorkspaceLibrary.emptyState"].waitForExistence(timeout: 5),
-			"The saved-workspace library should return to its empty state after deleting the only snapshot."
+			"The saved-workspace library should return to its empty state after deleting the only saved workspace."
 		)
 		XCTAssertTrue(
 			waitForNonExistence(timeout: 2) {
 				self.savedWorkspaceLibraryRow(titled: "Workspace 2", in: app)
 			},
-			"The deleted saved-workspace snapshot should no longer appear in the library list."
+			"The deleted saved workspace should no longer appear in the library list."
 		)
 	}
 

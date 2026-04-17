@@ -36,8 +36,8 @@ The source tree is now organized to match the current ownership boundaries in th
 
 - `gmaxApp.swift` keeps app bootstrap and scene declarations
 - `gmaxApp.swift` and the scene roots hold app bootstrap, menu commands, and UI-test launch behavior
-- `Workspace/` keeps workspace state plus pane and workspace management split by concern
-- `Persistence/Workspace/` keeps Core Data setup, persistence profiles, workspace payload and placement storage, and migration helpers split by concern
+- `Scenes/WorkspaceWindowGroup/` keeps workspace state plus pane and workspace management split by concern
+- `Persistence/Workspace/` keeps Core Data setup, persistence profiles, and workspace payload plus placement storage split by concern
 - `Terminal/` keeps the SwiftUI representable boundary, coordinator, AppKit host, and terminal-session plumbing
 - `Scenes/WorkspaceWindowGroup/` keeps top-level workspace-window scene composition and scene-bound presentation surfaces
 - `Scenes/Settings/` keeps the settings entry view plus the terminal appearance and workspace sections

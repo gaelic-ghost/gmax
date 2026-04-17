@@ -58,10 +58,10 @@ Build `gmax` into a finished macOS terminal workspace app:
 
 - [ ] Audit the SwiftUI shell for keyboard-only reachability
 - [ ] Improve pane focus visibility and command discoverability
-- [ ] Evaluate SwiftTerm host accessibility gaps in the app context
+- [x] Evaluate SwiftTerm host accessibility gaps in the app context
 - [x] Add app-level accessibility affordances around pane metadata and session state
 - [ ] Design a practical Voice Control and Full Keyboard Access story
-- [ ] Decide whether SwiftTerm should be extended locally for better accessibility support
+- [x] Decide whether SwiftTerm should be extended locally for better accessibility support
 - [ ] Integrate SpeakSwiftly for in-process custom TTS and STT
 - [ ] Evaluate small fine-tunes of FunctionGemma and STT for Voice Commands
 
@@ -70,7 +70,7 @@ Build `gmax` into a finished macOS terminal workspace app:
 - [ ] Validate current SwiftTerm accessibility behavior under VoiceOver and Full Keyboard Access outside `gmax`-specific pane chrome
 - [ ] Identify the smallest macOS accessibility gaps in SwiftTerm's `TerminalView` and `LocalProcessTerminalView`
 - [ ] Prototype upstream-safe AppKit accessibility improvements that do not depend on `gmax` pane metadata or app-specific actions
-- [ ] Replace or deepen the currently limited macOS accessibility-service implementation in SwiftTerm where the gap is real and reproducible
+- [ ] Only deepen the currently limited macOS accessibility-service implementation in SwiftTerm where the gap is real and reproducible
 - [ ] Split app-local accessibility affordances from package-level terminal accessibility fixes so upstream scope stays clean
 - [ ] Prepare an isolated patch series and reproduction notes suitable for a SwiftTerm upstream contribution
 
@@ -83,11 +83,9 @@ Build `gmax` into a finished macOS terminal workspace app:
 - [ ] Add toolbar "preset" buttons for saving workspace layouts as "favorites"
 - [ ] Add initial set of configurable keyboard shortcuts
 - [ ] Add custom actions or command presets worth persisting
-- [ ] Separate durable app settings from scene-local window state beyond the current restored selection and inspector visibility
 
 ## Milestone 5: Persistence and Sync Follow-Through
 
-- [ ] Add migration-safe versioning around the Core Data model
 - [x] Restore a more complete session and workspace state on launch
 - [x] Add a separate saved-workspace library beside the live session store
 - [x] Add explicit `Save Workspace` and `Close to Library` flows
@@ -100,8 +98,7 @@ Build `gmax` into a finished macOS terminal workspace app:
 - [x] Add initial failure-mode coverage for corrupted and partial saved-workspace payloads so restore degrades safely instead of unpredictably
 - [x] Restore live and recent workspace state per window scene instead of one app-global live list
 - [x] Unify live, recent, and library persistence around payload plus placement records
-- [x] Add a migration bridge from legacy live and saved workspace records into the placement model
-- [x] Quarantine legacy migration entities and helpers away from the active payload-plus-placement persistence files
+- [ ] REMOVE the retired snapshot persistence graph and migration shim from the active codebase
 - [ ] Add explicit saved-workspace revision history retention instead of replacing the current saved payload in place
 - [ ] Finish narrowing remaining scene-command and terminal-bridge cleanup now that window-scoped persistence is in place
 - [ ] Decide which settings and metadata are sync-worthy

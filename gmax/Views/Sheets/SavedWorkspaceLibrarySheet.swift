@@ -12,29 +12,29 @@ struct SavedWorkspaceLibrarySheet: View {
 	@Binding var selectedWorkspaceID: WorkspaceID?
 	@Environment(\.dismiss) private var dismiss
 	@State private var searchText = ""
-	@State private var selectedSnapshotID: SavedWorkspaceID?
+	@State private var selectedSavedWorkspaceID: SavedWorkspaceID?
 
 	var body: some View {
 		let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-		let snapshots = model.listSavedWorkspaceSnapshots(matching: query.isEmpty ? nil : query)
+		let savedWorkspaces = model.listSavedWorkspaces(matching: query.isEmpty ? nil : query)
 		let normalizeSelection = {
-			if !snapshots.contains(where: { $0.id == selectedSnapshotID }) {
-				selectedSnapshotID = snapshots.first?.id
+			if !savedWorkspaces.contains(where: { $0.id == selectedSavedWorkspaceID }) {
+				selectedSavedWorkspaceID = savedWorkspaces.first?.id
 			}
 		}
-		let open: (SavedWorkspaceID) -> Void = { snapshotID in
-			guard let workspaceID = model.openSavedWorkspace(snapshotID) else { return }
+		let open: (SavedWorkspaceID) -> Void = { savedWorkspaceID in
+			guard let workspaceID = model.openSavedWorkspace(savedWorkspaceID) else { return }
 			selectedWorkspaceID = workspaceID
 			dismiss()
 		}
-		let delete: (SavedWorkspaceID) -> Void = { snapshotID in
-			model.deleteSavedWorkspace(snapshotID)
-			selectedSnapshotID = snapshots.first { $0.id != snapshotID }?.id
+		let delete: (SavedWorkspaceID) -> Void = { savedWorkspaceID in
+			model.deleteSavedWorkspace(savedWorkspaceID)
+			selectedSavedWorkspaceID = savedWorkspaces.first { $0.id != savedWorkspaceID }?.id
 		}
 
 		VStack(spacing: 0) {
 			Group {
-				if snapshots.isEmpty {
+				if savedWorkspaces.isEmpty {
 					ContentUnavailableView {
 						Label("No Saved Workspaces", systemImage: "externaldrive.badge.timemachine")
 					} description: {
@@ -46,22 +46,22 @@ struct SavedWorkspaceLibrarySheet: View {
 					}
 					.accessibilityIdentifier("savedWorkspaceLibrary.emptyState")
 				} else {
-					List(selection: $selectedSnapshotID) {
-						ForEach(snapshots) { snapshot in
-							let paneCountText = snapshot.paneCount == 1 ? "1 pane" : "\(snapshot.paneCount) panes"
-							let timestampText = if let lastOpenedAt = snapshot.lastOpenedAt {
+					List(selection: $selectedSavedWorkspaceID) {
+						ForEach(savedWorkspaces) { savedWorkspace in
+							let paneCountText = savedWorkspace.paneCount == 1 ? "1 pane" : "\(savedWorkspace.paneCount) panes"
+							let timestampText = if let lastOpenedAt = savedWorkspace.lastOpenedAt {
 								"Opened \(lastOpenedAt.formatted(.relative(presentation: .named)))"
 							} else {
-								"Saved \(snapshot.updatedAt.formatted(.relative(presentation: .named)))"
+								"Saved \(savedWorkspace.updatedAt.formatted(.relative(presentation: .named)))"
 							}
 							VStack(alignment: .leading, spacing: 6) {
 								HStack(alignment: .firstTextBaseline, spacing: 8) {
-									Text(snapshot.title)
+									Text(savedWorkspace.title)
 										.font(.headline)
 										.lineLimit(1)
-										.accessibilityIdentifier("savedWorkspaceLibrary.title.\(snapshot.title)")
+										.accessibilityIdentifier("savedWorkspaceLibrary.title.\(savedWorkspace.title)")
 
-									if snapshot.isPinned {
+									if savedWorkspace.isPinned {
 										Image(systemName: "pin.fill")
 											.font(.caption)
 											.foregroundStyle(.secondary)
@@ -75,7 +75,7 @@ struct SavedWorkspaceLibrarySheet: View {
 								.font(.caption)
 								.foregroundStyle(.secondary)
 
-								if let previewText = snapshot.previewText {
+								if let previewText = savedWorkspace.previewText {
 									Text(previewText)
 										.font(.callout)
 										.foregroundStyle(.secondary)
@@ -83,22 +83,22 @@ struct SavedWorkspaceLibrarySheet: View {
 								}
 							}
 							.padding(.vertical, 4)
-							.accessibilityIdentifier("savedWorkspaceLibrary.row.\(snapshot.title)")
-							.simultaneousGesture(
-								TapGesture(count: 2).onEnded {
-									open(snapshot.id)
-								}
-							)
-								.tag(snapshot.id)
-								.contextMenu {
-									Button("Open Workspace") {
-										open(snapshot.id)
+								.accessibilityIdentifier("savedWorkspaceLibrary.row.\(savedWorkspace.title)")
+								.simultaneousGesture(
+									TapGesture(count: 2).onEnded {
+										open(savedWorkspace.id)
 									}
+								)
+									.tag(savedWorkspace.id)
+									.contextMenu {
+										Button("Open Workspace") {
+											open(savedWorkspace.id)
+										}
 
-									Button("Delete Saved Workspace", role: .destructive) {
-										delete(snapshot.id)
+										Button("Delete Saved Workspace", role: .destructive) {
+											delete(savedWorkspace.id)
+										}
 									}
-								}
 						}
 					}
 					.accessibilityIdentifier("savedWorkspaceLibrary.list")
@@ -117,22 +117,22 @@ struct SavedWorkspaceLibrarySheet: View {
 				Spacer()
 
 				Button("Delete") {
-					guard let snapshotID = selectedSnapshotID else {
+					guard let savedWorkspaceID = selectedSavedWorkspaceID else {
 						return
 					}
-					delete(snapshotID)
+					delete(savedWorkspaceID)
 				}
-				.disabled(selectedSnapshotID == nil)
+				.disabled(selectedSavedWorkspaceID == nil)
 				.accessibilityIdentifier("savedWorkspaceLibrary.deleteButton")
 
 				Button("Open") {
-					guard let snapshotID = selectedSnapshotID else {
+					guard let savedWorkspaceID = selectedSavedWorkspaceID else {
 						return
 					}
-					open(snapshotID)
+					open(savedWorkspaceID)
 				}
 				.keyboardShortcut(.defaultAction)
-				.disabled(selectedSnapshotID == nil)
+				.disabled(selectedSavedWorkspaceID == nil)
 				.accessibilityIdentifier("savedWorkspaceLibrary.openButton")
 			}
 			.padding(16)

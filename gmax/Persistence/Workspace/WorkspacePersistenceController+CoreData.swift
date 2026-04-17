@@ -330,7 +330,6 @@ extension WorkspacePersistenceController {
 			workspacePlacementEntity,
 			paneSessionSnapshotEntity,
 		]
-		model.entities.append(contentsOf: makeLegacyManagedObjectEntities(paneSessionSnapshotEntity: paneSessionSnapshotEntity))
 		return model
 	}
 

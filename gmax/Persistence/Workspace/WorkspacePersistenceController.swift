@@ -47,9 +47,6 @@ final class WorkspacePersistenceController {
 
 	func loadWorkspaces(for sceneIdentity: WorkspaceSceneIdentity) -> [Workspace] {
 		let context = container.viewContext
-		context.performAndWait {
-			try? migrateLegacyPersistenceIfNeeded(for: sceneIdentity, context: context)
-		}
 		return loadPlacements(role: .live, sceneIdentity: sceneIdentity, in: context)
 			.compactMap { placement in
 				guard let revision = workspaceRevision(for: placement.workspace, placement: placement) else {
@@ -61,9 +58,6 @@ final class WorkspacePersistenceController {
 
 	func loadRecentlyClosedWorkspaces(for sceneIdentity: WorkspaceSceneIdentity) -> [PersistedRecentlyClosedWorkspace] {
 		let context = container.viewContext
-		context.performAndWait {
-			try? migrateLegacyPersistenceIfNeeded(for: sceneIdentity, context: context)
-		}
 		return loadPlacements(role: .recent, sceneIdentity: sceneIdentity, in: context)
 			.compactMap { placement in
 				guard let revision = workspaceRevision(for: placement.workspace, placement: placement) else {
@@ -175,7 +169,7 @@ final class WorkspacePersistenceController {
 		}
 	}
 
-	func createWorkspaceSnapshot(
+	func saveWorkspaceToLibrary(
 		from workspace: Workspace,
 		sessions: TerminalSessionRegistry,
 		transcriptsBySessionID: [TerminalSessionID: String] = [:],
@@ -236,11 +230,8 @@ final class WorkspacePersistenceController {
 		return createdListing
 	}
 
-	func listWorkspaceSnapshots(matching query: String? = nil) -> [SavedWorkspaceListing] {
+	func listSavedWorkspaces(matching query: String? = nil) -> [SavedWorkspaceListing] {
 		let context = container.viewContext
-		context.performAndWait {
-			try? migrateLegacyPersistenceIfNeeded(for: WorkspaceSceneIdentity(), context: context)
-		}
 		let request = NSFetchRequest<WorkspacePlacementEntity>(entityName: "WorkspacePlacementEntity")
 		request.sortDescriptors = [
 			NSSortDescriptor(key: #keyPath(WorkspacePlacementEntity.isPinned), ascending: false),
@@ -268,11 +259,8 @@ final class WorkspacePersistenceController {
 		}
 	}
 
-	func loadWorkspaceSnapshot(id: SavedWorkspaceID) -> WorkspaceRevision? {
+	func loadSavedWorkspace(id: SavedWorkspaceID) -> WorkspaceRevision? {
 		let context = container.viewContext
-		context.performAndWait {
-			try? migrateLegacyPersistenceIfNeeded(for: WorkspaceSceneIdentity(), context: context)
-		}
 		let request = NSFetchRequest<WorkspacePlacementEntity>(entityName: "WorkspacePlacementEntity")
 		request.fetchLimit = 1
 		request.predicate = NSPredicate(
@@ -294,11 +282,8 @@ final class WorkspacePersistenceController {
 	}
 
 	@discardableResult
-	func deleteWorkspaceSnapshot(id: SavedWorkspaceID) -> Bool {
+	func deleteSavedWorkspace(id: SavedWorkspaceID) -> Bool {
 		let context = container.viewContext
-		context.performAndWait {
-			try? migrateLegacyPersistenceIfNeeded(for: WorkspaceSceneIdentity(), context: context)
-		}
 		var didDeleteSavedWorkspace = false
 		context.performAndWait {
 			do {
@@ -337,11 +322,8 @@ final class WorkspacePersistenceController {
 		return didDeleteSavedWorkspace
 	}
 
-	func markWorkspaceSnapshotOpened(_ id: SavedWorkspaceID) {
+	func markSavedWorkspaceOpened(_ id: SavedWorkspaceID) {
 		let context = container.viewContext
-		context.performAndWait {
-			try? migrateLegacyPersistenceIfNeeded(for: WorkspaceSceneIdentity(), context: context)
-		}
 		context.performAndWait {
 			do {
 				let request = NSFetchRequest<WorkspacePlacementEntity>(entityName: "WorkspacePlacementEntity")
