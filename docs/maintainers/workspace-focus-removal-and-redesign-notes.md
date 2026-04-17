@@ -43,12 +43,13 @@ The main custom pieces were:
 - `ContentPaneFramePreferenceKey` and `.onPreferenceChange(...)` in [`gmax/Scenes/WorkspaceWindowGroup/NavigationSplitView/ContentPanel/ContentPane.swift`](../../gmax/Scenes/WorkspaceWindowGroup/NavigationSplitView/ContentPanel/ContentPane.swift)
   - Descendants still report pane frames upward, but that geometry now feeds scene-local pane navigation instead of model-owned navigation state.
 - `isFocused` plumbing through [`ContentPane.swift`](../../gmax/Scenes/WorkspaceWindowGroup/NavigationSplitView/ContentPanel/ContentPane.swift), [`ContentPaneLeafView.swift`](../../gmax/Scenes/WorkspaceWindowGroup/NavigationSplitView/ContentPanel/ContentPaneLeafView.swift), and [`TerminalPaneView.swift`](../../gmax/Terminal/Panes/TerminalPaneView.swift)
-  - Partially redesigned.
-  - Pane views now bind against scene-owned `@FocusState`, but the terminal bridge still consumes a derived `isFocused` flag while the SwiftTerm/AppKit boundary is being narrowed.
+  - Narrowed.
+  - Pane views still derive local visual state from scene-owned `@FocusState`,
+    but the terminal wrapper no longer consumes that focus state.
 - pane-activation callbacks from [`ContentPaneLeafView.swift`](../../gmax/Scenes/WorkspaceWindowGroup/NavigationSplitView/ContentPanel/ContentPaneLeafView.swift) into [`TerminalPaneView.swift`](../../gmax/Terminal/Panes/TerminalPaneView.swift) and [`TerminalPaneHostView.swift`](../../gmax/Terminal/Panes/TerminalPaneHostView.swift)
-  - Pointer and accessibility interactions still explicitly push focus back into the scene-owned focus state.
-- `window?.makeFirstResponder(...)` calls in [`TerminalPaneView+Coordinator.swift`](../../gmax/Terminal/Panes/TerminalPaneView+Coordinator.swift)
-  - The AppKit bridge still force-aligns the terminal view's first responder with pane focus transitions.
+  - Removed.
+- custom terminal subclass and first-responder forcing
+  - Removed.
 
 ## Removal Or Replacement Map
 
@@ -73,11 +74,9 @@ The goal here is not “delete focus.” The goal is to stop owning custom focus
   - Store-owned frame storage and frame updates are removed.
   - Directional geometry ranking still exists, but now lives alongside scene-local focus state rather than inside `WorkspaceStore`.
 - wrapper-owned pane activation callbacks and `.onTapGesture { focusedTarget = ... }`
-  - Marked for narrowing rather than preserving as the default focus path.
-  - Native focus movement should do as much of this work as SwiftUI will allow cleanly.
-- Forced first-responder synchronization in `TerminalPaneView+Coordinator.update(...)`
-  - Marked for redesign.
-  - Some AppKit responder alignment will probably remain for the embedded terminal, but it should follow native focus transitions instead of model-owned “isFocused” state.
+  - Removed from the pane and inspector surfaces.
+  - Native focus movement now either works through SwiftUI/AppKit directly or
+    it does not.
 
 ### Keep, but re-anchor on native focus
 

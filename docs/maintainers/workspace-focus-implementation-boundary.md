@@ -203,8 +203,6 @@ It should own:
 - hosting the SwiftTerm view inside SwiftUI
 - process/session lifecycle wiring
 - transcript restore and capture
-- narrow translation from pane activation into terminal first responder, if
-  SwiftTerm still needs that help
 - accessibility affordances that describe the enclosing pane rather than trying
   to replace SwiftTerm's internal terminal interaction model
 
@@ -225,19 +223,15 @@ If the app still needs last-focused-pane information for restore, that can
 survive as persistence or restoration data. But it should stop being the live
 keyboard-focus engine.
 
-### 2. Stop forcing terminal first responder from every `updateNSView`
+### 2. Keep responder ownership framework-native unless SwiftTerm proves a real gap
 
-Forcing `makeFirstResponder(...)` on every update when `isFocused` is true makes
-AppKit responder state follow a model boolean.
+The explicit responder-forcing path is gone.
 
-The better path is:
+The remaining rule is simpler:
 
-- pane becomes active through native SwiftUI focus or a narrowly scoped
-  activation transition
-- terminal first responder is requested only at that transition boundary if
-  needed
-
-That is a much narrower responsibility.
+- pane focus belongs to the scene's SwiftUI focus namespace
+- terminal responder ownership belongs to SwiftTerm and AppKit unless a
+  concrete product bug proves that a narrow escape hatch is still required
 
 ### 3. Stop replacing SwiftTerm mouse behavior casually
 
@@ -263,13 +257,9 @@ runtime truth.
 
 These are the seams that still look legitimate after the redesign:
 
-### 1. Subclass `LocalProcessTerminalView` if terminal-side hooks are needed
+### 1. Use `LocalProcessTerminalView` directly unless a terminal-side hook is proven necessary
 
-This is currently the best terminal extension seam because it follows
-SwiftTerm's own guidance.
-
-Use this when we need terminal-specific behavior that belongs close to the
-terminal surface.
+This is now the current shape. A custom subclass is no longer the default seam.
 
 ### 2. Keep `NSViewRepresentable` for hosting and lifecycle
 
@@ -290,11 +280,11 @@ scene-owned actions.
 Use `focusedValue` from the pane container when pane-local commands should only
 exist while the pane is active.
 
-### 5. Keep terminal-specific hooks in the terminal subclass seam
+### 5. Keep terminal-specific hooks out of the default path
 
-`WorkspaceTerminalView`, as the local `LocalProcessTerminalView` subclass, is
-the preferred place for any terminal-specific responder or host-policy hooks
-that still survive after the bridge is narrowed.
+`LocalProcessTerminalView` is now used directly. Add a terminal-specific subclass
+only if a concrete SwiftTerm gap proves that a terminal-side hook is really
+necessary.
 
 ## Provisional Implementation Shape
 

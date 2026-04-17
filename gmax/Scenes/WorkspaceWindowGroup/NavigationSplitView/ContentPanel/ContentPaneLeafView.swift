@@ -51,18 +51,12 @@ struct ContentPaneLeafView: View {
 		.focusedValue(\.moveFocusedPaneFocus, onMovePaneFocus)
 		.focusedValue(\.splitFocusedPane, splitFocusedPane)
 		.focusedValue(\.closeFocusedPane, onClose)
-		.onTapGesture {
-			focusedTarget.wrappedValue = .pane(pane.id)
-		}
 		.accessibilityElement(children: .contain)
 		.accessibilityLabel(accessibilityLabel)
 		.accessibilityValue(accessibilityValue)
 		.accessibilityHint(paneActionsHint)
 		.accessibilityRespondsToUserInteraction(true)
 		.accessibilityAddTraits(isFocused ? .isSelected : [])
-		.accessibilityAction(.default) {
-			focusedTarget.wrappedValue = .pane(pane.id)
-		}
 		.accessibilityAction(named: Text("Split Right")) {
 			onSplitRight()
 		}
@@ -83,10 +77,6 @@ struct ContentPaneLeafView: View {
 			TerminalPaneView(
 				controller: controller,
 				session: session,
-				isFocused: isFocused,
-				onActivatePane: {
-					focusedTarget.wrappedValue = .pane(pane.id)
-				},
 				onRestart: restartShell,
 				onSplitRight: onSplitRight,
 				onSplitDown: onSplitDown,

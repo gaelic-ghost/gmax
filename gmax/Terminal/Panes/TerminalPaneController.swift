@@ -5,8 +5,8 @@
 //  Created by Gale Williams on 4/6/26.
 //
 
-import AppKit
 import Combine
+import CoreGraphics
 import Foundation
 import SwiftTerm
 
@@ -14,8 +14,8 @@ import SwiftTerm
 final class TerminalPaneController: ObservableObject {
 	let paneID: PaneID
 	let session: TerminalSession
-	private weak var attachedTerminalView: WorkspaceTerminalView?
-	private var retainedTerminalView: WorkspaceTerminalView?
+	private weak var attachedTerminalView: LocalProcessTerminalView?
+	private var retainedTerminalView: LocalProcessTerminalView?
 	private var retainedTerminalGeneration: Int?
 	private var startedTerminalGeneration: Int?
 
@@ -27,7 +27,7 @@ final class TerminalPaneController: ObservableObject {
 	func terminalView(
 		for generation: Int,
 		processDelegate: LocalProcessTerminalViewDelegate
-	) -> WorkspaceTerminalView {
+	) -> LocalProcessTerminalView {
 		if
 			let terminalView = retainedTerminalView,
 			retainedTerminalGeneration == generation
@@ -36,7 +36,7 @@ final class TerminalPaneController: ObservableObject {
 			return terminalView
 		}
 
-		let terminalView = WorkspaceTerminalView(frame: .zero)
+		let terminalView = LocalProcessTerminalView(frame: .zero)
 		retainedTerminalView = terminalView
 		retainedTerminalGeneration = generation
 		startedTerminalGeneration = nil
@@ -44,11 +44,11 @@ final class TerminalPaneController: ObservableObject {
 		return terminalView
 	}
 
-	func attach(terminalView: WorkspaceTerminalView) {
+	func attach(terminalView: LocalProcessTerminalView) {
 		attachedTerminalView = terminalView
 	}
 
-	func detach(terminalView: WorkspaceTerminalView) {
+	func detach(terminalView: LocalProcessTerminalView) {
 		guard attachedTerminalView === terminalView else {
 			return
 		}
@@ -97,7 +97,7 @@ final class TerminalPaneController: ObservableObject {
 	}
 
 	private func configureTerminalView(
-		_ terminalView: WorkspaceTerminalView,
+		_ terminalView: LocalProcessTerminalView,
 		processDelegate: LocalProcessTerminalViewDelegate
 	) {
 		terminalView.processDelegate = processDelegate

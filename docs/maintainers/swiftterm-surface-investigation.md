@@ -109,35 +109,32 @@ This part is healthy and clearly belongs outside SwiftTerm:
 
 ### 2. Workspace pane focus signaling
 
-This part is currently custom and tied to the workspace model:
+This part is now mostly scene-local and no longer flows through the terminal
+wrapper:
 
-- `ContentPaneLeafView` still receives an `isFocused` flag, but that flag is now derived from scene-owned SwiftUI focus
-- tapping the pane now updates the scene-local `@FocusState`
-- `Workspace.focusedPaneID` still exists as persisted workspace metadata, but it is no longer the live runtime source of truth for pane focus
+- `ContentPaneLeafView` still derives pane visuals from scene-owned SwiftUI
+  focus
+- `Workspace.focusedPaneID` no longer exists as runtime or persistence focus
+  metadata
 - pane close command publication now follows scene-local focus rather than store-owned focus
 
-This is the part we already expect to redesign toward native SwiftUI focus.
+This remaining work is now mostly about native SwiftUI behavior proving
+adequate without extra activation glue.
 
-### 3. Terminal responder forcing
+### 3. Terminal host boundary
 
-This is where the wrapper is currently fighting the terminal surface a bit:
+This is the remaining AppKit-hosting seam:
 
-- `updateNSView` still drives responder alignment from a derived `isFocused`
-  flag
-- pane activation still flows through wrapper-owned activation callbacks
-- accessibility "Focus Pane" still forces first responder through the host view
-- the pane container still translates taps into scene-level pane activation
+- `TerminalPaneView` still hosts SwiftTerm through `NSViewRepresentable`
+- `TerminalPaneHostView` still owns pane-level accessibility metadata and
+  pane actions like restart, split, and close
+- `ContentPaneLeafView` still participates in the scene focus graph and pane
+  navigation policy
 
-This means our wrapper is currently trying to synchronize:
-
-- workspace pane focus
-- SwiftUI view activation
-- AppKit first responder
-- SwiftTerm terminal focus
-
-with one custom path.
-
-That is exactly the kind of coupling the focus redesign should break apart.
+The explicit responder-forcing path, wrapper-owned activation callback, and
+custom terminal subclass are gone. At this point the remaining question is
+whether the host layer itself can shrink further without losing behavior we
+still need.
 
 ## What This Suggests About Prompt vs Scrollback
 
@@ -170,24 +167,6 @@ separate scene-level focus targets today.
 
 The current integration has a few likely pain points:
 
-### Forced responder sync in `updateNSView`
-
-Forcing first responder whenever `isFocused` is true makes the terminal's
-AppKit focus follow a workspace-model boolean. That is the reverse of the native
-flow we likely want.
-
-### Wrapper-owned activation glue
-
-The current code is already better than the earlier bridge shape because it is
-no longer installing a replacement `NSClickGestureRecognizer` on the SwiftTerm
-view.
-
-However, pane activation is still expressed partly through wrapper-owned tap
-and accessibility glue outside SwiftTerm itself. That means the bridge is still
-responsible for reconciling pane activation with terminal responder state, even
-though SwiftTerm already owns the deeper mouse and selection model once the
-terminal is active.
-
 ### Mixed responsibility in `ContentPaneLeafView`
 
 `ContentPaneLeafView` is currently carrying:
@@ -204,20 +183,15 @@ file for a while, the design boundary wants to become clearer.
 
 ## Most Likely Integration Options
 
-### Option A: Keep `LocalProcessTerminalView`, but subclass it
+### Option A: Keep `LocalProcessTerminalView` directly
 
-This is the most likely near-term best path.
+This is now the current path.
 
 Why:
 
 - it preserves SwiftTerm's built-in local process handling
-- it follows SwiftTerm's documented extension guidance
-- it gives us a place for terminal-specific host behavior without overloading
-  the SwiftUI wrapper
-- it keeps terminal behavior close to the terminal surface
-
-This would let us move terminal-specific policy into a terminal-side type while
-letting SwiftUI own pane-level focus and command publication separately.
+- it avoids a terminal-specific subclass with no remaining behavior of its own
+- it keeps terminal behavior close to SwiftTerm rather than a custom wrapper
 
 ### Option B: Drop down to `TerminalView` directly and own `LocalProcess`
 

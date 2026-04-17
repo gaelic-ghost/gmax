@@ -373,8 +373,8 @@ The first cuts here should be:
 - stop treating `updateNSView` as the place where responder alignment happens
 - shrink wrapper-owned activation glue before inventing new terminal-side
   customization
-- only widen `WorkspaceTerminalView` if a real SwiftTerm gap remains after the
-  simpler cuts
+- only reintroduce a terminal-specific subclass if a real SwiftTerm gap remains
+  after the simpler cuts
 
 ### Phase 4: follow through on scene-local restoration and persistence
 

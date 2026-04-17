@@ -15,16 +15,15 @@ struct TerminalAccessibilitySnapshot {
 }
 
 final class TerminalPaneHostView: NSView {
-	let terminalView: WorkspaceTerminalView
+	let terminalView: LocalProcessTerminalView
 	var onEffectiveAppearanceChange: ((NSAppearance) -> Void)?
 	private var accessibilitySnapshot = TerminalAccessibilitySnapshot(label: "Shell terminal", value: "", help: "")
-	private var onAccessibilityFocus: (() -> Void)?
 	private var onAccessibilityRestart: (() -> Void)?
 	private var onAccessibilitySplitRight: (() -> Void)?
 	private var onAccessibilitySplitDown: (() -> Void)?
 	private var onAccessibilityClose: (() -> Void)?
 
-	init(terminalView: WorkspaceTerminalView) {
+	init(terminalView: LocalProcessTerminalView) {
 		self.terminalView = terminalView
 		super.init(frame: .zero)
 		setup()
@@ -53,14 +52,12 @@ final class TerminalPaneHostView: NSView {
 
 	func updateAccessibility(
 		snapshot: TerminalAccessibilitySnapshot,
-		onFocus: @escaping () -> Void,
 		onRestart: @escaping () -> Void,
 		onSplitRight: @escaping () -> Void,
 		onSplitDown: @escaping () -> Void,
 		onClose: @escaping () -> Void
 	) {
 		accessibilitySnapshot = snapshot
-		onAccessibilityFocus = onFocus
 		onAccessibilityRestart = onRestart
 		onAccessibilitySplitRight = onSplitRight
 		onAccessibilitySplitDown = onSplitDown
@@ -81,19 +78,11 @@ final class TerminalPaneHostView: NSView {
 
 	private func makeAccessibilityCustomActions() -> [NSAccessibilityCustomAction] {
 		[
-			NSAccessibilityCustomAction(name: "Focus Pane", target: self, selector: #selector(accessibilityFocusPane)),
 			NSAccessibilityCustomAction(name: "Restart Shell", target: self, selector: #selector(accessibilityRestartShell)),
 			NSAccessibilityCustomAction(name: "Split Right", target: self, selector: #selector(accessibilitySplitRight)),
 			NSAccessibilityCustomAction(name: "Split Down", target: self, selector: #selector(accessibilitySplitDown)),
 			NSAccessibilityCustomAction(name: "Close Pane", target: self, selector: #selector(accessibilityClosePane))
 		]
-	}
-
-	@objc
-	private func accessibilityFocusPane() -> Bool {
-		onAccessibilityFocus?()
-		terminalView.alignFirstResponderToTerminal()
-		return true
 	}
 
 	@objc
