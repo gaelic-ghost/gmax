@@ -21,14 +21,8 @@ struct DetailPane: View {
 			.focusable(interactions: .activate)
 			.focused(focusedTarget, equals: .inspector)
 			.contentShape(Rectangle())
-			.onTapGesture {
-				focusedTarget.wrappedValue = .inspector
-			}
 			.accessibilityRespondsToUserInteraction(true)
 			.accessibilityAddTraits(focusedTarget.wrappedValue == .inspector ? .isSelected : [])
-			.accessibilityAction(.default) {
-				focusedTarget.wrappedValue = .inspector
-			}
 	}
 
 	@ViewBuilder

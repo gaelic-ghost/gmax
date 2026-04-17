@@ -204,14 +204,14 @@ struct WorkspacePersistenceTests {
 		let reopenedPane = try #require(reopenedWorkspace.root?.firstLeaf())
 		let reopenedSession = try #require(model.sessions.session(for: reopenedPane.sessionID))
 
-		#expect(model.listSavedWorkspaceSnapshots().count == 1)
+		#expect(model.listSavedWorkspaces().count == 1)
 		#expect(reopenedWorkspace.title.starts(with: "Workspace 1"))
 		#expect(reopenedSession.title == "Build Shell")
 		#expect(reopenedSession.currentDirectory == "/tmp/workspace-library")
 		#expect(reopenedSession.consumeRestoredTranscript() == "$ pwd\n/tmp/workspace-library\n")
 	}
 
-	@Test func savedWorkspaceSnapshotCanBeOpenedRepeatedlyWithoutMutatingTheStoredLayout() throws {
+	@Test func savedWorkspaceCanBeOpenedRepeatedlyWithoutMutatingTheStoredLayout() throws {
 		let leftPane = PaneLeaf()
 		let topRightPane = PaneLeaf()
 		let bottomRightPane = PaneLeaf()
@@ -241,7 +241,7 @@ struct WorkspacePersistenceTests {
 		)
 
 		let expectedSignature = try #require(workspace.root.map(nodeSignature(from:)))
-		let snapshotTranscripts: [TerminalSessionID: String] = [
+		let savedWorkspaceTranscripts: [TerminalSessionID: String] = [
 			leftPane.sessionID: "echo left\n",
 			topRightPane.sessionID: "echo top-right\n",
 			bottomRightPane.sessionID: "echo bottom-right\n"
@@ -250,7 +250,7 @@ struct WorkspacePersistenceTests {
 		let summary = try #require(
 			model.saveWorkspaceToLibrary(
 				workspace.id,
-				transcriptsBySessionID: snapshotTranscripts
+					transcriptsBySessionID: savedWorkspaceTranscripts
 			)
 		)
 
@@ -266,7 +266,7 @@ struct WorkspacePersistenceTests {
 		let secondReopenedRoot = try #require(secondReopenedWorkspace.root)
 		let secondReopenedLeaves = secondReopenedWorkspace.paneLeaves
 
-		#expect(model.listSavedWorkspaceSnapshots().count == 1)
+		#expect(model.listSavedWorkspaces().count == 1)
 		#expect(nodeSignature(from: secondReopenedRoot) == expectedSignature)
 		#expect(secondReopenedWorkspace.paneCount == 3)
 		#expect(secondReopenedWorkspace.title != mutatedFirstWorkspace.title)
@@ -274,11 +274,11 @@ struct WorkspacePersistenceTests {
 		for (index, originalLeaf) in workspace.paneLeaves.enumerated() {
 			let reopenedLeaf = secondReopenedLeaves[index]
 			let restoredSession = try #require(model.sessions.session(for: reopenedLeaf.sessionID))
-			#expect(restoredSession.consumeRestoredTranscript() == snapshotTranscripts[originalLeaf.sessionID])
+			#expect(restoredSession.consumeRestoredTranscript() == savedWorkspaceTranscripts[originalLeaf.sessionID])
 		}
 	}
 
-	@Test func openSavedWorkspaceReturnsNilWhenSnapshotPaneTreeIsCorrupted() throws {
+	@Test func openSavedWorkspaceReturnsNilWhenSavedWorkspacePaneTreeIsCorrupted() throws {
 		let leftPane = PaneLeaf()
 		let rightPane = PaneLeaf()
 		let workspace = Workspace(
@@ -311,7 +311,7 @@ struct WorkspacePersistenceTests {
 
 		#expect(reopenedWorkspaceID == nil)
 		#expect(model.workspaces.count == 1)
-		#expect(model.listSavedWorkspaceSnapshots().count == 1)
+		#expect(model.listSavedWorkspaces().count == 1)
 	}
 
 	@Test func openSavedWorkspaceFallsBackToDefaultLaunchConfigurationWhenAPaneSessionSnapshotIsMissing() throws {
@@ -378,7 +378,7 @@ struct WorkspacePersistenceTests {
 		#expect(fallbackSession.consumeRestoredTranscript() == nil)
 	}
 
-	@Test func closeWorkspaceToLibraryCreatesAReusableSnapshotAndSelectsTheNeighbor() throws {
+	@Test func closeWorkspaceToLibraryCreatesAReusableSavedWorkspaceAndSelectsTheNeighbor() throws {
 		let firstWorkspace = TestSupport.makeWorkspace(title: "Workspace 1")
 		let secondWorkspace = TestSupport.makeWorkspace(title: "Workspace 2")
 		let persistence = WorkspacePersistenceController.inMemoryForTesting()
@@ -395,8 +395,8 @@ struct WorkspacePersistenceTests {
 			transcriptsBySessionID: [firstPane.sessionID: "echo library-close\n"]
 		)
 
-		let snapshot = try #require(model.listSavedWorkspaceSnapshots().first)
-		let reopenedWorkspaceID = try #require(model.openSavedWorkspace(snapshot.id))
+		let savedWorkspace = try #require(model.listSavedWorkspaces().first)
+		let reopenedWorkspaceID = try #require(model.openSavedWorkspace(savedWorkspace.id))
 		let reopenedWorkspace = try #require(model.workspaces.first(where: { $0.id == reopenedWorkspaceID }))
 
 		#expect(nextSelectedWorkspaceID == secondWorkspace.id)

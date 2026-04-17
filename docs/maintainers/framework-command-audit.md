@@ -21,9 +21,9 @@ This audit is based on the current implementation in:
 - [`gmax/Scenes/WorkspaceWindowGroup/NavigationSplitView/SidebarPanel/SidebarPane.swift`](../../gmax/Scenes/WorkspaceWindowGroup/NavigationSplitView/SidebarPanel/SidebarPane.swift)
 - [`gmax/Scenes/WorkspaceWindowGroup/NavigationSplitView/ContentPanel/ContentPane.swift`](../../gmax/Scenes/WorkspaceWindowGroup/NavigationSplitView/ContentPanel/ContentPane.swift)
 - [`gmax/Scenes/WorkspaceWindowGroup/NavigationSplitView/ContentPanel/ContentPaneLeafView.swift`](../../gmax/Scenes/WorkspaceWindowGroup/NavigationSplitView/ContentPanel/ContentPaneLeafView.swift)
-- [`gmax/Workspace/WorkspaceStore.swift`](../../gmax/Workspace/WorkspaceStore.swift)
-- [`gmax/Workspace/WorkspaceStore+PaneActions.swift`](../../gmax/Workspace/WorkspaceStore+PaneActions.swift)
-- [`gmax/Workspace/WorkspaceStore+WorkspaceActions.swift`](../../gmax/Workspace/WorkspaceStore+WorkspaceActions.swift)
+- [`gmax/Scenes/WorkspaceWindowGroup/WorkspaceStore.swift`](../../gmax/Scenes/WorkspaceWindowGroup/WorkspaceStore.swift)
+- [`gmax/Scenes/WorkspaceWindowGroup/WorkspaceStore+PaneActions.swift`](../../gmax/Scenes/WorkspaceWindowGroup/WorkspaceStore+PaneActions.swift)
+- [`gmax/Scenes/WorkspaceWindowGroup/WorkspaceStore+WorkspaceActions.swift`](../../gmax/Scenes/WorkspaceWindowGroup/WorkspaceStore+WorkspaceActions.swift)
 - [`gmax/Views/Sheets/SavedWorkspaceLibrarySheet.swift`](../../gmax/Views/Sheets/SavedWorkspaceLibrarySheet.swift)
 - [`gmaxUITests/WorkspaceSidebarUITests.swift`](../../gmaxUITests/WorkspaceSidebarUITests.swift)
 - [`gmaxUITests/SavedWorkspaceLibraryUITests.swift`](../../gmaxUITests/SavedWorkspaceLibraryUITests.swift)
@@ -119,11 +119,11 @@ Evidence:
 
 Current behavior:
 
-- if a pane leaf publishes `closeFocusedPane`, `Command-W` becomes `Close Pane`
-- else if the selected workspace is empty and publishes `closeEmptyWorkspace`, `Command-W` becomes `Close Workspace`
-- else it falls back to `dismiss()` and becomes `Close Window`
+- if the active focus target is a pane, `Command-W` becomes `Close Pane`
+- else the scene resolves close behavior from the active focus target plus the selected workspace state
+- window close remains the final scene-owned fallback when no narrower close target applies
 
-Why this is a gap:
+Why this was called out:
 
 - three different ownership layers are being multiplexed through one command slot
 - the resulting behavior is not obvious from the UI unless someone already understands the focus model
@@ -135,13 +135,19 @@ Why it matters:
 - command ambiguity here will be hard to reason about during future refactors
 - this is exactly the kind of surface where a small regression can feel like an architectural bug
 
-Recommendation:
+Recorded decision:
 
-- keep the current behavior only if this adaptive `Command-W` model is an explicit product decision
-- otherwise separate the questions more clearly:
-  - should pane close be the standard `Command-W` behavior only when a pane terminal truly has focus?
-  - should empty-workspace close be an explicit workspace command instead of sharing the same slot?
-  - should window close defer more aggressively to the native window close path?
+- this adaptive `Command-W` model is an explicit product decision
+- `Command-W` closes an actively focused pane
+- if the actively selected workspace has no panes, `Command-W` closes that workspace
+- if focus is in the sidebar and a workspace listing is focused, `Command-W` closes that workspace
+- if focus is on the only workspace in a window and that workspace has no panes, `Command-W` closes the window
+- if focus is in the inspector, `Command-W` does nothing
+
+Implementation follow-through:
+
+- keep the semantics above fixed
+- simplify the command code until those semantics are expressed directly and read clearly from the command surface
 
 ## 2. The command surface is coherent, but not yet explicit enough about ownership
 
@@ -222,22 +228,23 @@ Evidence:
 
 Current examples:
 
-- `@SceneStorage("mainShell.selectedWorkspaceID")`
-- `@SceneStorage("mainShell.isInspectorVisible")`
-- `@SceneStorage("mainShell.isSidebarVisible")`
+- `@SceneStorage("workspaceWindow.selectedWorkspaceID")`
+- `@SceneStorage("workspaceWindow.isInspectorVisible")`
+- `@SceneStorage("workspaceWindow.isSidebarVisible")`
 - toolbar accessibility identifiers like:
-  - `mainShell.openSavedWorkspacesButton`
-  - `mainShell.newWorkspaceButton`
-  - `mainShell.toggleInspectorButton`
+  - `workspaceWindow.openSavedWorkspacesButton`
+  - `workspaceWindow.newWorkspaceButton`
+  - `workspaceWindow.toggleInspectorButton`
 - UI-test helper names like:
-  - `assertMainShellIsVisible`
-  - `attemptToPresentMainShellWindow`
+  - `assertWorkspaceWindowIsVisible`
+  - `attemptToPresentWorkspaceWindow`
 
 Why this is a gap:
 
 - the repo has already renamed the scene and model vocabulary toward `Workspace...`
-- these older names now make the code feel more transitional than it really is
-- test and accessibility naming drift makes future audits noisier and weakens conceptual clarity
+- the scene-storage keys and toolbar accessibility identifiers now match that
+  vocabulary instead of carrying the older main-shell naming
+- the remaining naming drift is now much smaller and easier to audit directly
 
 Recommendation:
 
@@ -404,8 +411,8 @@ Lower-priority documentation and surface-shape gaps:
 
 If this area gets a real redesign pass, the safest order is:
 
-1. Decide whether the adaptive `Command-W` model is a product requirement or an accidental implementation artifact.
-2. Add behavioral tests for the current command and focus model before changing it.
+1. Keep the recorded `Command-W` semantics fixed while the implementation is simplified around them.
+2. Add behavioral tests for the current command and focus model.
 3. Align the remaining shell-era naming so the code and tests read like the architecture they now represent.
 4. Revisit whether the command-context key declarations should stay co-located with the menu implementation.
 5. Only after those steps, consider any larger structural simplification of the scene root.

@@ -30,8 +30,8 @@ Today the app already has the core product shape in place:
 - explicit workspace and pane creation commands
 - keyboard commands for workspace, pane, and close lifecycle actions
 - a saved-workspace library with searchable reopen
-- transcript-backed workspace snapshots so reopened workspaces preserve shell history
-- Core Data persistence for both live workspace topology and saved workspace snapshots
+- transcript-backed saved workspaces so reopened workspaces preserve shell history
+- Core Data persistence for both live workspace topology and saved workspace library entries
 - per-scene restoration for the selected workspace and inspector visibility
 - a settings window for terminal appearance and workspace persistence behavior
 
@@ -59,20 +59,20 @@ The shell uses a split-tree model rather than a flat grid:
 - the selected workspace plus sidebar and inspector visibility restore per scene
 - the frontmost shell window contributes menu command context through `focusedSceneValue`
 - terminal appearance is driven by persisted app settings for font, size, and theme
-- saved workspaces are stored as durable snapshots with pane launch context and preserved transcript text
+- saved workspaces are stored as durable library entries with pane launch context and preserved transcript text
 - operator-facing diagnostics now flow through Apple's unified logging system using a stable `Logger` subsystem and category taxonomy
 
 SwiftTerm is hosted through AppKit using `NSViewRepresentable`, so live terminal output stays inside the hosted terminal view instead of driving SwiftUI body churn.
 
-Persistence is handled with Core Data using relational live-workspace records plus a parallel saved-workspace snapshot graph. The app now also keeps production, debug, UI-test, and in-memory persistence profiles separate so local development and automated tests do not trample the same database. That gives the app a cleaner path toward undo-friendly workspace closure, searchable reopen, richer restoration, and future sync-friendly expansion if that becomes worthwhile.
+Persistence is handled with Core Data using one canonical workspace payload plus placement records for live, recent, and library roles. The app also keeps production, debug, UI-test, and in-memory persistence profiles separate so local development and automated tests do not trample the same database. That gives the app a cleaner path toward undo-friendly workspace closure, searchable reopen, richer restoration, and future sync-friendly expansion if that becomes worthwhile.
 
 The maintainer-facing architecture note lives at [docs/maintainers/swiftui-terminal-shell-architecture.md](docs/maintainers/swiftui-terminal-shell-architecture.md).
 
 ## Repository Layout
 
 - `gmax/`: app source root
-- `gmax/Workspace/`: workspace domain models, pane-tree structure, and workspace mutation/state surfaces
-- `gmax/Persistence/Workspace/`: Core Data setup, workspace coding, persistence profiles, and live plus saved workspace storage
+- `gmax/Scenes/WorkspaceWindowGroup/`: workspace-window runtime state, pane-tree structure, focus targets, and workspace mutation surfaces
+- `gmax/Persistence/Workspace/`: Core Data setup, workspace coding, persistence profiles, and payload-plus-placement storage
 - `gmax/Terminal/`: SwiftTerm hosting boundary, terminal launch/session plumbing, and pane controllers
 - `gmax/Scenes/WorkspaceWindowGroup/`: top-level workspace window scene composition and menu commands
 - `gmax/Scenes/Settings/`: settings window and section views
@@ -162,7 +162,7 @@ The current shell exposes a command-first keyboard model across the `File`, `Wor
 - `cmd-shift-d`: split the focused pane downward
 - `cmd-option-left/right/up/down`: move focus directionally
 - `cmd-option-[` and `cmd-option-]`: move focus in pane order
-- `cmd-w`: close the focused pane when a pane is focused, close the selected empty workspace when the empty-workspace content is focused, otherwise use the standard window close command
+- `cmd-w`: close the focused pane when a pane is focused, close the selected workspace when the selected workspace is empty, do nothing when the inspector is focused, otherwise use the standard window close command
 - `cmd-option-w`: close the selected workspace directly
 
 ## Status

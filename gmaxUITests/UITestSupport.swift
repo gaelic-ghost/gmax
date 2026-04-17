@@ -9,7 +9,6 @@ import XCTest
 
 class GmaxUITestCase: XCTestCase {
 	private enum UIProbe {
-		static let captureAccessibilityHierarchyEnvironmentKey = "GMAX_UI_TEST_CAPTURE_AX_DEBUG"
 		static let initialWorkspaceTitle = "Workspace 1"
 		static let sidebarWorkspaceListIdentifier = "sidebar.workspaceList"
 	}
@@ -27,62 +26,39 @@ class GmaxUITestCase: XCTestCase {
 		}
 		app.launch()
 		app.activate()
-		assertMainShellIsVisible(in: app)
+		assertWorkspaceWindowIsVisible(in: app)
 		return app
 	}
 
-	func assertMainShellIsVisible(in app: XCUIApplication) {
+	func assertWorkspaceWindowIsVisible(in app: XCUIApplication) {
 		let workspaceList = app.descendants(matching: .any)[UIProbe.sidebarWorkspaceListIdentifier]
 		if workspaceList.waitForExistence(timeout: 2) {
 			return
 		}
 
-		attemptToPresentMainShellWindow(in: app)
+		attemptToPresentWorkspaceWindow(in: app)
 
 		guard workspaceList.waitForExistence(timeout: 5) else {
-			recordMainShellLaunchDiagnostics(in: app)
+			recordWorkspaceWindowLaunchDiagnostics(in: app)
 
-			let hierarchyDetails = accessibilityHierarchyFailureDetails(in: app)
 			XCTFail(
 				"""
 				The main shell should expose the workspace sidebar after launch.
-				\(hierarchyDetails)
+				A screenshot attachment was recorded for diagnosis instead of dumping the full accessibility hierarchy, because AX tree dumps can trigger macOS permission prompts and destabilize UI automation.
 				"""
 			)
 			return
 		}
 	}
 
-	private func recordMainShellLaunchDiagnostics(in app: XCUIApplication) {
+	private func recordWorkspaceWindowLaunchDiagnostics(in app: XCUIApplication) {
 		let appScreenshot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
-		appScreenshot.name = "Main shell launch failure screenshot"
+		appScreenshot.name = "Workspace window launch failure screenshot"
 		appScreenshot.lifetime = .keepAlways
 		add(appScreenshot)
 	}
 
-	private func accessibilityHierarchyFailureDetails(in app: XCUIApplication) -> String {
-		guard shouldCaptureAccessibilityHierarchy else {
-			return """
-			
-			Accessibility hierarchy capture is disabled for normal shell-driven UI tests because \
-			requesting the full hierarchy can trigger macOS permission prompts and destabilize XCUITest.
-			Use XCTest attachments and manual Accessibility Inspector checks for ordinary diagnosis.
-			Set \(UIProbe.captureAccessibilityHierarchyEnvironmentKey)=1 when you explicitly want the full hierarchy dump.
-			"""
-		}
-
-		return """
-		
-		Current accessibility hierarchy:
-		\(app.debugDescription)
-		"""
-	}
-
-	private var shouldCaptureAccessibilityHierarchy: Bool {
-		ProcessInfo.processInfo.environment[UIProbe.captureAccessibilityHierarchyEnvironmentKey] == "1"
-	}
-
-	func attemptToPresentMainShellWindow(in app: XCUIApplication) {
+	func attemptToPresentWorkspaceWindow(in app: XCUIApplication) {
 		app.typeKey("n", modifierFlags: .command)
 	}
 
@@ -100,7 +76,7 @@ class GmaxUITestCase: XCTestCase {
 	}
 
 	func assertWorkspaceDoesNotExist(_ title: String, in app: XCUIApplication) {
-		XCTAssertFalse(
+		XCTAssertTrue(
 			waitForNonExistence(timeout: 2) {
 				self.sidebarWorkspaceRow(titled: title, in: app)
 			},
@@ -204,6 +180,10 @@ class GmaxUITestCase: XCTestCase {
 		return workspaceList.staticTexts["sidebar.workspacePaneCount.\(title)"]
 	}
 
+	func sidebarWorkspaceRowLabel(titled title: String, in scope: XCUIElement) -> String {
+		sidebarWorkspaceRow(titled: title, in: scope).label
+	}
+
 	func savedWorkspaceLibraryRow(titled title: String, in app: XCUIApplication) -> XCUIElement {
 		let libraryList = app.descendants(matching: .any)["savedWorkspaceLibrary.list"]
 		let identifiedTitle = libraryList.staticTexts["savedWorkspaceLibrary.title.\(title)"]
@@ -225,15 +205,26 @@ class GmaxUITestCase: XCTestCase {
 	}
 
 	func toggleInspectorButton(in app: XCUIApplication) -> XCUIElement {
-		app.buttons["mainShell.toggleInspectorButton"]
+		app.buttons["workspaceWindow.toggleInspectorButton"]
 	}
 
 	func openSavedWorkspacesButton(in app: XCUIApplication) -> XCUIElement {
-		app.buttons["mainShell.openSavedWorkspacesButton"]
+		app.buttons["workspaceWindow.openSavedWorkspacesButton"]
 	}
 
 	func newWorkspaceButton(in app: XCUIApplication) -> XCUIElement {
-		app.buttons["mainShell.newWorkspaceButton"]
+		app.buttons["workspaceWindow.newWorkspaceButton"]
+	}
+
+	func focusFirstVisiblePane(in app: XCUIApplication) {
+		let pane = app.descendants(matching: .any)
+			.matching(NSPredicate(format: "identifier BEGINSWITH %@", "contentPane.leaf."))
+			.firstMatch
+		XCTAssertTrue(
+			pane.waitForExistence(timeout: 5),
+			"The workspace content area should expose at least one pane before the test tries to focus it."
+		)
+		pane.click()
 	}
 
 	@discardableResult

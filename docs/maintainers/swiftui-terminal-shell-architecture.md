@@ -1,17 +1,29 @@
 # SwiftUI Terminal Shell Architecture
 
+> Status
+> Historical shell-architecture background. This note still contains useful
+> context, but it is no longer the authoritative source for current focus,
+> command, or persistence behavior.
+>
+> Use these notes instead:
+> - [`workspace-focus-target-plan.md`](./workspace-focus-target-plan.md) for
+>   current focus decisions
+> - [`workspace-window-scene-command-focus-map.md`](./workspace-window-scene-command-focus-map.md)
+>   for current scene-command behavior
+> - [`framework-command-audit.md`](./framework-command-audit.md) for current
+>   command risks and test gaps
+> - [`workspace-window-state-and-persistence-model.md`](./workspace-window-state-and-persistence-model.md)
+>   for current persistence structure
+> - [`swiftterm-surface-investigation.md`](./swiftterm-surface-investigation.md)
+>   for the current SwiftTerm boundary
+
 ## Purpose
 
-This note captures the current preferred architecture for a macOS terminal shell built with SwiftUI around SwiftTerm.
+This note is background context for the broader shell architecture.
 
-The immediate product shape is:
-
-- a three-column `NavigationSplitView`
-- a left sidebar listing workspaces
-- a center content column showing the selected workspace's pane layout
-- a right detail column showing badges and inspector-style metadata for the actively focused pane in the selected workspace
-
-This document is intentionally maintainer-facing. It describes the durable primitives we want to build on, the tradeoffs we already considered, and the implementation direction we should preserve while the product grows.
+It is no longer the active planning surface for focus, command, or persistence
+work. Keep it for high-level product-shape context and earlier architectural
+tradeoff history, not for day-to-day planning.
 
 ## Current Source Organization
 
@@ -19,8 +31,8 @@ The source tree is now organized to match the current ownership boundaries in th
 
 - `gmaxApp.swift` keeps app bootstrap and scene declarations
 - `gmaxApp.swift` and the scene roots hold app bootstrap, menu commands, and UI-test launch behavior
-- `Workspace/` keeps workspace state plus pane and workspace management split by concern
-- `Persistence/Workspace/` keeps Core Data setup, persistence profiles, workspace payload and placement storage, and migration helpers split by concern
+- `Scenes/WorkspaceWindowGroup/` keeps workspace state plus pane and workspace management split by concern
+- `Persistence/Workspace/` keeps Core Data setup, persistence profiles, and workspace payload plus placement storage split by concern
 - `Terminal/` keeps the SwiftUI representable boundary, coordinator, AppKit host, and terminal-session plumbing
 - `Scenes/WorkspaceWindowGroup/` keeps top-level workspace-window scene composition and scene-bound presentation surfaces
 - `Scenes/Settings/` keeps the settings entry view plus the terminal appearance and workspace sections

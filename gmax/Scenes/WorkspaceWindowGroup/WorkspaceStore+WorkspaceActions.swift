@@ -121,24 +121,24 @@ extension WorkspaceStore {
 			return nil
 		}
 
-		let resolvedTranscripts = snapshotTranscripts(
+		let resolvedTranscripts = captureWorkspaceTranscripts(
 			for: workspace,
 			explicitTranscriptsBySessionID: transcriptsBySessionID
 		)
 
-		let summary = persistence.createWorkspaceSnapshot(
+		let summary = persistence.saveWorkspaceToLibrary(
 			from: workspace,
 			sessions: sessions,
 			transcriptsBySessionID: resolvedTranscripts
 		)
 		if let summary {
-			Logger.workspace.notice("Saved a workspace to the library. Workspace title: \(workspace.title, privacy: .public). Workspace ID: \(workspace.id.rawValue.uuidString, privacy: .public). Snapshot ID: \(summary.id.rawValue.uuidString, privacy: .public)")
+			Logger.workspace.notice("Saved a workspace to the library. Workspace title: \(workspace.title, privacy: .public). Workspace ID: \(workspace.id.rawValue.uuidString, privacy: .public). Saved workspace ID: \(summary.id.rawValue.uuidString, privacy: .public)")
 		}
 		return summary
 	}
 
-	func listSavedWorkspaceSnapshots(matching query: String? = nil) -> [SavedWorkspaceListing] {
-		persistence.listWorkspaceSnapshots(matching: query)
+	func listSavedWorkspaces(matching query: String? = nil) -> [SavedWorkspaceListing] {
+		persistence.listSavedWorkspaces(matching: query)
 	}
 
 	@discardableResult
@@ -157,9 +157,9 @@ extension WorkspaceStore {
 	}
 
 	@discardableResult
-	func openSavedWorkspace(_ snapshotID: SavedWorkspaceID) -> WorkspaceID? {
-		guard let snapshot = persistence.loadWorkspaceSnapshot(id: snapshotID) else {
-			Logger.workspace.error("The app could not reopen a saved workspace because the requested library snapshot was missing or unreadable. Check the persistence logs for the exact load failure. Snapshot ID: \(snapshotID.rawValue.uuidString, privacy: .public)")
+	func openSavedWorkspace(_ savedWorkspaceID: SavedWorkspaceID) -> WorkspaceID? {
+		guard let savedWorkspace = persistence.loadSavedWorkspace(id: savedWorkspaceID) else {
+			Logger.workspace.error("The app could not reopen a saved workspace because the requested library entry was missing or unreadable. Check the persistence logs for the exact load failure. Saved workspace ID: \(savedWorkspaceID.rawValue.uuidString, privacy: .public)")
 			return nil
 		}
 
@@ -168,7 +168,7 @@ extension WorkspaceStore {
 		var titlesBySessionID: [TerminalSessionID: String] = [:]
 		let restoredWorkspace = Workspace(
 			title: {
-				let title = snapshot.title.trimmingCharacters(in: .whitespacesAndNewlines)
+					let title = savedWorkspace.title.trimmingCharacters(in: .whitespacesAndNewlines)
 				let baseTitle = title.isEmpty ? "Workspace" : title
 				return uniqueWorkspaceTitle(
 					startingWith: workspaces.map(\.title).contains(baseTitle)
@@ -176,17 +176,17 @@ extension WorkspaceStore {
 						: baseTitle
 				)
 			}(),
-			root: snapshot.workspace.root.map {
-				restoreNode(
-					$0,
-					paneSnapshotsBySessionID: snapshot.paneSnapshotsBySessionID,
-					launchConfigurationsBySessionID: &launchConfigurationsBySessionID,
-					transcriptsBySessionID: &transcriptsBySessionID,
-					titlesBySessionID: &titlesBySessionID
-				)
-			},
-			savedWorkspaceID: snapshot.savedWorkspaceID
-		)
+				root: savedWorkspace.workspace.root.map {
+					restoreNode(
+						$0,
+						paneSnapshotsBySessionID: savedWorkspace.paneSnapshotsBySessionID,
+						launchConfigurationsBySessionID: &launchConfigurationsBySessionID,
+						transcriptsBySessionID: &transcriptsBySessionID,
+						titlesBySessionID: &titlesBySessionID
+					)
+				},
+				savedWorkspaceID: savedWorkspace.savedWorkspaceID
+			)
 		workspaces.append(restoredWorkspace)
 
 		for (sessionID, launchConfiguration) in launchConfigurationsBySessionID {
@@ -196,19 +196,19 @@ extension WorkspaceStore {
 			session.setRestoredTranscript(transcriptsBySessionID[sessionID])
 		}
 
-		persistence.markWorkspaceSnapshotOpened(snapshotID)
-		Logger.workspace.notice("Opened a workspace from the saved-workspace library. Snapshot title: \(snapshot.title, privacy: .public). Snapshot ID: \(snapshotID.rawValue.uuidString, privacy: .public). Restored pane count: \((restoredWorkspace.root?.leaves().count ?? 0))")
+		persistence.markSavedWorkspaceOpened(savedWorkspaceID)
+		Logger.workspace.notice("Opened a workspace from the saved-workspace library. Saved workspace title: \(savedWorkspace.title, privacy: .public). Saved workspace ID: \(savedWorkspaceID.rawValue.uuidString, privacy: .public). Restored pane count: \((restoredWorkspace.root?.leaves().count ?? 0))")
 		schedulePersistenceSave()
 		return restoredWorkspace.id
 	}
 
-	func deleteSavedWorkspace(_ snapshotID: SavedWorkspaceID) {
-		guard persistence.deleteWorkspaceSnapshot(id: snapshotID) else {
-			Logger.workspace.error("The app could not delete a saved workspace snapshot from the library because persistence did not confirm the deletion. Check the persistence logs for the exact failure. Snapshot ID: \(snapshotID.rawValue.uuidString, privacy: .public)")
+	func deleteSavedWorkspace(_ savedWorkspaceID: SavedWorkspaceID) {
+		guard persistence.deleteSavedWorkspace(id: savedWorkspaceID) else {
+			Logger.workspace.error("The app could not delete a saved workspace from the library because persistence did not confirm the deletion. Check the persistence logs for the exact failure. Saved workspace ID: \(savedWorkspaceID.rawValue.uuidString, privacy: .public)")
 			return
 		}
 
-		Logger.workspace.notice("Deleted a saved workspace snapshot from the library. Snapshot ID: \(snapshotID.rawValue.uuidString, privacy: .public)")
+		Logger.workspace.notice("Deleted a saved workspace from the library. Saved workspace ID: \(savedWorkspaceID.rawValue.uuidString, privacy: .public)")
 	}
 
 }
@@ -286,7 +286,7 @@ extension WorkspaceStore {
 			uniqueKeysWithValues: workspacesSnapshot.map { workspace in
 				(
 					workspace.id,
-					snapshotTranscripts(
+						captureWorkspaceTranscripts(
 						for: workspace,
 						explicitTranscriptsBySessionID: [:]
 					)
@@ -321,11 +321,11 @@ extension WorkspaceStore {
 
 		let workspace = workspaces[workspaceIndex]
 		if saveToLibrary {
-			let resolvedTranscripts = snapshotTranscripts(
+				let resolvedTranscripts = captureWorkspaceTranscripts(
 				for: workspace,
 				explicitTranscriptsBySessionID: explicitTranscriptsBySessionID
 			)
-			_ = persistence.createWorkspaceSnapshot(
+			_ = persistence.saveWorkspaceToLibrary(
 				from: workspace,
 				sessions: sessions,
 				transcriptsBySessionID: resolvedTranscripts
@@ -363,7 +363,7 @@ extension WorkspaceStore {
 			let session = sessions.ensureSession(id: leaf.sessionID)
 			return (leaf.sessionID, session.title)
 		})
-		let transcriptsBySessionID = snapshotTranscripts(
+			let transcriptsBySessionID = captureWorkspaceTranscripts(
 			for: workspace,
 			explicitTranscriptsBySessionID: [:]
 		)
@@ -386,7 +386,7 @@ extension WorkspaceStore {
 		recentlyClosedWorkspaceCount = recentlyClosedWorkspaces.count
 	}
 
-	private func snapshotTranscripts(
+		private func captureWorkspaceTranscripts(
 		for workspace: Workspace,
 		explicitTranscriptsBySessionID: [TerminalSessionID: String]
 	) -> [TerminalSessionID: String] {

@@ -20,8 +20,6 @@ struct TerminalPaneView: NSViewRepresentable {
 
 	let controller: TerminalPaneController
 	let session: TerminalSession
-	let isFocused: Bool
-	let onActivatePane: () -> Void
 	let onRestart: () -> Void
 	let onSplitRight: () -> Void
 	let onSplitDown: () -> Void
@@ -36,7 +34,6 @@ struct TerminalPaneView: NSViewRepresentable {
 		applyCurrentAppearance(to: hostingView)
 		hostingView.updateAccessibility(
 			snapshot: accessibilitySnapshot,
-			onFocus: onActivatePane,
 			onRestart: onRestart,
 			onSplitRight: onSplitRight,
 			onSplitDown: onSplitDown,
@@ -47,10 +44,9 @@ struct TerminalPaneView: NSViewRepresentable {
 
 	func updateNSView(_ nsView: TerminalPaneHostView, context: Context) {
 		applyCurrentAppearance(to: nsView)
-		context.coordinator.update(hostingView: nsView, isFocused: isFocused)
+		context.coordinator.update(hostingView: nsView)
 		nsView.updateAccessibility(
 			snapshot: accessibilitySnapshot,
-			onFocus: onActivatePane,
 			onRestart: onRestart,
 			onSplitRight: onSplitRight,
 			onSplitDown: onSplitDown,
@@ -92,11 +88,7 @@ struct TerminalPaneView: NSViewRepresentable {
 			case .exited(let exitCode): exitCode.map { "Shell exited with status \($0)" } ?? "Shell exited"
 		}
 
-		var valueParts: [String] = []
-		if isFocused {
-			valueParts.append("Focused")
-		}
-		valueParts.append(state)
+		var valueParts: [String] = [state]
 		if let currentDirectory = session.currentDirectory, !currentDirectory.isEmpty {
 			valueParts.append("Directory \(currentDirectory)")
 		}
@@ -104,7 +96,7 @@ struct TerminalPaneView: NSViewRepresentable {
 		return TerminalAccessibilitySnapshot(
 			label: label,
 			value: valueParts.joined(separator: ". "),
-			help: "This terminal lives inside a workspace pane. Use the available accessibility actions to focus the pane, restart the shell, split the pane, or close the pane."
+			help: "This terminal lives inside a workspace pane. Use the available accessibility actions to restart the shell, split the pane, or close the pane."
 		)
 	}
 }

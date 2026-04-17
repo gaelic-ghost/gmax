@@ -47,9 +47,6 @@ final class WorkspacePersistenceController {
 
 	func loadWorkspaces(for sceneIdentity: WorkspaceSceneIdentity) -> [Workspace] {
 		let context = container.viewContext
-		context.performAndWait {
-			try? migrateLegacyPersistenceIfNeeded(for: sceneIdentity, context: context)
-		}
 		return loadPlacements(role: .live, sceneIdentity: sceneIdentity, in: context)
 			.compactMap { placement in
 				guard let revision = workspaceRevision(for: placement.workspace, placement: placement) else {
@@ -61,9 +58,6 @@ final class WorkspacePersistenceController {
 
 	func loadRecentlyClosedWorkspaces(for sceneIdentity: WorkspaceSceneIdentity) -> [PersistedRecentlyClosedWorkspace] {
 		let context = container.viewContext
-		context.performAndWait {
-			try? migrateLegacyPersistenceIfNeeded(for: sceneIdentity, context: context)
-		}
 		return loadPlacements(role: .recent, sceneIdentity: sceneIdentity, in: context)
 			.compactMap { placement in
 				guard let revision = workspaceRevision(for: placement.workspace, placement: placement) else {
@@ -175,7 +169,7 @@ final class WorkspacePersistenceController {
 		}
 	}
 
-	func createWorkspaceSnapshot(
+	func saveWorkspaceToLibrary(
 		from workspace: Workspace,
 		sessions: TerminalSessionRegistry,
 		transcriptsBySessionID: [TerminalSessionID: String] = [:],
@@ -236,11 +230,8 @@ final class WorkspacePersistenceController {
 		return createdListing
 	}
 
-	func listWorkspaceSnapshots(matching query: String? = nil) -> [SavedWorkspaceListing] {
+	func listSavedWorkspaces(matching query: String? = nil) -> [SavedWorkspaceListing] {
 		let context = container.viewContext
-		context.performAndWait {
-			try? migrateLegacyPersistenceIfNeeded(for: WorkspaceSceneIdentity(), context: context)
-		}
 		let request = NSFetchRequest<WorkspacePlacementEntity>(entityName: "WorkspacePlacementEntity")
 		request.sortDescriptors = [
 			NSSortDescriptor(key: #keyPath(WorkspacePlacementEntity.isPinned), ascending: false),
@@ -268,11 +259,8 @@ final class WorkspacePersistenceController {
 		}
 	}
 
-	func loadWorkspaceSnapshot(id: SavedWorkspaceID) -> WorkspaceRevision? {
+	func loadSavedWorkspace(id: SavedWorkspaceID) -> WorkspaceRevision? {
 		let context = container.viewContext
-		context.performAndWait {
-			try? migrateLegacyPersistenceIfNeeded(for: WorkspaceSceneIdentity(), context: context)
-		}
 		let request = NSFetchRequest<WorkspacePlacementEntity>(entityName: "WorkspacePlacementEntity")
 		request.fetchLimit = 1
 		request.predicate = NSPredicate(
@@ -294,11 +282,8 @@ final class WorkspacePersistenceController {
 	}
 
 	@discardableResult
-	func deleteWorkspaceSnapshot(id: SavedWorkspaceID) -> Bool {
+	func deleteSavedWorkspace(id: SavedWorkspaceID) -> Bool {
 		let context = container.viewContext
-		context.performAndWait {
-			try? migrateLegacyPersistenceIfNeeded(for: WorkspaceSceneIdentity(), context: context)
-		}
 		var didDeleteSavedWorkspace = false
 		context.performAndWait {
 			do {
@@ -337,11 +322,8 @@ final class WorkspacePersistenceController {
 		return didDeleteSavedWorkspace
 	}
 
-	func markWorkspaceSnapshotOpened(_ id: SavedWorkspaceID) {
+	func markSavedWorkspaceOpened(_ id: SavedWorkspaceID) {
 		let context = container.viewContext
-		context.performAndWait {
-			try? migrateLegacyPersistenceIfNeeded(for: WorkspaceSceneIdentity(), context: context)
-		}
 		context.performAndWait {
 			do {
 				let request = NSFetchRequest<WorkspacePlacementEntity>(entityName: "WorkspacePlacementEntity")
@@ -368,7 +350,7 @@ final class WorkspacePersistenceController {
 	}
 }
 
-private extension WorkspacePersistenceController {
+extension WorkspacePersistenceController {
 	func loadPlacements(
 		role: WorkspacePlacementRole,
 		sceneIdentity: WorkspaceSceneIdentity,
@@ -698,131 +680,5 @@ private extension WorkspacePersistenceController {
 			.map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
 			.first { !$0.isEmpty }
 			.map { String($0.prefix(160)) }
-	}
-
-	func migrateLegacyPersistenceIfNeeded(
-		for sceneIdentity: WorkspaceSceneIdentity,
-		context: NSManagedObjectContext
-	) throws {
-		let placementCountRequest = NSFetchRequest<WorkspacePlacementEntity>(entityName: "WorkspacePlacementEntity")
-		let existingPlacementCount = try context.count(for: placementCountRequest)
-		guard existingPlacementCount == 0 else {
-			return
-		}
-
-		var migratedAnything = false
-		let now = Date()
-
-		let legacyWorkspaceRequest = NSFetchRequest<WorkspaceEntity>(entityName: "WorkspaceEntity")
-		legacyWorkspaceRequest.sortDescriptors = [NSSortDescriptor(key: #keyPath(WorkspaceEntity.sortOrder), ascending: true)]
-		let legacyWorkspaceEntities = try context.fetch(legacyWorkspaceRequest)
-		for (sortOrder, workspaceEntity) in legacyWorkspaceEntities.enumerated() where workspaceEntity.savedWorkspaceID == nil {
-			let placement = WorkspacePlacementEntity(context: context)
-			placement.id = workspaceEntity.id
-			placement.role = WorkspacePlacementRole.live.rawValue
-			placement.windowID = sceneIdentity.windowID
-			placement.sortOrder = Int64(sortOrder)
-			placement.restoreSortOrder = Int64(sortOrder)
-			placement.createdAt = workspaceEntity.createdAt.timeIntervalSinceReferenceDate == 0 ? now : workspaceEntity.createdAt
-			placement.updatedAt = workspaceEntity.updatedAt.timeIntervalSinceReferenceDate == 0 ? now : workspaceEntity.updatedAt
-			placement.lastOpenedAt = nil
-			placement.isPinned = false
-			placement.workspace = workspaceEntity
-
-			if workspaceEntity.createdAt.timeIntervalSinceReferenceDate == 0 {
-				workspaceEntity.createdAt = now
-			}
-			if workspaceEntity.updatedAt.timeIntervalSinceReferenceDate == 0 {
-				workspaceEntity.updatedAt = now
-			}
-			refreshListingMetadata(on: placement, from: workspaceEntity)
-			migratedAnything = true
-		}
-
-		let legacySnapshotRequest = NSFetchRequest<WorkspaceSnapshotEntity>(entityName: "WorkspaceSnapshotEntity")
-		let legacySnapshotEntities = try context.fetch(legacySnapshotRequest)
-		for snapshotEntity in legacySnapshotEntities {
-			let workspaceEntity = WorkspaceEntity(context: context)
-			workspaceEntity.id = UUID()
-			workspaceEntity.savedWorkspaceID = snapshotEntity.id
-			workspaceEntity.createdAt = snapshotEntity.createdAt
-			workspaceEntity.updatedAt = snapshotEntity.updatedAt
-			workspaceEntity.title = snapshotEntity.title
-			workspaceEntity.notes = snapshotEntity.notes
-			workspaceEntity.previewText = snapshotEntity.previewText
-			workspaceEntity.searchText = snapshotEntity.searchText
-			workspaceEntity.sortOrder = 0
-			workspaceEntity.rootNode = Self.makeNodeEntity(
-				from: Self.decodeSnapshotNode(snapshotEntity.rootNode),
-				context: context
-			)
-			let legacySessionSnapshots = decodeLegacySessionSnapshots(from: snapshotEntity)
-			let sessionSnapshotEntities = legacySessionSnapshots.map { sessionSnapshot -> PaneSessionSnapshotEntity in
-				let entity = PaneSessionSnapshotEntity(context: context)
-				entity.id = sessionSnapshot.id.rawValue
-				entity.executable = sessionSnapshot.launchConfiguration.executable
-				entity.argumentsData = try? JSONEncoder().encode(sessionSnapshot.launchConfiguration.arguments)
-				entity.environmentData = try? JSONEncoder().encode(sessionSnapshot.launchConfiguration.environment)
-				entity.currentDirectory = sessionSnapshot.launchConfiguration.currentDirectory
-				entity.title = sessionSnapshot.title
-				entity.transcript = sessionSnapshot.transcript
-				entity.transcriptByteCount = Int64(sessionSnapshot.transcriptByteCount)
-				entity.transcriptLineCount = Int64(sessionSnapshot.transcriptLineCount)
-				entity.previewText = sessionSnapshot.previewText
-				entity.workspace = workspaceEntity
-				return entity
-			}
-			workspaceEntity.sessionSnapshots = NSSet(array: sessionSnapshotEntities)
-
-			let placement = WorkspacePlacementEntity(context: context)
-			placement.id = snapshotEntity.id
-			placement.role = WorkspacePlacementRole.library.rawValue
-			placement.windowID = nil
-			placement.sortOrder = 0
-			placement.restoreSortOrder = 0
-			placement.createdAt = snapshotEntity.createdAt
-			placement.updatedAt = snapshotEntity.updatedAt
-			placement.lastOpenedAt = snapshotEntity.lastOpenedAt
-			placement.isPinned = snapshotEntity.isPinned
-			placement.workspace = workspaceEntity
-			refreshListingMetadata(on: placement, from: workspaceEntity)
-			migratedAnything = true
-		}
-
-		if migratedAnything, context.hasChanges {
-			try context.save()
-			Logger.persistence.notice("Migrated legacy workspace persistence records into the window-scoped placement model. Window ID: \(sceneIdentity.windowID.uuidString, privacy: .public). Legacy live workspace count: \(legacyWorkspaceEntities.count). Legacy saved workspace count: \(legacySnapshotEntities.count)")
-		}
-	}
-
-	func decodeLegacySessionSnapshots(from snapshotEntity: WorkspaceSnapshotEntity) -> [WorkspaceSessionSnapshot] {
-		let sessionSnapshots = snapshotEntity.sessionSnapshots as? Set<PaneSessionSnapshotEntity> ?? []
-		return sessionSnapshots.compactMap { sessionSnapshot in
-			guard let argumentsData = sessionSnapshot.argumentsData else {
-				return nil
-			}
-			do {
-				let arguments = try JSONDecoder().decode([String].self, from: argumentsData)
-				let environment = try sessionSnapshot.environmentData.map {
-					try JSONDecoder().decode([String]?.self, from: $0)
-				} ?? nil
-				return WorkspaceSessionSnapshot(
-					id: TerminalSessionID(rawValue: sessionSnapshot.id),
-					title: sessionSnapshot.title,
-					launchConfiguration: TerminalLaunchConfiguration(
-						executable: sessionSnapshot.executable,
-						arguments: arguments,
-						environment: environment,
-						currentDirectory: sessionSnapshot.currentDirectory
-					),
-					transcript: sessionSnapshot.transcript,
-					transcriptByteCount: Int(sessionSnapshot.transcriptByteCount),
-					transcriptLineCount: Int(sessionSnapshot.transcriptLineCount),
-					previewText: sessionSnapshot.previewText
-				)
-			} catch {
-				return nil
-			}
-		}
 	}
 }

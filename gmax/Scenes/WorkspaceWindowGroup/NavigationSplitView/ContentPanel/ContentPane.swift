@@ -59,14 +59,6 @@ struct ContentPane: View {
 				}
 			}
 			.navigationTitle(workspace.title)
-			.focusedSceneValue(
-				\.closeEmptyWorkspace,
-				workspace.root == nil
-					? {
-						selectedWorkspaceID = model.closeWorkspace(workspace.id)
-					}
-					: nil
-			)
 		} else {
 			ContentUnavailableView {
 				Label("No Workspace Selected", systemImage: "sidebar.left")

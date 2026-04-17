@@ -1,6 +1,12 @@
 import OSLog
 import SwiftUI
 
+private enum WorkspaceWindowSceneStorageKey {
+	static let selectedWorkspaceID = "workspaceWindow.selectedWorkspaceID"
+	static let isInspectorVisible = "workspaceWindow.isInspectorVisible"
+	static let isSidebarVisible = "workspaceWindow.isSidebarVisible"
+}
+
 struct WorkspaceWindowSceneView: View {
 	@StateObject private var workspaceStore: WorkspaceStore
 	private let sceneIdentity: WorkspaceSceneIdentity
@@ -11,9 +17,9 @@ struct WorkspaceWindowSceneView: View {
 	@State private var isSavedWorkspaceLibraryPresented = false
 	@State private var columnVisibility: NavigationSplitViewVisibility = .all
 	@State private var isInspectorVisible = true
-	@SceneStorage("mainShell.selectedWorkspaceID") private var restoredSelectedWorkspaceID: String?
-	@SceneStorage("mainShell.isInspectorVisible") private var restoredInspectorVisible = true
-	@SceneStorage("mainShell.isSidebarVisible") private var restoredSidebarVisible = true
+	@SceneStorage(WorkspaceWindowSceneStorageKey.selectedWorkspaceID) private var restoredSelectedWorkspaceID: String?
+	@SceneStorage(WorkspaceWindowSceneStorageKey.isInspectorVisible) private var restoredInspectorVisible = true
+	@SceneStorage(WorkspaceWindowSceneStorageKey.isSidebarVisible) private var restoredSidebarVisible = true
 	@State private var hasAppliedSceneState = false
 	@State private var paneFrames: [PaneID: CGRect] = [:]
 	@State private var paneFocusHistory: [PaneID] = []
@@ -83,6 +89,23 @@ struct WorkspaceWindowSceneView: View {
 		}
 		let pendingDeletionWorkspace = workspacePendingDeletionID.flatMap { workspaceID in workspaceStore.workspaces.first { $0.id == workspaceID } }
 		let pendingRenameWorkspace = workspacePendingRenameID.flatMap { workspaceID in workspaceStore.workspaces.first { $0.id == workspaceID } }
+		let dismissPresentedWorkspaceModal: (() -> Void)? = {
+			if isSavedWorkspaceLibraryPresented {
+				return {
+					Logger.diagnostics.notice(
+						"Dismissed the saved-workspace library sheet from the active shell window without reopening a workspace."
+					)
+					isSavedWorkspaceLibraryPresented = false
+				}
+			}
+			if pendingRenameWorkspace != nil {
+				return dismissWorkspaceRename
+			}
+			if pendingDeletionWorkspace != nil {
+				return dismissWorkspaceDeletion
+			}
+			return nil
+		}()
 		let selectedWorkspace = selectedWorkspaceID.flatMap { selectedWorkspaceID in
 			workspaceStore.workspaces.first { $0.id == selectedWorkspaceID }
 		}
@@ -319,7 +342,9 @@ struct WorkspaceWindowSceneView: View {
 			)
 		}
 		.focusedSceneObject(workspaceStore)
+		.focusedSceneValue(\.activeWorkspaceFocusTarget, focusedTarget)
 		.focusedSceneValue(\.selectedWorkspaceSelection, $selectedWorkspaceID)
+		.focusedSceneValue(\.dismissPresentedWorkspaceModal, dismissPresentedWorkspaceModal)
 		.focusedSceneValue(\.openSavedWorkspaceLibrary, openSavedWorkspaceLibrary)
 		.focusedSceneValue(\.presentWorkspaceRename, presentWorkspaceRename)
 		.focusedSceneValue(\.presentWorkspaceDeletion, presentWorkspaceDeletion)
@@ -328,7 +353,7 @@ struct WorkspaceWindowSceneView: View {
 				Button("Open Saved Workspaces", systemImage: "folder", action: openSavedWorkspaceLibrary)
 				.labelStyle(.iconOnly)
 				.help("Open saved workspaces (\u{2318}O)")
-				.accessibilityIdentifier("mainShell.openSavedWorkspacesButton")
+				.accessibilityIdentifier("workspaceWindow.openSavedWorkspacesButton")
 			}
 
 			ToolbarItem(placement: .navigation) {
@@ -337,7 +362,7 @@ struct WorkspaceWindowSceneView: View {
 				}
 				.labelStyle(.iconOnly)
 				.help("Create a new workspace (\u{2318}N)")
-				.accessibilityIdentifier("mainShell.newWorkspaceButton")
+				.accessibilityIdentifier("workspaceWindow.newWorkspaceButton")
 			}
 
 			ToolbarItemGroup(placement: .primaryAction) {
@@ -347,7 +372,7 @@ struct WorkspaceWindowSceneView: View {
 				.labelStyle(.iconOnly)
 				.help("Split the focused pane to the right (\u{2318}D)")
 				.disabled(!canSplitFocusedPane)
-				.accessibilityIdentifier("mainShell.splitRightButton")
+				.accessibilityIdentifier("workspaceWindow.splitRightButton")
 
 				Button("Split Down", systemImage: "uiwindow.split.2x1.rotate.90") {
 					splitFocusedPane(.down)
@@ -355,7 +380,7 @@ struct WorkspaceWindowSceneView: View {
 				.labelStyle(.iconOnly)
 				.help("Split the focused pane downward (\u{21E7}\u{2318}D)")
 				.disabled(!canSplitFocusedPane)
-				.accessibilityIdentifier("mainShell.splitDownButton")
+				.accessibilityIdentifier("workspaceWindow.splitDownButton")
 			}
 
 			ToolbarItem(placement: .primaryAction) {
@@ -370,7 +395,7 @@ struct WorkspaceWindowSceneView: View {
 				}
 				.labelStyle(.iconOnly)
 				.help(isInspectorVisible ? "Hide the inspector (\u{21E7}\u{2318}B)" : "Show the inspector (\u{21E7}\u{2318}B)")
-				.accessibilityIdentifier("mainShell.toggleInspectorButton")
+				.accessibilityIdentifier("workspaceWindow.toggleInspectorButton")
 			}
 		}
 		.task {
