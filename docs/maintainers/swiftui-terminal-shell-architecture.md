@@ -1,5 +1,22 @@
 # SwiftUI Terminal Shell Architecture
 
+> Status
+> Historical shell-architecture background. This note still contains useful
+> context, but it is no longer the authoritative source for current focus,
+> command, or persistence behavior.
+>
+> Use these notes instead:
+> - [`workspace-focus-target-plan.md`](./workspace-focus-target-plan.md) for
+>   current focus decisions
+> - [`workspace-window-scene-command-focus-map.md`](./workspace-window-scene-command-focus-map.md)
+>   for current scene-command behavior
+> - [`framework-command-audit.md`](./framework-command-audit.md) for current
+>   command risks and test gaps
+> - [`workspace-window-state-and-persistence-model.md`](./workspace-window-state-and-persistence-model.md)
+>   for current persistence structure
+> - [`swiftterm-surface-investigation.md`](./swiftterm-surface-investigation.md)
+>   for the current SwiftTerm boundary
+
 ## Purpose
 
 This note captures the current preferred architecture for a macOS terminal shell built with SwiftUI around SwiftTerm.

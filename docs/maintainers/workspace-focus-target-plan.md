@@ -33,6 +33,35 @@ Status summary for this note:
 - prompt-versus-scrollback ownership should be treated as settled in favor of
   SwiftTerm unless a later product requirement proves otherwise
 
+## Maintainer Doc Roles
+
+Use the focus and persistence notes in this folder by role rather than treating
+them as interchangeable architecture write-ups:
+
+- `workspace-focus-target-plan.md`
+  - current decision record for workspace-level focus behavior
+- `workspace-focus-implementation-boundary.md`
+  - ownership boundary for scene state, pane state, SwiftTerm, and the AppKit
+    bridge
+- `workspace-window-scene-command-focus-map.md`
+  - current-state implementation map for scene commands, focused values, and
+    close behavior
+- `framework-command-audit.md`
+  - current risk, ambiguity, and test-gap audit for the command surface
+- `workspace-window-state-and-persistence-model.md`
+  - current source of truth for payload-plus-placement persistence
+- `swiftterm-surface-investigation.md`
+  - source of truth for what SwiftTerm already owns versus what `gmax` still
+    wraps
+
+These two notes are now historical background, not current source-of-truth
+architecture surfaces:
+
+- `workspace-focus-first-pass-plan.md`
+  - first implementation-pass history
+- `swiftui-terminal-shell-architecture.md`
+  - broader shell-architecture background and earlier design exploration
+
 ## Core Design Goal
 
 Define a small, stable set of logical focus targets for the workspace window, then shape the view hierarchy around those targets.

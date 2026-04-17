@@ -14,6 +14,20 @@ into a full window-restoration or terminal transport rewrite.
 
 # Workspace Focus First Pass Plan
 
+> Status
+> Historical implementation-pass record. Do not use this as the current source
+> of truth for focus behavior or remaining work.
+>
+> Use these notes instead:
+> - [`workspace-focus-target-plan.md`](./workspace-focus-target-plan.md) for
+>   current decisions
+> - [`workspace-focus-implementation-boundary.md`](./workspace-focus-implementation-boundary.md)
+>   for ownership boundaries
+> - [`workspace-window-scene-command-focus-map.md`](./workspace-window-scene-command-focus-map.md)
+>   for current implementation shape
+> - [`framework-command-audit.md`](./framework-command-audit.md) for current
+>   gaps and risks
+
 ## Purpose
 
 This note defines the first implementation pass for moving `gmax` away from its

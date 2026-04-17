@@ -410,8 +410,8 @@ Lower-priority documentation and surface-shape gaps:
 
 If this area gets a real redesign pass, the safest order is:
 
-1. Decide whether the adaptive `Command-W` model is a product requirement or an accidental implementation artifact.
-2. Add behavioral tests for the current command and focus model before changing it.
+1. Keep the recorded `Command-W` semantics fixed while the implementation is simplified around them.
+2. Add behavioral tests for the current command and focus model.
 3. Align the remaining shell-era naming so the code and tests read like the architecture they now represent.
 4. Revisit whether the command-context key declarations should stay co-located with the menu implementation.
 5. Only after those steps, consider any larger structural simplification of the scene root.
