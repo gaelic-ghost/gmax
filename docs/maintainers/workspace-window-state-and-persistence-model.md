@@ -44,9 +44,7 @@ cleanly.
 
 Use this together with:
 
-- [`workspace-focus-target-plan.md`](./workspace-focus-target-plan.md)
-- [`workspace-focus-implementation-boundary.md`](./workspace-focus-implementation-boundary.md)
-- [`workspace-focus-removal-and-redesign-notes.md`](./workspace-focus-removal-and-redesign-notes.md)
+- [`workspace-focus-guide.md`](./workspace-focus-guide.md)
 - [`swiftterm-surface-investigation.md`](./swiftterm-surface-investigation.md)
 
 ## Documented Apple Behavior This Depends On

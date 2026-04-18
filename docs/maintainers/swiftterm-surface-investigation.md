@@ -24,8 +24,7 @@ This note answers a narrow architectural question:
 
 This is a companion to:
 
-- [workspace-focus-removal-and-redesign-notes.md](workspace-focus-removal-and-redesign-notes.md)
-- [workspace-focus-target-plan.md](workspace-focus-target-plan.md)
+- [workspace-focus-guide.md](workspace-focus-guide.md)
 
 ## Primary References
 

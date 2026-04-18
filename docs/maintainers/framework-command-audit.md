@@ -4,10 +4,10 @@
 
 This document is the current gap audit for the workspace-window scene, command, focus, and dismissal architecture in `gmax`.
 
-It is intentionally different from the two related maintainer notes:
+It is intentionally different from the related maintainer guide:
 
-- [`swiftui-command-and-focus-architecture.md`](./swiftui-command-and-focus-architecture.md) records the repo's preferred default model.
-- [`workspace-window-scene-command-focus-map.md`](./workspace-window-scene-command-focus-map.md) maps what the code is doing today.
+- [`workspace-focus-guide.md`](./workspace-focus-guide.md) records the repo's
+  preferred defaults, ownership boundary, and current implementation map.
 
 This file answers the next question: where the current implementation is solid, where it is merely awkward, where it is risky, and what deserves redesign attention first.
 

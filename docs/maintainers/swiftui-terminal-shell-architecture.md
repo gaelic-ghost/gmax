@@ -6,10 +6,8 @@
 > command, or persistence behavior.
 >
 > Use these notes instead:
-> - [`workspace-focus-target-plan.md`](./workspace-focus-target-plan.md) for
->   current focus decisions
-> - [`workspace-window-scene-command-focus-map.md`](./workspace-window-scene-command-focus-map.md)
->   for current scene-command behavior
+> - [`workspace-focus-guide.md`](./workspace-focus-guide.md) for current focus
+>   decisions and ownership boundaries
 > - [`framework-command-audit.md`](./framework-command-audit.md) for current
 >   command risks and test gaps
 > - [`workspace-window-state-and-persistence-model.md`](./workspace-window-state-and-persistence-model.md)

@@ -127,7 +127,6 @@ Build `gmax` into a finished macOS terminal workspace app:
 
 - [docs/maintainers/accessibility-and-keyboard-plan.md](docs/maintainers/accessibility-and-keyboard-plan.md)
 - [docs/maintainers/logging-and-telemetry-options.md](docs/maintainers/logging-and-telemetry-options.md)
-- [docs/maintainers/workspace-focus-target-plan.md](docs/maintainers/workspace-focus-target-plan.md)
-- [docs/maintainers/workspace-focus-implementation-boundary.md](docs/maintainers/workspace-focus-implementation-boundary.md)
+- [docs/maintainers/workspace-focus-guide.md](docs/maintainers/workspace-focus-guide.md)
 - [docs/maintainers/workspace-window-state-and-persistence-model.md](docs/maintainers/workspace-window-state-and-persistence-model.md)
 - [docs/maintainers/v0.1.0-release-checklist.md](docs/maintainers/v0.1.0-release-checklist.md)
