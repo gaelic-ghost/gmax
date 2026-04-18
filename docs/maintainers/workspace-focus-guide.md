@@ -27,15 +27,7 @@ Use it together with:
 - [`framework-command-audit.md`](./framework-command-audit.md)
 - [`swiftterm-surface-investigation.md`](./swiftterm-surface-investigation.md)
 
-## Status
-
-The structural focus cleanup is complete.
-
-What remains is not another architecture reset. The remaining work is product
-verification, accessibility follow-through, naming cleanup, and stronger
-multi-window command coverage.
-
-## How This Note Fits With The Other Command Docs
+## How To Use This Note
 
 Use the workspace-window notes by role:
 
@@ -50,6 +42,14 @@ Use the workspace-window notes by role:
 Historical shell-shape context still lives in
 [`swiftui-terminal-shell-architecture.md`](./swiftui-terminal-shell-architecture.md),
 but it is not the source of truth for current focus or command behavior.
+
+## Status
+
+The structural focus cleanup is complete.
+
+What remains is not another architecture reset. The remaining work is product
+verification, accessibility follow-through, naming cleanup, and stronger
+multi-window command coverage.
 
 ## Research Workflow
 
@@ -109,7 +109,93 @@ when it duplicated built-in scene, focus, and window behavior with custom
 routing layers. The goal of this note is to preserve that lesson without
 overstating what SwiftUI guarantees.
 
-## How To Choose The Right Channel
+## Current Product Decisions
+
+These are not open planning questions anymore:
+
+- the workspace window owns a scene-local focus namespace
+- the scene owns window-local selection, sidebar and inspector visibility, and
+  modal presentation state
+- pane containers own pane identity, pane-local command publication, and visual
+  focus treatment
+- the sidebar stays native and list-driven
+- the inspector is a real focus region, but pane-oriented commands disable when
+  focus leaves content and moves there
+- SwiftTerm owns prompt input, scrollback selection, copy, find, and
+  terminal-native responder behavior
+- `gmax` does not model prompt versus scrollback as separate scene-level focus
+  targets
+- AppKit interop should stay narrow and should not reintroduce a custom
+  terminal focus bridge or first-responder forcing path
+
+`Command-W` is also settled:
+
+- if a scene-owned modal surface is frontmost, `Command-W` dismisses that modal
+  first
+- if a pane is the active focus target, `Command-W` closes that pane
+- if the selected workspace is empty, `Command-W` closes that workspace
+- if focus is in the sidebar on a workspace listing, `Command-W` closes that
+  workspace
+- if that empty workspace is the only workspace in the window, `Command-W`
+  closes the window
+- if focus is in the inspector, `Command-W` does nothing
+
+Do not reopen that product decision casually during adjacent cleanup work.
+
+## Ownership Boundary
+
+### Scene responsibilities
+
+The workspace window scene owns:
+
+- selected workspace
+- window-local sidebar and inspector visibility
+- scene-local modal presentation state
+- the scene-wide command context exported through focused scene values
+- `@FocusState` for `WorkspaceFocusTarget`
+
+The scene does not own terminal responder behavior, and it does not push focus
+into SwiftTerm through a custom bridge.
+
+### Pane responsibilities
+
+Pane containers own:
+
+- pane focus identity
+- pane-local command exports such as close, split, and navigation actions
+- visual focus treatment for the active pane
+
+Pane identity is a workspace-window concern. It is not stored as live runtime
+state on the workspace model.
+
+### SwiftTerm responsibilities
+
+SwiftTerm owns:
+
+- prompt input
+- scrollback selection
+- copy and select all
+- built-in find behavior
+- terminal-native responder and mouse behavior
+
+`gmax` treats the enclosing pane as the workspace-level command target. It does
+not model prompt versus scrollback as separate scene-level focus targets.
+
+### AppKit interop boundary
+
+The AppKit boundary should stay limited to:
+
+- hosting SwiftTerm inside SwiftUI
+- session lifecycle and transcript wiring
+- ordinary accessibility labeling for the enclosing pane surface
+
+The AppKit boundary should not grow back into:
+
+- a custom first-responder forcing path
+- a replacement for SwiftUI scene focus
+- a replacement for SwiftTerm's terminal interaction model
+
+## Choosing The Right Channel
 
 ### Scene command surface
 
@@ -180,78 +266,6 @@ That is still different from inventing a parallel in-house responder or command
 system. Use the native AppKit surface directly before creating a custom
 abstraction.
 
-## Ownership Boundary
-
-### Scene responsibilities
-
-The workspace window scene owns:
-
-- selected workspace
-- window-local sidebar and inspector visibility
-- scene-local modal presentation state
-- the scene-wide command context exported through focused scene values
-- `@FocusState` for `WorkspaceFocusTarget`
-
-The scene does not own terminal responder behavior, and it does not push focus
-into SwiftTerm through a custom bridge.
-
-### Pane responsibilities
-
-Pane containers own:
-
-- pane focus identity
-- pane-local command exports such as close, split, and navigation actions
-- visual focus treatment for the active pane
-
-Pane identity is a workspace-window concern. It is not stored as live runtime
-state on the workspace model.
-
-### SwiftTerm responsibilities
-
-SwiftTerm owns:
-
-- prompt input
-- scrollback selection
-- copy and select all
-- built-in find behavior
-- terminal-native responder and mouse behavior
-
-`gmax` treats the enclosing pane as the workspace-level command target. It does
-not model prompt versus scrollback as separate scene-level focus targets.
-
-### AppKit interop boundary
-
-The AppKit boundary should stay limited to:
-
-- hosting SwiftTerm inside SwiftUI
-- session lifecycle and transcript wiring
-- ordinary accessibility labeling for the enclosing pane surface
-
-The AppKit boundary should not grow back into:
-
-- a custom first-responder forcing path
-- a replacement for SwiftUI scene focus
-- a replacement for SwiftTerm's terminal interaction model
-
-## Settled Decisions
-
-These are not open planning questions anymore:
-
-- the workspace window owns a scene-local focus namespace
-- the scene owns window-local selection, sidebar and inspector visibility, and
-  modal presentation state
-- pane containers own pane identity, pane-local command publication, and visual
-  focus treatment
-- the sidebar stays native and list-driven
-- the inspector is a real focus region, but pane-oriented commands disable when
-  focus leaves content and moves there
-- SwiftTerm owns prompt input, scrollback selection, copy, find, and
-  terminal-native responder behavior
-- `gmax` does not model prompt versus scrollback as separate scene-level focus
-  targets
-- AppKit interop should stay narrow and should not reintroduce a custom
-  terminal focus bridge or first-responder forcing path
-
 ## Current Implementation Map
 
 This section is the current-state implementation map for the main workspace
@@ -274,7 +288,7 @@ That means the main command surface for the app is not global app state. It is
 the command set attached to the workspace window scene, evaluated against
 whichever window scene is currently active.
 
-### Workspace window scene ownership
+### Workspace window scene ownership today
 
 `WorkspaceWindowSceneView` owns:
 
@@ -477,7 +491,7 @@ rather than trying to route commands upward.
 Settings are not currently routed through `WorkspaceStore`, focused values, or
 scene command infrastructure.
 
-## Current Strengths
+## What Is Working Well
 
 The current implementation is strongest in these areas:
 
@@ -491,22 +505,6 @@ The current implementation is strongest in these areas:
   than command routing
 - settings are isolated in a separate scene instead of being folded into the
   workspace window
-
-## Command-W Decision
-
-`Command-W` is settled:
-
-- if a scene-owned modal surface is frontmost, `Command-W` dismisses that modal
-  first
-- if a pane is the active focus target, `Command-W` closes that pane
-- if the selected workspace is empty, `Command-W` closes that workspace
-- if focus is in the sidebar on a workspace listing, `Command-W` closes that
-  workspace
-- if that empty workspace is the only workspace in the window, `Command-W`
-  closes the window
-- if focus is in the inspector, `Command-W` does nothing
-
-Do not reopen that product decision casually during adjacent cleanup work.
 
 ## Historical Cleanup That Already Landed
 
@@ -525,7 +523,10 @@ Do not reintroduce:
 - a SwiftTerm focus bridge or responder adapter
 - a prompt-versus-scrollback focus model inside `gmax`
 
-## Remaining Focus Follow-Through
+## Remaining Follow-Through
+
+The remaining work is ordinary product follow-through, not another structural
+focus redesign.
 
 ### 1. Manual behavior verification
 
@@ -562,15 +563,6 @@ Any remaining comments, identifiers, or docs that still describe the removed
 focus bridge or store-owned pane focus as current behavior should be cleaned up
 when encountered.
 
-## Out Of Scope
-
-These are not active focus-plan items:
-
-- reintroducing any SwiftTerm focus bridge or responder adapter
-- reviving `Workspace.focusedPaneID` or store-owned pane focus state
-- inventing a prompt-versus-scrollback focus model in `gmax`
-- reopening the `Command-W` product decision
-
 ## Practical Decision Checklist
 
 Before adding new command, focus, selection, toolbar, sheet, inspector, or
@@ -604,6 +596,15 @@ When that happens, the write-up should say:
 - why it is insufficient here
 - what near-term use case the custom path unlocks
 - what maintenance cost we are accepting
+
+## Out Of Scope
+
+These are not active focus-plan items:
+
+- reintroducing any SwiftTerm focus bridge or responder adapter
+- reviving `Workspace.focusedPaneID` or store-owned pane focus state
+- inventing a prompt-versus-scrollback focus model in `gmax`
+- reopening the `Command-W` product decision
 
 ## Apple References
 

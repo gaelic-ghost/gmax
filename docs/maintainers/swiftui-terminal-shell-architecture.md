@@ -12,8 +12,9 @@
 >   command risks and test gaps
 > - [`workspace-window-state-and-persistence-model.md`](./workspace-window-state-and-persistence-model.md)
 >   for current persistence structure
-> - [`swiftterm-surface-investigation.md`](./swiftterm-surface-investigation.md)
->   for the current SwiftTerm boundary
+>
+> This note now also carries the consolidated SwiftTerm boundary findings that
+> previously lived in `swiftterm-surface-investigation.md`.
 
 ## Purpose
 
@@ -138,6 +139,168 @@ Guidance:
 
 - choose `LocalProcessTerminalView` for a native local shell flow on macOS
 - choose `TerminalView` when the backend is remote, virtualized, multiplexed, custom, or otherwise not "launch one local shell process in a PTY"
+
+## SwiftTerm Surface Boundary
+
+The current SwiftTerm boundary is now intentionally documented here rather than
+in a separate companion note.
+
+This section answers the narrow architectural question that drove the earlier
+investigation:
+
+- what SwiftTerm already owns as an AppKit terminal control
+- what `gmax` should continue to own around pane and workspace behavior
+- where the clean seam sits between workspace focus and terminal-native text
+  interaction
+
+### Primary References
+
+- SwiftTerm repository:
+  - <https://github.com/migueldeicaza/SwiftTerm>
+- SwiftTerm README:
+  - <https://github.com/migueldeicaza/SwiftTerm/blob/main/README.md>
+- SwiftTerm API docs:
+  - `TerminalView`: <https://migueldeicaza.github.io/SwiftTerm/Classes/TerminalView.html>
+  - `LocalProcessTerminalView`: <https://migueldeicaza.github.io/SwiftTerm/Classes/LocalProcessTerminalView.html>
+  - `TerminalViewDelegate`: <https://migueldeicaza.github.io/SwiftTerm/Protocols/TerminalViewDelegate.html>
+  - `LocalProcessTerminalViewDelegate`: <https://migueldeicaza.github.io/SwiftTerm/Protocols/LocalProcessTerminalViewDelegate.html>
+
+### What SwiftTerm Already Owns
+
+SwiftTerm is not just a drawing surface. On macOS, `TerminalView` is already an
+AppKit `NSView` control that participates in the responder chain and text-input
+system.
+
+Based on the SwiftTerm docs and source:
+
+- `TerminalView` is an `NSView` control, not a passive render-only surface.
+- `TerminalView` already participates in first-responder behavior.
+- `TerminalView` already supports text selection.
+- `TerminalView` already validates standard menu items such as copy, select
+  all, and find-related actions.
+- `TerminalView` already implements built-in search and the macOS find bar.
+- `TerminalView` already owns mouse-driven selection behavior.
+- `TerminalView` already models terminal-specific tradeoffs such as mouse
+  reporting conflicting with normal text selection.
+
+So the terminal surface itself is already the correct home for:
+
+- prompt input
+- scrollback selection
+- copy and select-all availability
+- find-in-terminal behavior
+- first-responder text handling
+
+Those are terminal-surface concerns, not workspace-layout concerns.
+
+### What `LocalProcessTerminalView` Adds
+
+`LocalProcessTerminalView` is SwiftTerm's convenience subclass for a local PTY.
+It wires a `TerminalView` to a local process.
+
+The important design constraint from the docs and source is:
+
+- `LocalProcessTerminalView` already uses `TerminalView`'s delegate internally.
+- host applications are expected to use `processDelegate` for process-level
+  signals.
+- if a host app needs more control than that reduced delegate surface provides,
+  SwiftTerm explicitly recommends subclassing `LocalProcessTerminalView`
+
+That recommendation matters here. The natural extension point is not "keep
+bolting external gesture and responder behavior onto the outside of the view."
+The natural extension point is "subclass the terminal host view if we need
+terminal-specific policy or hooks."
+
+### What `gmax` Should Own Around SwiftTerm
+
+The current wrapper lives mainly in:
+
+- `gmax/Terminal/Panes/TerminalPaneController.swift`
+- `gmax/Terminal/Panes/TerminalPaneHostView.swift`
+- `gmax/Terminal/Panes/TerminalPaneView.swift`
+- `gmax/Terminal/Panes/TerminalPaneView+Coordinator.swift`
+- `gmax/Scenes/WorkspaceWindowGroup/NavigationSplitView/ContentPanel/ContentPaneLeafView.swift`
+
+That wrapper still has three different jobs, and only two of them are durable:
+
+#### Process and session lifecycle
+
+This belongs outside SwiftTerm:
+
+- create or retain a terminal host for a pane session
+- start the local process
+- reconnect to restored session state
+- capture transcript for persistence
+- observe terminal title and current-directory updates
+
+#### Workspace pane focus signaling
+
+This should stay scene-local and SwiftUI-owned:
+
+- `ContentPaneLeafView` derives pane visuals from scene-owned SwiftUI focus
+- `Workspace.focusedPaneID` is no longer runtime or persistence focus metadata
+- pane close command publication follows scene-local focus rather than
+  store-owned focus
+
+This boundary means the pane is the workspace-level command target, while the
+terminal view is the text and responder surface inside that pane.
+
+#### Terminal host boundary
+
+This remains the AppKit-hosting seam:
+
+- `TerminalPaneView` hosts SwiftTerm through `NSViewRepresentable`
+- `TerminalPaneHostView` owns pane-level accessibility metadata and pane
+  actions like restart, split, and close
+- `ContentPaneLeafView` participates in the scene focus graph and pane
+  navigation policy
+
+The explicit responder-forcing path, wrapper-owned activation callback, and
+custom terminal subclass are gone. The remaining question is only how much
+further the host layer can shrink without losing behavior we still need.
+
+### Prompt, Scrollback, and Workspace Focus
+
+Prompt versus scrollback is a terminal interaction distinction, not a
+scene-command distinction.
+
+That matches both product intent and SwiftTerm's surface:
+
+- SwiftTerm presents one terminal control with internal selection, search, and
+  input behavior.
+- the docs and source do not present prompt and scrollback as two independent
+  host views.
+- copy, selection, find, and text input are already handled inside the
+  terminal control.
+
+That means the current `gmax` model should stay:
+
+- the pane is the workspace-level command target
+- the terminal view is the text, input, and responder surface inside that pane
+- prompt versus scrollback remains an internal terminal interaction difference
+  owned by SwiftTerm
+- `gmax` should not add a parallel prompt-versus-scrollback focus or command
+  model unless later product work proves SwiftTerm's existing behavior
+  insufficient
+
+### Current Recommendation
+
+The durable recommendation is:
+
+1. Treat the pane as the workspace-level command target.
+2. Treat the SwiftTerm view as the terminal text and responder surface inside
+   that pane.
+3. Do not use the workspace model as the live source of truth for terminal
+   first responder.
+4. Keep rebuilding pane focus around native SwiftUI focus and scene command
+   context.
+5. If terminal-specific hooks are still needed after that, subclass
+   `LocalProcessTerminalView` rather than bolting more custom click or
+   responder behavior onto it externally.
+
+In practice, that means SwiftUI owns which pane is active, and SwiftTerm owns
+how terminal input, selection, search, and text behavior work once that pane's
+terminal surface is active.
 
 ## Performance Model
 
