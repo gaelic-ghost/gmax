@@ -25,7 +25,7 @@ Use this note for:
 Use it together with:
 
 - [`framework-command-audit.md`](./framework-command-audit.md)
-- [`swiftterm-surface-investigation.md`](./swiftterm-surface-investigation.md)
+- [`swiftui-terminal-shell-architecture.md`](./swiftui-terminal-shell-architecture.md)
 
 ## How To Use This Note
 
@@ -36,8 +36,9 @@ Use the workspace-window notes by role:
     follow-through
 - `framework-command-audit.md`
   - risk, awkward edges, and test-gap audit
-- `swiftterm-surface-investigation.md`
-  - SwiftTerm-side ownership boundary
+- `swiftui-terminal-shell-architecture.md`
+  - historical shell architecture plus the consolidated SwiftTerm-side ownership
+    boundary
 
 Historical shell-shape context still lives in
 [`swiftui-terminal-shell-architecture.md`](./swiftui-terminal-shell-architecture.md),
@@ -133,11 +134,10 @@ These are not open planning questions anymore:
 - if a scene-owned modal surface is frontmost, `Command-W` dismisses that modal
   first
 - if a pane is the active focus target, `Command-W` closes that pane
-- if the selected workspace is empty, `Command-W` closes that workspace
+- if the selected workspace is empty, `Command-W` closes that workspace unless
+  it is the only workspace in the window, in which case it closes the window
 - if focus is in the sidebar on a workspace listing, `Command-W` closes that
-  workspace
-- if that empty workspace is the only workspace in the window, `Command-W`
-  closes the window
+  workspace unless that empty workspace is the only workspace in the window
 - if focus is in the inspector, `Command-W` does nothing
 
 Do not reopen that product decision casually during adjacent cleanup work.
@@ -227,7 +227,6 @@ Good examples in `gmax`:
 
 - split the focused pane
 - close the focused pane
-- relaunch the focused pane
 
 If the pane is not the focused part of the scene, the command should normally
 disable rather than guessing a target through an app-global backchannel.
@@ -331,6 +330,8 @@ Scene-wide publication from `WorkspaceWindowSceneView`:
 - `.focusedSceneObject(workspaceStore)`
 - `.focusedSceneValue(\.activeWorkspaceFocusTarget, focusedTarget)`
 - `.focusedSceneValue(\.selectedWorkspaceSelection, $selectedWorkspaceID)`
+- `.focusedSceneValue(\.dismissPresentedWorkspaceModal,
+  dismissPresentedWorkspaceModal)`
 - `.focusedSceneValue(\.openSavedWorkspaceLibrary, openSavedWorkspaceLibrary)`
 - `.focusedSceneValue(\.presentWorkspaceRename, presentWorkspaceRename)`
 - `.focusedSceneValue(\.presentWorkspaceDeletion, presentWorkspaceDeletion)`
@@ -339,20 +340,25 @@ Those values represent scene-scoped state and scene-scoped actions:
 
 - which logical workspace focus target is active in this window
 - which workspace is selected in this window
+- how to dismiss the frontmost scene-owned modal in this window
 - how to open the saved workspace sheet in this window
 - how to present rename and deletion flows in this window
 - the store that backs this window
 
 Focused-subtree publication from content views:
 
-- `ContentPaneLeafView` publishes `.focusedValue(\.closeFocusedPane, isFocused
-  ? onClose : nil)` only for the focused pane leaf
+- `ContentPaneLeafView` publishes `.focusedValue(\.moveFocusedPaneFocus,
+  onMovePaneFocus)`
+- `ContentPaneLeafView` publishes `.focusedValue(\.splitFocusedPane,
+  splitFocusedPane)`
+- `ContentPaneLeafView` publishes `.focusedValue(\.closeFocusedPane, onClose)`
 
 That creates a layered command context:
 
 - scene-wide workspace selection and presentation actions come from the scene
   root
-- pane-specific close behavior comes from the focused pane
+- pane-specific navigation, split, and close behavior comes from the focused
+  pane
 - scene commands derive empty-workspace close behavior from the active focus
   target plus selected workspace state
 
@@ -447,6 +453,8 @@ Pane close:
 
 Empty workspace close or window close:
 
+- if a scene-owned modal is frontmost, the command layer consults
+  `dismissPresentedWorkspaceModal` first and uses `Close` to dismiss that modal
 - when there is no focused pane close action, the scene command layer resolves
   close behavior from `activeWorkspaceFocusTarget`, the selected workspace,
   whether the selected workspace is empty, and whether the current window
@@ -471,8 +479,8 @@ The only current preference-based upward signal in this surface is pane
 geometry.
 
 `ContentPaneLeafView` publishes pane frame rectangles through
-`ContentPaneFramePreferenceKey`, and `ContentPane` consumes those values to
-feed pane-geometry state upward.
+`ContentPaneFramePreferenceKey`, and `ContentPane` forwards those values upward
+so the scene root can maintain pane-geometry state for directional focus.
 
 That use of `PreferenceKey` is aligned with SwiftUI's intended
 child-to-container signaling model. It is carrying layout metadata upward

@@ -45,7 +45,7 @@ cleanly.
 Use this together with:
 
 - [`workspace-focus-guide.md`](./workspace-focus-guide.md)
-- [`swiftterm-surface-investigation.md`](./swiftterm-surface-investigation.md)
+- [`swiftui-terminal-shell-architecture.md`](./swiftui-terminal-shell-architecture.md)
 
 ## Documented Apple Behavior This Depends On
 

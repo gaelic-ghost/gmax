@@ -15,6 +15,10 @@
 >
 > This note now also carries the consolidated SwiftTerm boundary findings that
 > previously lived in `swiftterm-surface-investigation.md`.
+>
+> Do not use this note as the source of truth for current workspace-window
+> command shortcuts, close semantics, or focus routing details. Those now live
+> in [`workspace-focus-guide.md`](./workspace-focus-guide.md).
 
 ## Purpose
 
@@ -500,28 +504,18 @@ Preferred settings:
 
 ## Current Command Surface Status
 
-The command surface is now intentionally split across three menu homes:
+This section is now high-level rationale only. For the current command map,
+keyboard shortcuts, close behavior, and focus-dependent enablement, use
+[`workspace-focus-guide.md`](./workspace-focus-guide.md) and
+[`framework-command-audit.md`](./framework-command-audit.md).
+
+The current command surface is intentionally split across three menu homes:
 
 - `File` owns file-like workspace actions such as `New Workspace`, `Open Workspace...`, `Save Workspace`, and contextual `Close`
 - `Workspace` owns workspace lifecycle and workspace-to-workspace navigation
 - `Pane` owns pane creation, pane splits, and pane focus movement
 
-This is a durable building-block cleanup, not a stopgap.
-
-The current preferred shortcut model is:
-
-- `cmd-n`: `New Workspace`
-- `cmd-o`: `Open Workspace...`
-- `cmd-s`: `Save Workspace`
-- `cmd-shift-o`: `Undo Close Workspace`
-- `cmd-w`: contextual `Close`
-- `cmd-option-w`: `Close Workspace`
-- `cmd-t`: `New Pane`
-- `cmd-d`: `Split Right`
-- `cmd-shift-d`: `Split Down`
-- `cmd-option-arrow`: directional pane focus
-- `cmd-option-[` / `cmd-option-]`: previous and next pane focus
-- `cmd-shift-[` / `cmd-shift-]`: previous and next workspace
+This remains a durable building-block cleanup, not a stopgap.
 
 The current toolbar and sidebar affordance direction is:
 
@@ -536,12 +530,15 @@ The current built-in-command guidance is:
 
 ## Current Follow-Ups
 
-The command and keyboard pass is in a good place structurally, but two follow-ups remain active:
+The command and keyboard follow-through now lives in the workspace-window notes:
 
-- workspace rename is currently presented from the top-level `Workspace` menu through a notification bridge into the sidebar-owned rename sheet; this works, but it should move to a cleaner scene-level presentation seam
-- inspector visibility still uses custom command wiring even though the current shell now presents inspector content through SwiftUI's `.inspector(...)` API; revisit whether a more native inspector command path is worthwhile before a `0.1.0` release
+- use [`workspace-focus-guide.md`](./workspace-focus-guide.md) for the current
+  implementation map and remaining behavior follow-through
+- use [`framework-command-audit.md`](./framework-command-audit.md) for the
+  current risk and test-gap list
 
-These are polish follow-ups, not blockers for the current command architecture.
+Keep this note focused on shell-shape and SwiftTerm-boundary context rather
+than reopening a second command-planning surface here.
 
 Recommended semantics:
 

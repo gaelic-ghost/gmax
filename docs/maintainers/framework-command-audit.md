@@ -2,14 +2,21 @@
 
 ## Purpose
 
-This document is the current gap audit for the workspace-window scene, command, focus, and dismissal architecture in `gmax`.
+This document is the current gap audit for the workspace-window scene, command,
+focus, and dismissal architecture in `gmax`.
 
 It is intentionally different from the related maintainer guide:
 
 - [`workspace-focus-guide.md`](./workspace-focus-guide.md) records the repo's
   preferred defaults, ownership boundary, and current implementation map.
 
-This file answers the next question: where the current implementation is solid, where it is merely awkward, where it is risky, and what deserves redesign attention first.
+Read
+[`workspace-focus-guide.md`](./workspace-focus-guide.md)
+first for the current defaults, ownership model, and implementation map.
+
+This file answers the next question: where the current implementation is solid,
+where it is merely awkward, where it is risky, and what deserves redesign
+attention first.
 
 ## Audit Basis
 
@@ -101,9 +108,12 @@ This is one of the healthiest parts of the current architecture.
 
 ### 3. Preferences are being used for layout metadata, not command routing
 
-`ContentPaneFramePreferenceKey` is used to push pane frame rectangles upward so the container and store can reason about pane geometry.
+`ContentPaneFramePreferenceKey` is used to push pane frame rectangles upward so
+the content container and scene root can reason about pane geometry.
 
-That is a legitimate use of `PreferenceKey`, and it avoids one of the main mistakes from the earlier architecture work.
+That is a legitimate use of `PreferenceKey`, and it avoids one of the main
+mistakes from the earlier architecture work. Pane geometry is no longer part of
+the store's responsibilities here.
 
 ## Findings
 
@@ -114,7 +124,7 @@ Severity: high
 Evidence:
 
 - [`WorkspaceWindowSceneCommands.swift`](../../gmax/Scenes/WorkspaceWindowGroup/NavigationSplitView/WorkspaceWindowSceneCommands.swift)
-- [`ContentPane.swift`](../../gmax/Scenes/WorkspaceWindowGroup/NavigationSplitView/ContentPanel/ContentPane.swift)
+- [`WorkspaceWindowSceneView.swift`](../../gmax/Scenes/WorkspaceWindowGroup/NavigationSplitView/WorkspaceWindowSceneView.swift)
 - [`ContentPaneLeafView.swift`](../../gmax/Scenes/WorkspaceWindowGroup/NavigationSplitView/ContentPanel/ContentPaneLeafView.swift)
 
 Current behavior:
@@ -241,10 +251,12 @@ Current examples:
 
 Why this is a gap:
 
-- the repo has already renamed the scene and model vocabulary toward `Workspace...`
-- the scene-storage keys and toolbar accessibility identifiers now match that
-  vocabulary instead of carrying the older main-shell naming
-- the remaining naming drift is now much smaller and easier to audit directly
+- the repo has already renamed the product and model vocabulary toward
+  `Workspace...`
+- but the current scene-storage keys, toolbar accessibility identifiers, and
+  some UI-test helper names still use the older `workspaceWindow...` family
+- the drift is now bounded and easy to enumerate, but it has not been cleaned
+  up yet
 
 Recommendation:
 
@@ -255,13 +267,14 @@ Recommendation:
   - UI-test helper names
   - maintainer-doc wording where the old names still survive
 
-## 5. The command audit and implementation map were drifting before this pass
+## 5. The unified guide is stronger, but this audit still matters separately
 
 Severity: medium
 
 Evidence:
 
-- older versions of repo docs were still describing earlier paths and earlier "main shell" vocabulary
+- older versions of the maintainer docs were still describing earlier paths and
+  earlier "main shell" vocabulary
 
 Why this matters:
 
@@ -270,16 +283,18 @@ Why this matters:
 
 Current status:
 
-- the preferred-default note has been softened and corrected
-- the current-state implementation map now exists
-- this gap audit now reflects the live implementation rather than the pre-rename architecture
+- the canonical guide now carries the default model, ownership boundary, and
+  current implementation map in one place
+- this audit now acts as the narrower companion read for risk, awkward edges,
+  and redesign priority
 
 Recommendation:
 
-- keep these three documents distinct:
-  - default model
-  - current implementation map
-  - current gap audit
+- keep the split between:
+  - one canonical guide
+  - one narrower gap audit
+- do not let this audit regrow a second source of truth for settled behavior or
+  implementation detail that now belongs in the guide
 
 ## 6. Command and focus behavior is under-tested relative to its importance
 
@@ -299,7 +314,7 @@ What is covered today:
 - closing a workspace to the library and reopening it
 - deleting a saved snapshot
 - toolbar new-workspace action
-- inspector toggle keyboard path
+- inspector toggle behavior through the menu and toolbar label state
 - pane split actions and one contextual pane-close path
 
 What is not clearly covered:
@@ -404,7 +419,7 @@ Second-order cleanup gaps:
 
 Lower-priority documentation and surface-shape gaps:
 
-7. keeping the three maintainer docs synchronized
+7. keeping the audit and the canonical guide aligned
 8. keeping settings explicitly outside the workspace-window command model
 
 ## Recommended Next Sequence
