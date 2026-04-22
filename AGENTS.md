@@ -2,7 +2,9 @@
 
 ## Apple / Xcode Project Workflow
 
-- Use `xcode-app-project-workflow` for normal work inside this existing Xcode project.
+- Use `xcode-build-run-workflow` for normal Xcode build, run, diagnostics, preview, file-membership, and guarded mutation work inside this existing project.
+- Use `xcode-testing-workflow` when the task is primarily about Swift Testing, XCTest, XCUITest, `.xctestplan`, flaky tests, retries, or test diagnosis.
+- Use `apple-ui-accessibility-workflow` when the task is primarily about SwiftUI accessibility semantics, Apple UI accessibility review, accessibility tree shaping, or UIKit/AppKit accessibility bridge behavior.
 - Use `sync-xcode-project-guidance` when the repo guidance for this project drifts and needs to be refreshed or merged forward.
 - Use `scripts/repo-maintenance/validate-all.sh` for local maintainer validation, `scripts/repo-maintenance/sync-shared.sh` for repo-local sync steps, and `scripts/repo-maintenance/release.sh` for releases.
 - Read relevant Apple documentation before proposing or making Xcode, SwiftUI, lifecycle, architecture, or build-configuration changes.

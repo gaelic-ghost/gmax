@@ -2,8 +2,8 @@
 set -eu
 
 SELF_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-REPO_MAINTENANCE_COMMON_SOURCE="$SELF_DIR/../lib/common.sh"
-. "$REPO_MAINTENANCE_COMMON_SOURCE"
+export REPO_MAINTENANCE_COMMON_DIR="$SELF_DIR/../lib"
+. "$SELF_DIR/../lib/common.sh"
 
 workflow_path="$REPO_ROOT/.github/workflows/validate-repo-maintenance.yml"
 

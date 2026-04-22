@@ -1,132 +1,310 @@
-# ROADMAP
+# gmax Roadmap
 
-## Product Direction
+## Table of Contents
 
-Build `gmax` into a finished macOS terminal workspace app:
+- [Vision](#vision)
+- [Product Principles](#product-principles)
+- [Milestone Progress](#milestone-progress)
+- [Milestone 1: Workspace and Pane Core](#milestone-1-workspace-and-pane-core)
+- [Milestone 2: Terminal Product UX](#milestone-2-terminal-product-ux)
+- [Milestone 3: Accessibility](#milestone-3-accessibility)
+- [Milestone 4: Preferences and Customization](#milestone-4-preferences-and-customization)
+- [Milestone 5: Persistence and Sync Follow-Through](#milestone-5-persistence-and-sync-follow-through)
+- [Milestone 6: Quality and Release Readiness](#milestone-6-quality-and-release-readiness)
+- [Milestone 7: Deeper Terminal Integrations / Remote / SSH / Etc.](#milestone-7-deeper-terminal-integrations--remote--ssh--etc)
+- [Milestone 8: App Sandbox Compatibility](#milestone-8-app-sandbox-compatibility)
+- [Milestone 9: iOS Remote and iPadOS App](#milestone-9-ios-remote-and-ipados-app)
+- [Milestone 10: Chromium Browser Pane](#milestone-10-chromium-browser-pane)
+- [Milestone 11: Custom Codex App-Server Pane](#milestone-11-custom-codex-app-server-pane)
+- [Backlog Candidates](#backlog-candidates)
+- [History](#history)
 
-- native-feeling shell structure
-- strong keyboard workflow
-- reliable workspace and pane persistence
-- thoughtful inspector and workspace tooling
-- real accessibility and product polish
+## Vision
+
+- Build `gmax` into a native-feeling macOS terminal workspace app where multi-window scene behavior, pane composition, persistence, and keyboard-first control all feel coherent enough to ship as a real product instead of a promising shell prototype.
+
+## Product Principles
+
+- Keep scene, focus, menu, and window behavior grounded in documented SwiftUI and AppKit primitives instead of custom routing infrastructure.
+- Treat workspace and pane state as durable product data, not temporary UI convenience state.
+- Prefer keyboard-first and accessibility-aware product decisions over chrome-heavy terminal mimicry.
+- Keep observability, persistence, and future integrations explicit enough that maintainers can debug real user state without turning the app into a server-style telemetry project.
+
+## Milestone Progress
+
+- Milestone 1: Workspace and Pane Core - In Progress
+- Milestone 2: Terminal Product UX - Planned
+- Milestone 3: Accessibility - In Progress
+- Milestone 4: Preferences and Customization - In Progress
+- Milestone 5: Persistence and Sync Follow-Through - In Progress
+- Milestone 6: Quality and Release Readiness - In Progress
+- Milestone 7: Deeper Terminal Integrations / Remote / SSH / Etc. - Planned
+- Milestone 8: App Sandbox Compatibility - Planned
+- Milestone 9: iOS Remote and iPadOS App - Planned
+- Milestone 10: Chromium Browser Pane - Planned
+- Milestone 11: Custom Codex App-Server Pane - Planned
 
 ## Milestone 1: Workspace and Pane Core
 
-- [ ] Tighten remaining command-routing edge cases that only show up in multi-window use
+### Status
+
+In Progress
+
+### Scope
+
+- [ ] Finish the remaining multi-window command and close-behavior edges so the already-shipped workspace shell behaves predictably across multiple scene instances.
+
+### Tickets
+
+- [ ] Tighten remaining command-routing edge cases that only show up in multi-window use.
+
+### Exit Criteria
+
+- [ ] Multi-window workspace, pane, and close commands consistently target the frontmost scene-local context without mutating a background window.
 
 ## Milestone 2: Terminal Product UX
 
-- [ ] Replace scaffold-style pane controls with intentional terminal-native chrome
-- [ ] Improve close, focus, and split animations so the shell feels calmer
-- [ ] Add configurable startup behavior for new panes and new workspaces
-- [ ] Add pane-local tabs and reserve `cmd-t` for `New Tab` once the tab model exists
+### Status
+
+Planned
+
+### Scope
+
+- [ ] Replace the early shell chrome with calmer, more intentional terminal product behavior without undoing the existing split-pane workspace model.
+
+### Tickets
+
+- [ ] Replace scaffold-style pane controls with intentional terminal-native chrome.
+- [ ] Improve close, focus, and split animations so the shell feels calmer.
+- [ ] Add configurable startup behavior for new panes and new workspaces.
+- [ ] Add pane-local tabs and reserve `cmd-t` for `New Tab` once the tab model exists.
+
+### Exit Criteria
+
+- [ ] The pane shell feels intentional enough that the current workspace model reads as product UI rather than scaffolding.
 
 ## Milestone 3: Accessibility
 
-- [ ] Audit the SwiftUI shell for keyboard-only reachability
-- [ ] Improve pane focus visibility and command discoverability
-- [ ] Design a practical Voice Control and Full Keyboard Access story
-- [ ] Integrate SpeakSwiftly for in-process custom TTS and STT
-- [ ] Evaluate small fine-tunes of FunctionGemma and STT for Voice Commands
+### Status
 
-## Milestone 3A: SwiftTerm Accessibility Upstream Work
+In Progress
 
-- [ ] Validate current SwiftTerm accessibility behavior under VoiceOver and Full Keyboard Access outside `gmax`-specific pane chrome
-- [ ] Identify the smallest macOS accessibility gaps in SwiftTerm's `TerminalView` and `LocalProcessTerminalView`
-- [ ] Prototype upstream-safe AppKit accessibility improvements that do not depend on `gmax` pane metadata or app-specific actions
-- [ ] Only deepen the currently limited macOS accessibility-service implementation in SwiftTerm where the gap is real and reproducible
-- [ ] Split app-local accessibility affordances from package-level terminal accessibility fixes so upstream scope stays clean
-- [ ] Prepare an isolated patch series and reproduction notes suitable for a SwiftTerm upstream contribution
+### Scope
+
+- [ ] Make the current shell meaningfully keyboard-reachable and screen-reader-auditable, while keeping `gmax`-specific shell affordances separate from any upstream SwiftTerm accessibility fixes.
+
+### Tickets
+
+- [ ] Audit the SwiftUI shell for keyboard-only reachability.
+- [ ] Improve pane focus visibility and command discoverability.
+- [ ] Design a practical Voice Control and Full Keyboard Access story.
+- [ ] Integrate SpeakSwiftly for in-process custom TTS and STT.
+- [ ] Evaluate small fine-tunes of FunctionGemma and STT for Voice Commands.
+- [ ] Validate current SwiftTerm accessibility behavior under VoiceOver and Full Keyboard Access outside `gmax`-specific pane chrome.
+- [ ] Identify the smallest macOS accessibility gaps in SwiftTerm's `TerminalView` and `LocalProcessTerminalView`.
+- [ ] Prototype upstream-safe AppKit accessibility improvements that do not depend on `gmax` pane metadata or app-specific actions.
+- [ ] Only deepen the currently limited macOS accessibility-service implementation in SwiftTerm where the gap is real and reproducible.
+- [ ] Split app-local accessibility affordances from package-level terminal accessibility fixes so upstream scope stays clean.
+- [ ] Prepare an isolated patch series and reproduction notes suitable for a SwiftTerm upstream contribution.
+
+### Exit Criteria
+
+- [ ] The main shell is usable in a keyboard-only pass, the primary accessibility gaps are documented precisely, and any SwiftTerm upstream work is separated from app-local accessibility follow-through.
 
 ## Milestone 4: Preferences and Customization
 
-- [ ] Add import for theme and appearance settings
-- [ ] Add font, spacing, and terminal presentation settings
-- [ ] Add toolbar "preset" buttons for saving workspace layouts as "favorites"
-- [ ] Add initial set of configurable keyboard shortcuts
-- [ ] Add custom actions or command presets worth persisting
+### Status
+
+In Progress
+
+### Scope
+
+- [ ] Extend the existing settings surface from the current terminal appearance and persistence controls into a broader but still grounded customization model.
+
+### Tickets
+
+- [ ] Add import for theme and appearance settings.
+- [ ] Add font, spacing, and terminal presentation settings.
+- [ ] Add toolbar "preset" buttons for saving workspace layouts as "favorites".
+- [ ] Add initial set of configurable keyboard shortcuts.
+- [ ] Add custom actions or command presets worth persisting.
+
+### Exit Criteria
+
+- [ ] Settings cover the first real set of appearance, workspace-behavior, and shortcut customizations without fragmenting the app's command vocabulary.
 
 ## Milestone 5: Persistence and Sync Follow-Through
 
-- [ ] Add configurable transcript retention limits for saved workspace history
-- [ ] Add crash-safe and operator-friendly persistence diagnostics
-- [ ] Add explicit saved-workspace revision history retention instead of replacing the current saved payload in place
-- [ ] Decide which settings and metadata are sync-worthy
-- [ ] Evaluate `NSPersistentCloudKitContainer` for future sync support
-- [ ] Keep sync design scoped to durable product value, not novelty
-- [ ] Refine reopened-workspace naming so duplicate live opens communicate provenance more gracefully
-- [ ] Decide whether reopened-workspace provenance belongs in the title, sidebar metadata, or a transient badge
+### Status
+
+In Progress
+
+### Scope
+
+- [ ] Build on the shipped Core Data-backed workspace and library model with better diagnostics, clearer reopen provenance, and a deliberate decision about what future sync is actually worth carrying.
+
+### Tickets
+
+- [ ] Add configurable transcript retention limits for saved workspace history.
+- [ ] Add crash-safe and operator-friendly persistence diagnostics.
+- [ ] Add explicit saved-workspace revision history retention instead of replacing the current saved payload in place.
+- [ ] Decide which settings and metadata are sync-worthy.
+- [ ] Evaluate `NSPersistentCloudKitContainer` for future sync support.
+- [ ] Keep sync design scoped to durable product value, not novelty.
+- [ ] Refine reopened-workspace naming so duplicate live opens communicate provenance more gracefully.
+- [ ] Decide whether reopened-workspace provenance belongs in the title, sidebar metadata, or a transient badge.
+
+### Exit Criteria
+
+- [ ] Persistence failures are diagnosable, reopened workspaces communicate provenance clearly, and the roadmap has an explicit answer about whether sync belongs in the product.
 
 ## Milestone 6: Quality and Release Readiness
 
-- [ ] Add broader UI coverage for pane lifecycle flows and multi-window command interactions
-- [ ] Tighten operator-facing logs and error messages throughout the app
-- [ ] Choose a lightweight logging and diagnostics baseline that supports support-bundle export and future crash or hang reporting
-- [ ] Write onboarding and maintainer docs for release-oriented development
+### Status
 
-## Milestone 6A: Observability And Diagnostics Follow-Through
+In Progress
 
-- [ ] Add an `OSLogStore`-based recent-diagnostics export path suitable for future user-facing feedback bundles
-- [ ] Decide what support-bundle metadata should accompany exported logs, such as workspace summaries, pane state, persistence outcomes, or recent alerts
-- [ ] Evaluate `MetricKit` intake for crash and hang diagnostics once the ordinary logging baseline is stable
-- [ ] Revisit distributed tracing and `swift-otel` only when `gmax` has a concrete telemetry destination or cross-process workflow that needs correlation
-- [ ] Keep observability scope lightweight and product-driven instead of introducing server-style telemetry by default
+### Scope
+
+- [ ] Turn the current shell into a release-ready internal build with broader coverage, stronger operator-facing diagnostics, and one lightweight observability baseline.
+
+### Tickets
+
+- [ ] Add broader UI coverage for pane lifecycle flows and multi-window command interactions.
+- [ ] Tighten operator-facing logs and error messages throughout the app.
+- [ ] Choose a lightweight logging and diagnostics baseline that supports support-bundle export and future crash or hang reporting.
+- [ ] Write onboarding and maintainer docs for release-oriented development.
+- [ ] Add an `OSLogStore`-based recent-diagnostics export path suitable for future user-facing feedback bundles.
+- [ ] Decide what support-bundle metadata should accompany exported logs, such as workspace summaries, pane state, persistence outcomes, or recent alerts.
+- [ ] Evaluate `MetricKit` intake for crash and hang diagnostics once the ordinary logging baseline is stable.
+- [ ] Revisit distributed tracing and `swift-otel` only when `gmax` has a concrete telemetry destination or cross-process workflow that needs correlation.
+- [ ] Keep observability scope lightweight and product-driven instead of introducing server-style telemetry by default.
+
+### Exit Criteria
+
+- [ ] The repo has a clear release-oriented validation path, the shell has stronger command and pane coverage, and the diagnostics baseline is good enough for an internal `v0.1.0` release.
 
 ## Milestone 7: Deeper Terminal Integrations / Remote / SSH / Etc.
 
-- [ ] Explore other SwiftTerm types, particularly `TerminalView`
-- [ ] Decide how local-shell, headless, and remote-session backends should share one durable session model
-- [ ] Add a headless terminal path for workflow command execution
-- [ ] Add a remote SSH session path with clear connection lifecycle and operator-facing state
-- [ ] Surface remote host, command, and connection metadata in the inspector
-- [ ] Evaluate transport and protocol primitives worth using for remote sessions
-- [ ] Add Ghostty.app pane option if and when Ghostty exposes a stable integration surface
+### Status
+
+Planned
+
+### Scope
+
+- [ ] Define how local shell, headless execution, and remote sessions could share one durable session model without bloating the current local-shell app.
+
+### Tickets
+
+- [ ] Explore other SwiftTerm types, particularly `TerminalView`.
+- [ ] Decide how local-shell, headless, and remote-session backends should share one durable session model.
+- [ ] Add a headless terminal path for workflow command execution.
+- [ ] Add a remote SSH session path with clear connection lifecycle and operator-facing state.
+- [ ] Surface remote host, command, and connection metadata in the inspector.
+- [ ] Evaluate transport and protocol primitives worth using for remote sessions.
+- [ ] Add Ghostty.app pane option if and when Ghostty exposes a stable integration surface.
+
+### Exit Criteria
+
+- [ ] There is one explicit session model for local, headless, and remote work, and any remote path has a clear lifecycle and operator-facing state model.
 
 ## Milestone 8: App Sandbox Compatibility
 
-- [ ] Move environment capture to a bundled XPC service or SMAppService helper
-- [ ] Audit local-shell launch assumptions against macOS App Sandbox constraints
-- [ ] Decide how shell launching, environment inheritance, and path resolution should behave in sandboxed builds
-- [ ] Add security-scoped or bookmark-backed file access where the product needs durable user-selected locations
-- [ ] Keep helper and IPC design explicit, minimal, and operator-friendly to debug
+### Status
+
+Planned
+
+### Scope
+
+- [ ] Make the local-shell product story compatible with sandboxed distribution constraints without hiding the helper and IPC behavior behind vague abstractions.
+
+### Tickets
+
+- [ ] Move environment capture to a bundled XPC service or SMAppService helper.
+- [ ] Audit local-shell launch assumptions against macOS App Sandbox constraints.
+- [ ] Decide how shell launching, environment inheritance, and path resolution should behave in sandboxed builds.
+- [ ] Add security-scoped or bookmark-backed file access where the product needs durable user-selected locations.
+- [ ] Keep helper and IPC design explicit, minimal, and operator-friendly to debug.
+
+### Exit Criteria
+
+- [ ] Sandboxed builds have an explicit and documented answer for shell launch, environment capture, helper ownership, and any durable file-access needs.
 
 ## Milestone 9: iOS Remote and iPadOS App
 
-- [ ] Define the first remote-companion scope instead of assuming full desktop feature parity
-- [ ] Reuse the workspace and pane model where it composes cleanly across macOS and iPadOS
-- [ ] Design an iPad external-keyboard-first interaction model
-- [ ] Add a remote session browser with clear workspace and pane selection
-- [ ] Decide which inspector affordances belong on touch-first platforms
-- [ ] Evaluate whether iPhone should stay companion-only while iPad carries the fuller remote shell story
+### Status
+
+Planned
+
+### Scope
+
+- [ ] Define a remote-companion product that reuses the workspace model where it composes cleanly, instead of assuming full desktop parity on touch-first platforms.
+
+### Tickets
+
+- [ ] Define the first remote-companion scope instead of assuming full desktop feature parity.
+- [ ] Reuse the workspace and pane model where it composes cleanly across macOS and iPadOS.
+- [ ] Design an iPad external-keyboard-first interaction model.
+- [ ] Add a remote session browser with clear workspace and pane selection.
+- [ ] Decide which inspector affordances belong on touch-first platforms.
+- [ ] Evaluate whether iPhone should stay companion-only while iPad carries the fuller remote shell story.
+
+### Exit Criteria
+
+- [ ] The remote companion has a clearly bounded first product scope and an interaction model that fits keyboard-first iPad use without pretending it is the desktop app.
 
 ## Milestone 10: Chromium Browser Pane
 
-- [ ] Define the browser-pane use cases that justify embedding Chromium instead of bouncing out to the default browser
-- [ ] Add a browser pane model that can coexist with terminal panes in the same workspace tree
-- [ ] Decide how navigation state, history, and session isolation should persist
-- [ ] Add intentional controls and inspector metadata for browser panes
-- [ ] Define security boundaries for web content inside mixed terminal workspaces
+### Status
+
+Planned
+
+### Scope
+
+- [ ] Decide whether a browser pane has durable product value inside mixed terminal workspaces, then define the minimum pane model, persistence, and security boundaries needed to support it.
+
+### Tickets
+
+- [ ] Define the browser-pane use cases that justify embedding Chromium instead of bouncing out to the default browser.
+- [ ] Add a browser pane model that can coexist with terminal panes in the same workspace tree.
+- [ ] Decide how navigation state, history, and session isolation should persist.
+- [ ] Add intentional controls and inspector metadata for browser panes.
+- [ ] Define security boundaries for web content inside mixed terminal workspaces.
+
+### Exit Criteria
+
+- [ ] The project either has a justified browser-pane feature with explicit persistence and security boundaries or an explicit decision not to carry it forward.
 
 ## Milestone 11: Custom Codex App-Server Pane
 
-- [ ] Define the first Codex-specific pane workflows worth building into `gmax`
-- [ ] Decide whether the pane is chat-first, tool-first, or workflow-first
-- [ ] Add a durable model for pane-scoped prompts, responses, and task context
-- [ ] Define how terminal panes and Codex panes should share or hand off context
-- [ ] Add operator-friendly visibility into tool execution, progress, and failure states
-- [ ] Keep the app-server integration explicit enough that local and remote Codex backends can evolve without rewriting the pane model
+### Status
 
-## Near-Term Recommended Order
+Planned
 
-- [ ] Accessibility pass on the current shell
-- [ ] Saved-workspace library polish and reopen semantics
-- [ ] Keyboard-shortcut and command discoverability pass
-- [ ] Release-readiness pass on logs, errors, and first-run workflow
+### Scope
 
-## Reference Docs
+- [ ] Define whether a Codex pane belongs in `gmax`, and if so, keep its prompt, tool, and context model explicit enough that local and remote backends can evolve without rewriting the pane model.
 
-- [docs/maintainers/accessibility-and-keyboard-plan.md](docs/maintainers/accessibility-and-keyboard-plan.md)
-- [docs/maintainers/logging-and-telemetry-options.md](docs/maintainers/logging-and-telemetry-options.md)
-- [docs/maintainers/workspace-focus-guide.md](docs/maintainers/workspace-focus-guide.md)
-- [docs/maintainers/workspace-window-state-and-persistence-model.md](docs/maintainers/workspace-window-state-and-persistence-model.md)
-- [docs/maintainers/v0.1.0-release-checklist.md](docs/maintainers/v0.1.0-release-checklist.md)
+### Tickets
+
+- [ ] Define the first Codex-specific pane workflows worth building into `gmax`.
+- [ ] Decide whether the pane is chat-first, tool-first, or workflow-first.
+- [ ] Add a durable model for pane-scoped prompts, responses, and task context.
+- [ ] Define how terminal panes and Codex panes should share or hand off context.
+- [ ] Add operator-friendly visibility into tool execution, progress, and failure states.
+- [ ] Keep the app-server integration explicit enough that local and remote Codex backends can evolve without rewriting the pane model.
+
+### Exit Criteria
+
+- [ ] The project has a clear answer about whether a Codex pane is real product direction, and any adopted pane model preserves explicit prompt, tool, and context ownership.
+
+## Backlog Candidates
+
+- [ ] Revisit a user-facing support-bundle export UI once Milestone 6 settles the diagnostics payload and operator workflow.
+- [ ] Revisit Ghostty integration only if a stable pane-hosting surface actually exists.
+- [ ] Revisit pane-local tabs only after the current workspace, split, and close model feels settled enough to support another navigation layer cleanly.
+
+## History
+
+- 2026-04-22: Migrated `ROADMAP.md` to the canonical checklist structure used by the roadmap-maintenance workflow.
+- 2026-04-22: Folded the former standalone accessibility-upstream and observability follow-through sections into Milestone 3 and Milestone 6 so the roadmap tracks one milestone status per product area.
