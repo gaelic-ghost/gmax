@@ -10,133 +10,133 @@ import Foundation
 import SwiftTerm
 
 enum TerminalAppearanceDefaults {
-	static let systemMonospacedFontName = "__SYSTEM_MONOSPACED__"
-	static let fontNameKey = "terminalAppearance.fontName"
-	static let fontSizeKey = "terminalAppearance.fontSize"
-	static let themeKey = "terminalAppearance.theme"
-	static let defaultFontSize = 13.0
+    static let systemMonospacedFontName = "__SYSTEM_MONOSPACED__"
+    static let fontNameKey = "terminalAppearance.fontName"
+    static let fontSizeKey = "terminalAppearance.fontSize"
+    static let themeKey = "terminalAppearance.theme"
+    static let defaultFontSize = 13.0
 }
 
 struct TerminalFontOption: Identifiable, Hashable {
-	let id: String
-	let displayName: String
+    let id: String
+    let displayName: String
 }
 
 enum TerminalTheme: String, CaseIterable {
-	case defaultTerminal
-	case midnight
-	case paper
-	case phosphor
+    case defaultTerminal
+    case midnight
+    case paper
+    case phosphor
 
-	var backgroundColor: NSColor {
-		switch self {
-			case .defaultTerminal:
-				return NSColor.textBackgroundColor
-			case .midnight:
-				return NSColor(calibratedRed: 0.04, green: 0.05, blue: 0.08, alpha: 1)
-			case .paper:
-				return NSColor(calibratedRed: 0.97, green: 0.96, blue: 0.92, alpha: 1)
-			case .phosphor:
-				return NSColor(calibratedRed: 0.02, green: 0.06, blue: 0.03, alpha: 1)
-		}
-	}
+    var backgroundColor: NSColor {
+        switch self {
+            case .defaultTerminal:
+                NSColor.textBackgroundColor
+            case .midnight:
+                NSColor(calibratedRed: 0.04, green: 0.05, blue: 0.08, alpha: 1)
+            case .paper:
+                NSColor(calibratedRed: 0.97, green: 0.96, blue: 0.92, alpha: 1)
+            case .phosphor:
+                NSColor(calibratedRed: 0.02, green: 0.06, blue: 0.03, alpha: 1)
+        }
+    }
 
-	var foregroundColor: NSColor {
-		switch self {
-			case .defaultTerminal:
-				return NSColor.textColor
-			case .midnight:
-				return NSColor(calibratedRed: 0.70, green: 0.84, blue: 1.00, alpha: 1)
-			case .paper:
-				return NSColor(calibratedRed: 0.14, green: 0.16, blue: 0.20, alpha: 1)
-			case .phosphor:
-				return NSColor(calibratedRed: 0.54, green: 0.96, blue: 0.62, alpha: 1)
-		}
-	}
+    var foregroundColor: NSColor {
+        switch self {
+            case .defaultTerminal:
+                NSColor.textColor
+            case .midnight:
+                NSColor(calibratedRed: 0.70, green: 0.84, blue: 1.00, alpha: 1)
+            case .paper:
+                NSColor(calibratedRed: 0.14, green: 0.16, blue: 0.20, alpha: 1)
+            case .phosphor:
+                NSColor(calibratedRed: 0.54, green: 0.96, blue: 0.62, alpha: 1)
+        }
+    }
 
-	var cursorColor: NSColor {
-		switch self {
-			case .defaultTerminal:
-				return NSColor.selectedTextBackgroundColor
-			case .midnight:
-				return NSColor(calibratedRed: 1.00, green: 0.78, blue: 0.95, alpha: 1)
-			case .paper:
-				return NSColor(calibratedRed: 0.20, green: 0.24, blue: 0.31, alpha: 1)
-			case .phosphor:
-				return NSColor(calibratedRed: 0.82, green: 1.00, blue: 0.72, alpha: 1)
-		}
-	}
+    var cursorColor: NSColor {
+        switch self {
+            case .defaultTerminal:
+                NSColor.selectedTextBackgroundColor
+            case .midnight:
+                NSColor(calibratedRed: 1.00, green: 0.78, blue: 0.95, alpha: 1)
+            case .paper:
+                NSColor(calibratedRed: 0.20, green: 0.24, blue: 0.31, alpha: 1)
+            case .phosphor:
+                NSColor(calibratedRed: 0.82, green: 1.00, blue: 0.72, alpha: 1)
+        }
+    }
 
-	var cursorTextColor: NSColor {
-		switch self {
-			case .defaultTerminal:
-				return NSColor.selectedTextColor
-			case .paper:
-				return backgroundColor
-			case .midnight, .phosphor:
-				return NSColor.black
-		}
-	}
+    var cursorTextColor: NSColor {
+        switch self {
+            case .defaultTerminal:
+                NSColor.selectedTextColor
+            case .paper:
+                backgroundColor
+            case .midnight, .phosphor:
+                NSColor.black
+        }
+    }
 }
 
 struct TerminalAppearance: Hashable {
-	var fontName: String
-	var fontSize: Double
-	var theme: TerminalTheme
+    static let fallback = TerminalAppearance(
+        fontName: TerminalAppearanceDefaults.systemMonospacedFontName,
+        fontSize: TerminalAppearanceDefaults.defaultFontSize,
+        theme: .defaultTerminal,
+    )
 
-	static let fallback = TerminalAppearance(
-		fontName: TerminalAppearanceDefaults.systemMonospacedFontName,
-		fontSize: TerminalAppearanceDefaults.defaultFontSize,
-		theme: .defaultTerminal
-	)
+    var fontName: String
+    var fontSize: Double
+    var theme: TerminalTheme
 
-	static func availableFontOptions(fontManager: NSFontManager = .shared) -> [TerminalFontOption] {
-		let fixedPitchFonts = Set(fontManager.availableFontNames(with: .fixedPitchFontMask) ?? [])
-		return [
-			TerminalFontOption(
-				id: TerminalAppearanceDefaults.systemMonospacedFontName,
-				displayName: "System Monospaced"
-			)
-		] + fontManager.availableFonts
-			.filter { fixedPitchFonts.contains($0) }
-			.compactMap { fontName -> TerminalFontOption? in
-				guard let font = NSFont(name: fontName, size: 13) else {
-					return nil
-				}
+    var resolvedFont: NSFont {
+        let resolvedSize = CGFloat(max(10, min(fontSize, 28)))
+        if fontName == TerminalAppearanceDefaults.systemMonospacedFontName {
+            return NSFont.monospacedSystemFont(ofSize: resolvedSize, weight: .regular)
+        }
 
-				return TerminalFontOption(
-					id: fontName,
-					displayName: font.displayName ?? fontName
-				)
-			}
-			.sorted { lhs, rhs in
-				lhs.displayName.localizedCaseInsensitiveCompare(rhs.displayName) == .orderedAscending
-			}
-	}
+        return NSFont(name: fontName, size: resolvedSize)
+            ?? NSFont.monospacedSystemFont(ofSize: resolvedSize, weight: .regular)
+    }
 
-	var resolvedFont: NSFont {
-		let resolvedSize = CGFloat(max(10, min(fontSize, 28)))
-		if fontName == TerminalAppearanceDefaults.systemMonospacedFontName {
-			return NSFont.monospacedSystemFont(ofSize: resolvedSize, weight: .regular)
-		}
+    static func availableFontOptions(fontManager: NSFontManager = .shared) -> [TerminalFontOption] {
+        let fixedPitchFonts = Set(fontManager.availableFontNames(with: .fixedPitchFontMask) ?? [])
+        return [
+            TerminalFontOption(
+                id: TerminalAppearanceDefaults.systemMonospacedFontName,
+                displayName: "System Monospaced",
+            ),
+        ] + fontManager.availableFonts
+            .filter { fixedPitchFonts.contains($0) }
+            .compactMap { fontName -> TerminalFontOption? in
+                guard let font = NSFont(name: fontName, size: 13) else {
+                    return nil
+                }
 
-		return NSFont(name: fontName, size: resolvedSize)
-			?? NSFont.monospacedSystemFont(ofSize: resolvedSize, weight: .regular)
-	}
+                return TerminalFontOption(
+                    id: fontName,
+                    displayName: font.displayName ?? fontName,
+                )
+            }
+            .sorted { lhs, rhs in
+                lhs.displayName.localizedCaseInsensitiveCompare(rhs.displayName) == .orderedAscending
+            }
+    }
 
-	func apply(to terminalView: TerminalView) {
-		terminalView.font = resolvedFont
+    func apply(to terminalView: TerminalView) {
+        terminalView.font = resolvedFont
 
-		if theme == .defaultTerminal {
-			terminalView.configureNativeColors()
-		} else {
-			terminalView.nativeForegroundColor = theme.foregroundColor
-			terminalView.nativeBackgroundColor = theme.backgroundColor
-		}
+        if theme == .defaultTerminal {
+            terminalView.configureNativeColors()
+        } else {
+            terminalView.nativeForegroundColor = theme.foregroundColor
+            terminalView.nativeBackgroundColor = theme.backgroundColor
+        }
 
-		terminalView.caretColor = theme.cursorColor
-		terminalView.caretTextColor = theme.cursorTextColor
-		terminalView.layer?.backgroundColor = terminalView.nativeBackgroundColor.cgColor
-		terminalView.needsDisplay = true
-	}
+        terminalView.caretColor = theme.cursorColor
+        terminalView.caretTextColor = theme.cursorTextColor
+        terminalView.layer?.backgroundColor = terminalView.nativeBackgroundColor.cgColor
+        terminalView.needsDisplay = true
+    }
 }

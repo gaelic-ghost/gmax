@@ -8,102 +8,103 @@
 import SwiftUI
 
 struct SidebarPane: View {
-	@ObservedObject var model: WorkspaceStore
-	@Binding var selection: WorkspaceID?
-	let focusedTarget: FocusState<WorkspaceFocusTarget?>.Binding
-	let requestRenameWorkspace: (WorkspaceID) -> Void
-	let requestDeleteWorkspace: (WorkspaceID) -> Void
+    @ObservedObject var model: WorkspaceStore
+    @Binding var selection: WorkspaceID?
 
-	var body: some View {
-		let selectedWorkspace = selection.flatMap { workspaceID in model.workspaces.first { $0.id == workspaceID } }
+    let focusedTarget: FocusState<WorkspaceFocusTarget?>.Binding
+    let requestRenameWorkspace: (WorkspaceID) -> Void
+    let requestDeleteWorkspace: (WorkspaceID) -> Void
 
-		List(selection: $selection) {
-			ForEach(model.workspaces) { workspace in
-				let paneCount = workspace.root?.leaves().count ?? 0
-				let paneCountDescription = paneCount == 1 ? "1 pane" : "\(paneCount) panes"
-				NavigationLink(value: workspace.id) {
-					VStack(alignment: .leading, spacing: 4) {
-						Text(workspace.title)
-							.accessibilityIdentifier("sidebar.workspaceTitle.\(workspace.title)")
-						Text(paneCountDescription)
-							.font(.caption)
-							.foregroundStyle(.secondary)
-							.accessibilityIdentifier("sidebar.workspacePaneCount.\(workspace.title)")
-					}
-				}
-					.accessibilityElement(children: .combine)
-					.accessibilityLabel("\(workspace.title), \(paneCountDescription)")
-					.accessibilityIdentifier("sidebar.workspaceRow.\(workspace.title)")
-					.contextMenu {
-						workspaceActions(for: workspace)
-					}
-			}
-		}
-		.accessibilityIdentifier("sidebar.workspaceList")
-		.focused(focusedTarget, equals: .sidebar)
-		.navigationTitle("Workspaces")
-		.toolbar {
-			ToolbarItem(placement: .automatic) {
-				if let workspace = selectedWorkspace {
-					Menu {
-						workspaceActions(for: workspace)
-					} label: {
-						Label("Workspace Actions", systemImage: "ellipsis.circle")
-					}
-					.help("Show contextual workspace actions")
-					.accessibilityIdentifier("sidebar.workspaceActionsButton")
-				}
-			}
-		}
-	}
+    var body: some View {
+        let selectedWorkspace = selection.flatMap { workspaceID in model.workspaces.first { $0.id == workspaceID } }
 
-	@ViewBuilder
-	private func workspaceActions(for workspace: Workspace) -> some View {
-		Button("Rename Workspace") {
-			requestRenameWorkspace(workspace.id)
-		}
+        List(selection: $selection) {
+            ForEach(model.workspaces) { workspace in
+                let paneCount = workspace.root?.leaves().count ?? 0
+                let paneCountDescription = paneCount == 1 ? "1 pane" : "\(paneCount) panes"
+                NavigationLink(value: workspace.id) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(workspace.title)
+                            .accessibilityIdentifier("sidebar.workspaceTitle.\(workspace.title)")
+                        Text(paneCountDescription)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .accessibilityIdentifier("sidebar.workspacePaneCount.\(workspace.title)")
+                    }
+                }
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("\(workspace.title), \(paneCountDescription)")
+                .accessibilityIdentifier("sidebar.workspaceRow.\(workspace.title)")
+                .contextMenu {
+                    workspaceActions(for: workspace)
+                }
+            }
+        }
+        .accessibilityIdentifier("sidebar.workspaceList")
+        .focused(focusedTarget, equals: .sidebar)
+        .navigationTitle("Workspaces")
+        .toolbar {
+            ToolbarItem(placement: .automatic) {
+                if let workspace = selectedWorkspace {
+                    Menu {
+                        workspaceActions(for: workspace)
+                    } label: {
+                        Label("Workspace Actions", systemImage: "ellipsis.circle")
+                    }
+                    .help("Show contextual workspace actions")
+                    .accessibilityIdentifier("sidebar.workspaceActionsButton")
+                }
+            }
+        }
+    }
 
-		Button("Duplicate Workspace Layout") {
-			selection = model.duplicateWorkspace(workspace.id)
-		}
+    @ViewBuilder
+    private func workspaceActions(for workspace: Workspace) -> some View {
+        Button("Rename Workspace") {
+            requestRenameWorkspace(workspace.id)
+        }
 
-		Divider()
+        Button("Duplicate Workspace Layout") {
+            selection = model.duplicateWorkspace(workspace.id)
+        }
 
-		Button("Save Workspace") {
-			_ = model.saveWorkspaceToLibrary(workspace.id)
-		}
+        Divider()
 
-		Button("Close Workspace to Library") {
-			selection = model.closeWorkspaceToLibrary(workspace.id)
-		}
+        Button("Save Workspace") {
+            _ = model.saveWorkspaceToLibrary(workspace.id)
+        }
 
-		Divider()
+        Button("Close Workspace to Library") {
+            selection = model.closeWorkspaceToLibrary(workspace.id)
+        }
 
-		Button("Close Workspace") {
-			selection = model.closeWorkspace(workspace.id)
-		}
+        Divider()
 
-		Button("Delete Workspace", role: .destructive) {
-			requestDeleteWorkspace(workspace.id)
-		}
-		.disabled(model.workspaces.count <= 1)
-	}
+        Button("Close Workspace") {
+            selection = model.closeWorkspace(workspace.id)
+        }
+
+        Button("Delete Workspace", role: .destructive) {
+            requestDeleteWorkspace(workspace.id)
+        }
+        .disabled(model.workspaces.count <= 1)
+    }
 }
 
 #Preview {
-	SidebarPanePreview()
+    SidebarPanePreview()
 }
 
 private struct SidebarPanePreview: View {
-	@FocusState private var focusedTarget: WorkspaceFocusTarget?
+    @FocusState private var focusedTarget: WorkspaceFocusTarget?
 
-	var body: some View {
-		SidebarPane(
-			model: WorkspaceStore(),
-			selection: .constant(nil),
-			focusedTarget: $focusedTarget,
-			requestRenameWorkspace: { _ in },
-			requestDeleteWorkspace: { _ in }
-		)
-	}
+    var body: some View {
+        SidebarPane(
+            model: WorkspaceStore(),
+            selection: .constant(nil),
+            focusedTarget: $focusedTarget,
+            requestRenameWorkspace: { _ in },
+            requestDeleteWorkspace: { _ in },
+        )
+    }
 }

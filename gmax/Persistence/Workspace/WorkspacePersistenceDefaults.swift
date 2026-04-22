@@ -8,19 +8,19 @@
 import Foundation
 
 enum WorkspacePersistenceDefaults {
-	static let restoreWorkspacesOnLaunchKey = "workspacePersistence.restoreOnLaunch"
-	static let keepRecentlyClosedWorkspacesKey = "workspacePersistence.keepRecentlyClosed"
-	static let autoSaveClosedWorkspacesKey = "workspacePersistence.autoSaveClosedWorkspaces"
-	static let maxRecentlyClosedWorkspaceCount = 20
+    static let restoreWorkspacesOnLaunchKey = "workspacePersistence.restoreOnLaunch"
+    static let keepRecentlyClosedWorkspacesKey = "workspacePersistence.keepRecentlyClosed"
+    static let autoSaveClosedWorkspacesKey = "workspacePersistence.autoSaveClosedWorkspaces"
+    static let maxRecentlyClosedWorkspaceCount = 20
 
-	static func systemRestoresWindowsByDefault(globalDefaults: UserDefaults = .standard) -> Bool {
-		guard
-			let globalDomain = globalDefaults.persistentDomain(forName: UserDefaults.globalDomain),
-			let keepsWindows = globalDomain["NSQuitAlwaysKeepsWindows"] as? Bool
-		else {
-			return true
-		}
+    static func systemRestoresWindowsByDefault(globalDefaults: UserDefaults = .standard) -> Bool {
+        guard
+            let globalDomain = globalDefaults.persistentDomain(forName: UserDefaults.globalDomain),
+            let keepsWindows = globalDomain["NSQuitAlwaysKeepsWindows"] as? Bool
+        else {
+            return true
+        }
 
-		return keepsWindows
-	}
+        return keepsWindows
+    }
 }

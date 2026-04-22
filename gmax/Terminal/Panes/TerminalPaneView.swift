@@ -9,94 +9,93 @@ import AppKit
 import SwiftUI
 
 struct TerminalPaneView: NSViewRepresentable {
-	@AppStorage(TerminalAppearanceDefaults.fontNameKey)
-	private var terminalFontName = TerminalAppearance.fallback.fontName
+    @AppStorage(TerminalAppearanceDefaults.fontNameKey)
+    private var terminalFontName = TerminalAppearance.fallback.fontName
 
-	@AppStorage(TerminalAppearanceDefaults.fontSizeKey)
-	private var terminalFontSize = TerminalAppearance.fallback.fontSize
+    @AppStorage(TerminalAppearanceDefaults.fontSizeKey)
+    private var terminalFontSize = TerminalAppearance.fallback.fontSize
 
-	@AppStorage(TerminalAppearanceDefaults.themeKey)
-	private var terminalThemeName = TerminalAppearance.fallback.theme.rawValue
+    @AppStorage(TerminalAppearanceDefaults.themeKey)
+    private var terminalThemeName = TerminalAppearance.fallback.theme.rawValue
 
-	let controller: TerminalPaneController
-	let session: TerminalSession
-	let onRestart: () -> Void
-	let onSplitRight: () -> Void
-	let onSplitDown: () -> Void
-	let onClose: () -> Void
+    let controller: TerminalPaneController
+    let session: TerminalSession
+    let onRestart: () -> Void
+    let onSplitRight: () -> Void
+    let onSplitDown: () -> Void
+    let onClose: () -> Void
 
-	func makeCoordinator() -> Coordinator {
-		Coordinator(controller: controller)
-	}
+    private var accessibilitySnapshot: TerminalAccessibilitySnapshot {
+        let trimmedTitle = session.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let label = if trimmedTitle.isEmpty || trimmedTitle == "Shell" {
+            "Shell terminal"
+        } else {
+            "\(trimmedTitle) terminal"
+        }
+        let state = switch session.state {
+            case .idle: "Shell ready to launch"
+            case .running: "Shell running"
+            case let .exited(exitCode): exitCode.map { "Shell exited with status \($0)" } ?? "Shell exited"
+        }
 
-	func makeNSView(context: Context) -> TerminalPaneHostView {
-		let hostingView = context.coordinator.makeHostingView()
-		applyCurrentAppearance(to: hostingView)
-		hostingView.updateAccessibility(
-			snapshot: accessibilitySnapshot,
-			onRestart: onRestart,
-			onSplitRight: onSplitRight,
-			onSplitDown: onSplitDown,
-			onClose: onClose
-		)
-		return hostingView
-	}
+        var valueParts: [String] = [state]
+        if let currentDirectory = session.currentDirectory, !currentDirectory.isEmpty {
+            valueParts.append("Directory \(currentDirectory)")
+        }
 
-	func updateNSView(_ nsView: TerminalPaneHostView, context: Context) {
-		applyCurrentAppearance(to: nsView)
-		context.coordinator.update(hostingView: nsView)
-		nsView.updateAccessibility(
-			snapshot: accessibilitySnapshot,
-			onRestart: onRestart,
-			onSplitRight: onSplitRight,
-			onSplitDown: onSplitDown,
-			onClose: onClose
-		)
-	}
+        return TerminalAccessibilitySnapshot(
+            label: label,
+            value: valueParts.joined(separator: ". "),
+            help: "This terminal lives inside a workspace pane. Use the available accessibility actions to restart the shell, split the pane, or close the pane.",
+        )
+    }
 
-	static func dismantleNSView(_ nsView: TerminalPaneHostView, coordinator: Coordinator) {
-		coordinator.dismantle(hostingView: nsView)
-	}
+    static func dismantleNSView(_ nsView: TerminalPaneHostView, coordinator: Coordinator) {
+        coordinator.dismantle(hostingView: nsView)
+    }
 
-	private func applyCurrentAppearance(to hostingView: TerminalPaneHostView) {
-		let appearance = TerminalAppearance(
-			fontName: terminalFontName,
-			fontSize: max(10, min(terminalFontSize, 28)),
-			theme: TerminalTheme(rawValue: terminalThemeName) ?? .defaultTerminal
-		)
-		appearance.apply(to: hostingView.terminalView)
-		hostingView.onEffectiveAppearanceChange = { [weak terminalView = hostingView.terminalView] _ in
-			guard let terminalView else {
-				return
-			}
+    func makeCoordinator() -> Coordinator {
+        Coordinator(controller: controller)
+    }
 
-			appearance.apply(to: terminalView)
-		}
-	}
+    func makeNSView(context: Context) -> TerminalPaneHostView {
+        let hostingView = context.coordinator.makeHostingView()
+        applyCurrentAppearance(to: hostingView)
+        hostingView.updateAccessibility(
+            snapshot: accessibilitySnapshot,
+            onRestart: onRestart,
+            onSplitRight: onSplitRight,
+            onSplitDown: onSplitDown,
+            onClose: onClose,
+        )
+        return hostingView
+    }
 
-	private var accessibilitySnapshot: TerminalAccessibilitySnapshot {
-		let trimmedTitle = session.title.trimmingCharacters(in: .whitespacesAndNewlines)
-		let label: String
-		if trimmedTitle.isEmpty || trimmedTitle == "Shell" {
-			label = "Shell terminal"
-		} else {
-			label = "\(trimmedTitle) terminal"
-		}
-		let state = switch session.state {
-			case .idle: "Shell ready to launch"
-			case .running: "Shell running"
-			case .exited(let exitCode): exitCode.map { "Shell exited with status \($0)" } ?? "Shell exited"
-		}
+    func updateNSView(_ nsView: TerminalPaneHostView, context: Context) {
+        applyCurrentAppearance(to: nsView)
+        context.coordinator.update(hostingView: nsView)
+        nsView.updateAccessibility(
+            snapshot: accessibilitySnapshot,
+            onRestart: onRestart,
+            onSplitRight: onSplitRight,
+            onSplitDown: onSplitDown,
+            onClose: onClose,
+        )
+    }
 
-		var valueParts: [String] = [state]
-		if let currentDirectory = session.currentDirectory, !currentDirectory.isEmpty {
-			valueParts.append("Directory \(currentDirectory)")
-		}
+    private func applyCurrentAppearance(to hostingView: TerminalPaneHostView) {
+        let appearance = TerminalAppearance(
+            fontName: terminalFontName,
+            fontSize: max(10, min(terminalFontSize, 28)),
+            theme: TerminalTheme(rawValue: terminalThemeName) ?? .defaultTerminal,
+        )
+        appearance.apply(to: hostingView.terminalView)
+        hostingView.onEffectiveAppearanceChange = { [weak terminalView = hostingView.terminalView] _ in
+            guard let terminalView else {
+                return
+            }
 
-		return TerminalAccessibilitySnapshot(
-			label: label,
-			value: valueParts.joined(separator: ". "),
-			help: "This terminal lives inside a workspace pane. Use the available accessibility actions to restart the shell, split the pane, or close the pane."
-		)
-	}
+            appearance.apply(to: terminalView)
+        }
+    }
 }

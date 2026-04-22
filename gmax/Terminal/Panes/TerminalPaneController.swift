@@ -12,94 +12,95 @@ import SwiftTerm
 
 @MainActor
 final class TerminalPaneController: ObservableObject {
-	let paneID: PaneID
-	let session: TerminalSession
-	private weak var attachedTerminalView: LocalProcessTerminalView?
-	private var retainedTerminalView: LocalProcessTerminalView?
-	private var retainedTerminalGeneration: Int?
-	private var startedTerminalGeneration: Int?
+    let paneID: PaneID
+    let session: TerminalSession
 
-	init(paneID: PaneID, session: TerminalSession) {
-		self.paneID = paneID
-		self.session = session
-	}
+    private weak var attachedTerminalView: LocalProcessTerminalView?
+    private var retainedTerminalView: LocalProcessTerminalView?
+    private var retainedTerminalGeneration: Int?
+    private var startedTerminalGeneration: Int?
 
-	func terminalView(
-		for generation: Int,
-		processDelegate: LocalProcessTerminalViewDelegate
-	) -> LocalProcessTerminalView {
-		if
-			let terminalView = retainedTerminalView,
-			retainedTerminalGeneration == generation
-		{
-			configureTerminalView(terminalView, processDelegate: processDelegate)
-			return terminalView
-		}
+    init(paneID: PaneID, session: TerminalSession) {
+        self.paneID = paneID
+        self.session = session
+    }
 
-		let terminalView = LocalProcessTerminalView(frame: .zero)
-		retainedTerminalView = terminalView
-		retainedTerminalGeneration = generation
-		startedTerminalGeneration = nil
-		configureTerminalView(terminalView, processDelegate: processDelegate)
-		return terminalView
-	}
+    func terminalView(
+        for generation: Int,
+        processDelegate: LocalProcessTerminalViewDelegate,
+    ) -> LocalProcessTerminalView {
+        if
+            let terminalView = retainedTerminalView,
+            retainedTerminalGeneration == generation {
+            configureTerminalView(terminalView, processDelegate: processDelegate)
+            return terminalView
+        }
 
-	func attach(terminalView: LocalProcessTerminalView) {
-		attachedTerminalView = terminalView
-	}
+        let terminalView = LocalProcessTerminalView(frame: .zero)
+        retainedTerminalView = terminalView
+        retainedTerminalGeneration = generation
+        startedTerminalGeneration = nil
+        configureTerminalView(terminalView, processDelegate: processDelegate)
+        return terminalView
+    }
 
-	func detach(terminalView: LocalProcessTerminalView) {
-		guard attachedTerminalView === terminalView else {
-			return
-		}
-		attachedTerminalView = nil
-	}
+    func attach(terminalView: LocalProcessTerminalView) {
+        attachedTerminalView = terminalView
+    }
 
-	func needsProcessStart(for generation: Int) -> Bool {
-		startedTerminalGeneration != generation
-	}
+    func detach(terminalView: LocalProcessTerminalView) {
+        guard attachedTerminalView === terminalView else {
+            return
+        }
 
-	func markProcessStarted(for generation: Int) {
-		startedTerminalGeneration = generation
-	}
+        attachedTerminalView = nil
+    }
 
-	func restoreTranscriptIfNeeded(into terminalView: LocalProcessTerminalView) {
-		guard let transcript = session.consumeRestoredTranscript() else {
-			return
-		}
+    func needsProcessStart(for generation: Int) -> Bool {
+        startedTerminalGeneration != generation
+    }
 
-		let bytes = ArraySlice(Array(transcript.utf8))
-		guard !bytes.isEmpty else {
-			return
-		}
+    func markProcessStarted(for generation: Int) {
+        startedTerminalGeneration = generation
+    }
 
-		terminalView.feed(byteArray: bytes)
-	}
+    func restoreTranscriptIfNeeded(into terminalView: LocalProcessTerminalView) {
+        guard let transcript = session.consumeRestoredTranscript() else {
+            return
+        }
 
-	func captureTranscript() -> String? {
-		guard let terminalView = retainedTerminalView else {
-			return nil
-		}
+        let bytes = ArraySlice(Array(transcript.utf8))
+        guard !bytes.isEmpty else {
+            return
+        }
 
-		let transcriptData = terminalView
-			.getTerminal()
-			.getBufferAsData(kind: .normal, encoding: .utf8)
+        terminalView.feed(byteArray: bytes)
+    }
 
-		guard
-			!transcriptData.isEmpty,
-			let transcript = String(data: transcriptData, encoding: .utf8)
-		else {
-			return nil
-		}
+    func captureTranscript() -> String? {
+        guard let terminalView = retainedTerminalView else {
+            return nil
+        }
 
-		let normalizedTranscript = transcript.trimmingCharacters(in: .newlines)
-		return normalizedTranscript.isEmpty ? nil : transcript
-	}
+        let transcriptData = terminalView
+            .getTerminal()
+            .getBufferAsData(kind: .normal, encoding: .utf8)
 
-	private func configureTerminalView(
-		_ terminalView: LocalProcessTerminalView,
-		processDelegate: LocalProcessTerminalViewDelegate
-	) {
-		terminalView.processDelegate = processDelegate
-	}
+        guard
+            !transcriptData.isEmpty,
+            let transcript = String(data: transcriptData, encoding: .utf8)
+        else {
+            return nil
+        }
+
+        let normalizedTranscript = transcript.trimmingCharacters(in: .newlines)
+        return normalizedTranscript.isEmpty ? nil : transcript
+    }
+
+    private func configureTerminalView(
+        _ terminalView: LocalProcessTerminalView,
+        processDelegate: LocalProcessTerminalViewDelegate,
+    ) {
+        terminalView.processDelegate = processDelegate
+    }
 }

@@ -2,7 +2,8 @@
 set -eu
 
 repo_root="$(git rev-parse --show-toplevel)"
-config_file="$repo_root/.swiftformat"
+swiftformat_config_file="$repo_root/.swiftformat"
+swiftlint_config_file="$repo_root/.swiftlint.yml"
 staged_file_list="$(mktemp "${TMPDIR:-/tmp}/swiftformat-staged.XXXXXX")"
 trap 'rm -f "$staged_file_list"' EXIT HUP INT TERM
 
@@ -11,8 +12,18 @@ if ! command -v swiftformat >/dev/null 2>&1; then
   exit 1
 fi
 
-if [ ! -f "$config_file" ]; then
-  echo "SwiftFormat pre-commit hook expected a checked-in config at $config_file, but it was missing. Restore the managed .swiftformat file or refresh the repo-maintenance toolkit before committing." >&2
+if ! command -v swiftlint >/dev/null 2>&1; then
+  echo "SwiftLint pre-commit hook could not find the \`swiftlint\` CLI on PATH. Install SwiftLint before committing, or bypass once with --no-verify if you are unblocking an emergency." >&2
+  exit 1
+fi
+
+if [ ! -f "$swiftformat_config_file" ]; then
+  echo "SwiftFormat pre-commit hook expected a checked-in config at $swiftformat_config_file, but it was missing. Restore the managed .swiftformat file or refresh the repo-maintenance toolkit before committing." >&2
+  exit 1
+fi
+
+if [ ! -f "$swiftlint_config_file" ]; then
+  echo "SwiftLint pre-commit hook expected a checked-in config at $swiftlint_config_file, but it was missing. Restore the repo SwiftLint config before committing." >&2
   exit 1
 fi
 
@@ -24,7 +35,7 @@ if [ ! -s "$staged_file_list" ]; then
 fi
 
 echo "Running SwiftFormat on staged Swift sources..."
-swiftformat --config "$config_file" --filelist "$staged_file_list"
+swiftformat --config "$swiftformat_config_file" --filelist "$staged_file_list"
 
 while IFS= read -r relative_path; do
   [ -n "$relative_path" ] || continue
@@ -32,4 +43,17 @@ while IFS= read -r relative_path; do
 done < "$staged_file_list"
 
 echo "Verifying staged Swift sources with SwiftFormat lint..."
-swiftformat --lint --config "$config_file" --filelist "$staged_file_list"
+swiftformat --lint --config "$swiftformat_config_file" --filelist "$staged_file_list"
+
+script_input_index=0
+while IFS= read -r relative_path; do
+  [ -n "$relative_path" ] || continue
+  eval "export SCRIPT_INPUT_FILE_$script_input_index=\"\$repo_root/\$relative_path\""
+  script_input_index=$((script_input_index + 1))
+done < "$staged_file_list"
+
+if [ "$script_input_index" -gt 0 ]; then
+  export SCRIPT_INPUT_FILE_COUNT="$script_input_index"
+  echo "Linting staged Swift sources with SwiftLint..."
+  swiftlint lint --config "$swiftlint_config_file" --use-script-input-files
+fi

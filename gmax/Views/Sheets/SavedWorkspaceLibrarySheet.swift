@@ -8,149 +8,153 @@
 import SwiftUI
 
 struct SavedWorkspaceLibrarySheet: View {
-	@ObservedObject var model: WorkspaceStore
-	@Binding var selectedWorkspaceID: WorkspaceID?
-	@Environment(\.dismiss) private var dismiss
-	@State private var searchText = ""
-	@State private var selectedSavedWorkspaceID: SavedWorkspaceID?
+    @ObservedObject var model: WorkspaceStore
+    @Binding var selectedWorkspaceID: WorkspaceID?
 
-	var body: some View {
-		let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-		let savedWorkspaces = model.listSavedWorkspaces(matching: query.isEmpty ? nil : query)
-		let normalizeSelection = {
-			if !savedWorkspaces.contains(where: { $0.id == selectedSavedWorkspaceID }) {
-				selectedSavedWorkspaceID = savedWorkspaces.first?.id
-			}
-		}
-		let open: (SavedWorkspaceID) -> Void = { savedWorkspaceID in
-			guard let workspaceID = model.openSavedWorkspace(savedWorkspaceID) else { return }
-			selectedWorkspaceID = workspaceID
-			dismiss()
-		}
-		let delete: (SavedWorkspaceID) -> Void = { savedWorkspaceID in
-			model.deleteSavedWorkspace(savedWorkspaceID)
-			selectedSavedWorkspaceID = savedWorkspaces.first { $0.id != savedWorkspaceID }?.id
-		}
+    @Environment(\.dismiss) private var dismiss
+    @State private var searchText = ""
+    @State private var selectedSavedWorkspaceID: SavedWorkspaceID?
 
-		VStack(spacing: 0) {
-			Group {
-				if savedWorkspaces.isEmpty {
-					ContentUnavailableView {
-						Label("No Saved Workspaces", systemImage: "externaldrive.badge.timemachine")
-					} description: {
-						Text(
-							query.isEmpty
-								? "Save a workspace to the library to reopen its pane layout and shell history later."
-								: "No saved workspaces matched that search. Try a different title, pane count, or transcript text."
-						)
-					}
-					.accessibilityIdentifier("savedWorkspaceLibrary.emptyState")
-				} else {
-					List(selection: $selectedSavedWorkspaceID) {
-						ForEach(savedWorkspaces) { savedWorkspace in
-							let paneCountText = savedWorkspace.paneCount == 1 ? "1 pane" : "\(savedWorkspace.paneCount) panes"
-							let timestampText = if let lastOpenedAt = savedWorkspace.lastOpenedAt {
-								"Opened \(lastOpenedAt.formatted(.relative(presentation: .named)))"
-							} else {
-								"Saved \(savedWorkspace.updatedAt.formatted(.relative(presentation: .named)))"
-							}
-							VStack(alignment: .leading, spacing: 6) {
-								HStack(alignment: .firstTextBaseline, spacing: 8) {
-									Text(savedWorkspace.title)
-										.font(.headline)
-										.lineLimit(1)
-										.accessibilityIdentifier("savedWorkspaceLibrary.title.\(savedWorkspace.title)")
+    var body: some View {
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let savedWorkspaces = model.listSavedWorkspaces(matching: query.isEmpty ? nil : query)
+        let normalizeSelection = {
+            if !savedWorkspaces.contains(where: { $0.id == selectedSavedWorkspaceID }) {
+                selectedSavedWorkspaceID = savedWorkspaces.first?.id
+            }
+        }
+        let open: (SavedWorkspaceID) -> Void = { savedWorkspaceID in
+            guard let workspaceID = model.openSavedWorkspace(savedWorkspaceID) else { return }
 
-									if savedWorkspace.isPinned {
-										Image(systemName: "pin.fill")
-											.font(.caption)
-											.foregroundStyle(.secondary)
-									}
-								}
+            selectedWorkspaceID = workspaceID
+            dismiss()
+        }
+        let delete: (SavedWorkspaceID) -> Void = { savedWorkspaceID in
+            model.deleteSavedWorkspace(savedWorkspaceID)
+            selectedSavedWorkspaceID = savedWorkspaces.first { $0.id != savedWorkspaceID }?.id
+        }
 
-								HStack(spacing: 10) {
-									Label(paneCountText, systemImage: "rectangle.split.3x1")
-									Text(timestampText)
-								}
-								.font(.caption)
-								.foregroundStyle(.secondary)
+        VStack(spacing: 0) {
+            Group {
+                if savedWorkspaces.isEmpty {
+                    ContentUnavailableView {
+                        Label("No Saved Workspaces", systemImage: "externaldrive.badge.timemachine")
+                    } description: {
+                        Text(
+                            query.isEmpty
+                                ? "Save a workspace to the library to reopen its pane layout and shell history later."
+                                : "No saved workspaces matched that search. Try a different title, pane count, or transcript text.",
+                        )
+                    }
+                    .accessibilityIdentifier("savedWorkspaceLibrary.emptyState")
+                } else {
+                    List(selection: $selectedSavedWorkspaceID) {
+                        ForEach(savedWorkspaces) { savedWorkspace in
+                            let paneCountText = savedWorkspace.paneCount == 1 ? "1 pane" : "\(savedWorkspace.paneCount) panes"
+                            let timestampText = if let lastOpenedAt = savedWorkspace.lastOpenedAt {
+                                "Opened \(lastOpenedAt.formatted(.relative(presentation: .named)))"
+                            } else {
+                                "Saved \(savedWorkspace.updatedAt.formatted(.relative(presentation: .named)))"
+                            }
+                            VStack(alignment: .leading, spacing: 6) {
+                                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                                    Text(savedWorkspace.title)
+                                        .font(.headline)
+                                        .lineLimit(1)
+                                        .accessibilityIdentifier("savedWorkspaceLibrary.title.\(savedWorkspace.title)")
 
-								if let previewText = savedWorkspace.previewText {
-									Text(previewText)
-										.font(.callout)
-										.foregroundStyle(.secondary)
-										.lineLimit(2)
-								}
-							}
-							.padding(.vertical, 4)
-								.accessibilityIdentifier("savedWorkspaceLibrary.row.\(savedWorkspace.title)")
-								.simultaneousGesture(
-									TapGesture(count: 2).onEnded {
-										open(savedWorkspace.id)
-									}
-								)
-									.tag(savedWorkspace.id)
-									.contextMenu {
-										Button("Open Workspace") {
-											open(savedWorkspace.id)
-										}
+                                    if savedWorkspace.isPinned {
+                                        Image(systemName: "pin.fill")
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                }
 
-										Button("Delete Saved Workspace", role: .destructive) {
-											delete(savedWorkspace.id)
-										}
-									}
-						}
-					}
-					.accessibilityIdentifier("savedWorkspaceLibrary.list")
-				}
-			}
-			.frame(maxWidth: .infinity, maxHeight: .infinity)
+                                HStack(spacing: 10) {
+                                    Label(paneCountText, systemImage: "rectangle.split.3x1")
+                                    Text(timestampText)
+                                }
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
 
-			Divider()
+                                if let previewText = savedWorkspace.previewText {
+                                    Text(previewText)
+                                        .font(.callout)
+                                        .foregroundStyle(.secondary)
+                                        .lineLimit(2)
+                                }
+                            }
+                            .padding(.vertical, 4)
+                            .accessibilityIdentifier("savedWorkspaceLibrary.row.\(savedWorkspace.title)")
+                            .simultaneousGesture(
+                                TapGesture(count: 2).onEnded {
+                                    open(savedWorkspace.id)
+                                },
+                            )
+                            .tag(savedWorkspace.id)
+                            .contextMenu {
+                                Button("Open Workspace") {
+                                    open(savedWorkspace.id)
+                                }
 
-			HStack {
-				Button("Cancel") {
-					dismiss()
-				}
-				.accessibilityIdentifier("savedWorkspaceLibrary.cancelButton")
+                                Button("Delete Saved Workspace", role: .destructive) {
+                                    delete(savedWorkspace.id)
+                                }
+                            }
+                        }
+                    }
+                    .accessibilityIdentifier("savedWorkspaceLibrary.list")
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-				Spacer()
+            Divider()
 
-				Button("Delete") {
-					guard let savedWorkspaceID = selectedSavedWorkspaceID else {
-						return
-					}
-					delete(savedWorkspaceID)
-				}
-				.disabled(selectedSavedWorkspaceID == nil)
-				.accessibilityIdentifier("savedWorkspaceLibrary.deleteButton")
+            HStack {
+                Button("Cancel") {
+                    dismiss()
+                }
+                .accessibilityIdentifier("savedWorkspaceLibrary.cancelButton")
 
-				Button("Open") {
-					guard let savedWorkspaceID = selectedSavedWorkspaceID else {
-						return
-					}
-					open(savedWorkspaceID)
-				}
-				.keyboardShortcut(.defaultAction)
-				.disabled(selectedSavedWorkspaceID == nil)
-				.accessibilityIdentifier("savedWorkspaceLibrary.openButton")
-			}
-			.padding(16)
-		}
-		.frame(minWidth: 620, minHeight: 420)
-		.searchable(text: $searchText, prompt: "Search saved workspaces")
-		.onAppear {
-			normalizeSelection()
-		}
-		.onChange(of: query) { _, _ in
-			normalizeSelection()
-		}
-	}
+                Spacer()
+
+                Button("Delete") {
+                    guard let savedWorkspaceID = selectedSavedWorkspaceID else {
+                        return
+                    }
+
+                    delete(savedWorkspaceID)
+                }
+                .disabled(selectedSavedWorkspaceID == nil)
+                .accessibilityIdentifier("savedWorkspaceLibrary.deleteButton")
+
+                Button("Open") {
+                    guard let savedWorkspaceID = selectedSavedWorkspaceID else {
+                        return
+                    }
+
+                    open(savedWorkspaceID)
+                }
+                .keyboardShortcut(.defaultAction)
+                .disabled(selectedSavedWorkspaceID == nil)
+                .accessibilityIdentifier("savedWorkspaceLibrary.openButton")
+            }
+            .padding(16)
+        }
+        .frame(minWidth: 620, minHeight: 420)
+        .searchable(text: $searchText, prompt: "Search saved workspaces")
+        .onAppear {
+            normalizeSelection()
+        }
+        .onChange(of: query) { _, _ in
+            normalizeSelection()
+        }
+    }
 }
 
 #Preview {
-	SavedWorkspaceLibrarySheet(
-		model: WorkspaceStore(),
-		selectedWorkspaceID: .constant(nil)
-	)
+    SavedWorkspaceLibrarySheet(
+        model: WorkspaceStore(),
+        selectedWorkspaceID: .constant(nil),
+    )
 }

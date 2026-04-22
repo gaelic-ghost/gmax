@@ -8,78 +8,78 @@
 import Foundation
 
 protocol ProcessInfoReading {
-	nonisolated var environment: [String: String] { get }
+    nonisolated var environment: [String: String] { get }
 }
 
 extension ProcessInfo: ProcessInfoReading {}
 
-enum WorkspacePersistenceProfile: String, Sendable {
-	case productionOnDisk = "production"
-	case debugOnDisk = "debug"
-	case uiTestOnDisk = "ui-test"
-	case inMemory = "in-memory"
+enum WorkspacePersistenceProfile: String {
+    case productionOnDisk = "production"
+    case debugOnDisk = "debug"
+    case uiTestOnDisk = "ui-test"
+    case inMemory = "in-memory"
 
-	nonisolated static let environmentKey = "GMAX_PERSISTENCE_PROFILE"
-	nonisolated static let uiTestResetStateEnvironmentKey = "GMAX_UI_TEST_RESET_STATE"
+    nonisolated static let environmentKey = "GMAX_PERSISTENCE_PROFILE"
+    nonisolated static let uiTestResetStateEnvironmentKey = "GMAX_UI_TEST_RESET_STATE"
 
-	nonisolated static func appDefault(processInfo: ProcessInfoReading = ProcessInfo.processInfo) -> WorkspacePersistenceProfile {
-		if let requestedProfile = processInfo.environment[environmentKey] {
-			if let explicitProfile = WorkspacePersistenceProfile(rawValue: requestedProfile) {
-				return explicitProfile
-			}
-		}
+    nonisolated var usesInMemoryStore: Bool {
+        self == .inMemory
+    }
 
-		if processInfo.environment[uiTestResetStateEnvironmentKey] == "1" {
-			return .uiTestOnDisk
-		}
+    nonisolated var storeFileName: String? {
+        switch self {
+            case .productionOnDisk:
+                "WorkspaceStore.sqlite"
+            case .debugOnDisk:
+                "WorkspaceStore.debug.sqlite"
+            case .uiTestOnDisk:
+                "WorkspaceStore.ui-test.sqlite"
+            case .inMemory:
+                nil
+        }
+    }
 
-		#if DEBUG
-		return .debugOnDisk
-		#else
-		return .productionOnDisk
-		#endif
-	}
+    nonisolated var contextName: String {
+        switch self {
+            case .productionOnDisk:
+                "WorkspacePersistence.productionViewContext"
+            case .debugOnDisk:
+                "WorkspacePersistence.debugViewContext"
+            case .uiTestOnDisk:
+                "WorkspacePersistence.uiTestViewContext"
+            case .inMemory:
+                "WorkspacePersistence.inMemoryViewContext"
+        }
+    }
 
-	nonisolated var usesInMemoryStore: Bool {
-		self == .inMemory
-	}
+    nonisolated var displayName: String {
+        switch self {
+            case .productionOnDisk:
+                "production on-disk workspace store"
+            case .debugOnDisk:
+                "debug on-disk workspace store"
+            case .uiTestOnDisk:
+                "UI-test on-disk workspace store"
+            case .inMemory:
+                "in-memory workspace store"
+        }
+    }
 
-	nonisolated var storeFileName: String? {
-		switch self {
-			case .productionOnDisk:
-				return "WorkspaceStore.sqlite"
-			case .debugOnDisk:
-				return "WorkspaceStore.debug.sqlite"
-			case .uiTestOnDisk:
-				return "WorkspaceStore.ui-test.sqlite"
-			case .inMemory:
-				return nil
-		}
-	}
+    nonisolated static func appDefault(processInfo: ProcessInfoReading = ProcessInfo.processInfo) -> WorkspacePersistenceProfile {
+        if let requestedProfile = processInfo.environment[environmentKey] {
+            if let explicitProfile = WorkspacePersistenceProfile(rawValue: requestedProfile) {
+                return explicitProfile
+            }
+        }
 
-	nonisolated var contextName: String {
-		switch self {
-			case .productionOnDisk:
-				return "WorkspacePersistence.productionViewContext"
-			case .debugOnDisk:
-				return "WorkspacePersistence.debugViewContext"
-			case .uiTestOnDisk:
-				return "WorkspacePersistence.uiTestViewContext"
-			case .inMemory:
-				return "WorkspacePersistence.inMemoryViewContext"
-		}
-	}
+        if processInfo.environment[uiTestResetStateEnvironmentKey] == "1" {
+            return .uiTestOnDisk
+        }
 
-	nonisolated var displayName: String {
-		switch self {
-			case .productionOnDisk:
-				return "production on-disk workspace store"
-			case .debugOnDisk:
-				return "debug on-disk workspace store"
-			case .uiTestOnDisk:
-				return "UI-test on-disk workspace store"
-			case .inMemory:
-				return "in-memory workspace store"
-		}
-	}
+#if DEBUG
+        return .debugOnDisk
+#else
+        return .productionOnDisk
+#endif
+    }
 }

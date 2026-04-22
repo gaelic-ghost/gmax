@@ -10,338 +10,338 @@ import Foundation
 import OSLog
 
 extension WorkspacePersistenceController {
-	nonisolated static func storeDirectoryURL() -> URL {
-		let fileManager = FileManager.default
-		let directoryURL = URL.applicationSupportDirectory
-			.appending(path: "gmax-exploration", directoryHint: .isDirectory)
-		do {
-			try fileManager.createDirectory(at: directoryURL, withIntermediateDirectories: true)
-		} catch {
-			Logger.persistence
-				.error("The app could not create the Application Support directory for workspace persistence. The SQLite store may fail to open on this launch. Directory: \(directoryURL.path, privacy: .public). Error: \(String(describing: error), privacy: .public)")
-		}
-		return directoryURL
-	}
+    nonisolated static func storeDirectoryURL() -> URL {
+        let fileManager = FileManager.default
+        let directoryURL = URL.applicationSupportDirectory
+            .appending(path: "gmax-exploration", directoryHint: .isDirectory)
+        do {
+            try fileManager.createDirectory(at: directoryURL, withIntermediateDirectories: true)
+        } catch {
+            Logger.persistence
+                .error("The app could not create the Application Support directory for workspace persistence. The SQLite store may fail to open on this launch. Directory: \(directoryURL.path, privacy: .public). Error: \(String(describing: error), privacy: .public)")
+        }
+        return directoryURL
+    }
 
-	nonisolated static func storeURL(for profile: WorkspacePersistenceProfile = .appDefault()) -> URL {
-		precondition(
-			!profile.usesInMemoryStore,
-			"The in-memory workspace persistence profile does not have an on-disk store URL."
-		)
-		return storeDirectoryURL().appendingPathComponent(profile.storeFileName ?? "WorkspaceStore.sqlite")
-	}
+    nonisolated static func storeURL(for profile: WorkspacePersistenceProfile = .appDefault()) -> URL {
+        precondition(
+            !profile.usesInMemoryStore,
+            "The in-memory workspace persistence profile does not have an on-disk store URL.",
+        )
+        return storeDirectoryURL().appendingPathComponent(profile.storeFileName ?? "WorkspaceStore.sqlite")
+    }
 
-	nonisolated static func storeCleanupURLs(for profile: WorkspacePersistenceProfile = .appDefault()) -> [URL] {
-		guard !profile.usesInMemoryStore else {
-			return []
-		}
+    nonisolated static func storeCleanupURLs(for profile: WorkspacePersistenceProfile = .appDefault()) -> [URL] {
+        guard !profile.usesInMemoryStore else {
+            return []
+        }
 
-		let storeURL = storeURL(for: profile)
-		return [storeURL, storeURL.appendingPathExtension("shm"), storeURL.appendingPathExtension("wal")]
-	}
+        let storeURL = storeURL(for: profile)
+        return [storeURL, storeURL.appendingPathExtension("shm"), storeURL.appendingPathExtension("wal")]
+    }
 
-	static func makePersistentContainer(profile: WorkspacePersistenceProfile) -> NSPersistentContainer {
-		let model = makeManagedObjectModel()
-		let description = makeStoreDescription(for: profile)
-		description.shouldMigrateStoreAutomatically = true
-		description.shouldInferMappingModelAutomatically = true
-		let primaryContainer = makeContainer(
-			model: model,
-			description: description,
-			contextName: profile.contextName
-		)
+    static func makePersistentContainer(profile: WorkspacePersistenceProfile) -> NSPersistentContainer {
+        let model = makeManagedObjectModel()
+        let description = makeStoreDescription(for: profile)
+        description.shouldMigrateStoreAutomatically = true
+        description.shouldInferMappingModelAutomatically = true
+        let primaryContainer = makeContainer(
+            model: model,
+            description: description,
+            contextName: profile.contextName,
+        )
 
-		Logger.persistence.notice(
-			"Configured workspace persistence using the \(profile.displayName, privacy: .public)."
-		)
+        Logger.persistence.notice(
+            "Configured workspace persistence using the \(profile.displayName, privacy: .public).",
+        )
 
-		if loadPersistentStores(for: primaryContainer) {
-			return primaryContainer
-		}
+        if loadPersistentStores(for: primaryContainer) {
+            return primaryContainer
+        }
 
-		Logger.persistence.error("Core Data could not open the on-disk workspace store, so the app is falling back to an in-memory store for this launch. Workspace changes will remain live, but they will not survive quitting the app until the disk-backed store loads successfully again.")
+        Logger.persistence.error("Core Data could not open the on-disk workspace store, so the app is falling back to an in-memory store for this launch. Workspace changes will remain live, but they will not survive quitting the app until the disk-backed store loads successfully again.")
 
-		let fallbackContainer = makeContainer(
-			model: model,
-			description: {
-				let description = NSPersistentStoreDescription()
-				description.type = NSInMemoryStoreType
-				return description
-			}(),
-			contextName: WorkspacePersistenceProfile.inMemory.contextName
-		)
+        let fallbackContainer = makeContainer(
+            model: model,
+            description: {
+                let description = NSPersistentStoreDescription()
+                description.type = NSInMemoryStoreType
+                return description
+            }(),
+            contextName: WorkspacePersistenceProfile.inMemory.contextName,
+        )
 
-		guard loadPersistentStores(for: fallbackContainer) else {
-			fatalError("Core Data could not load either the disk-backed workspace store or the in-memory fallback store. The app cannot continue without a managed object context.")
-		}
+        guard loadPersistentStores(for: fallbackContainer) else {
+            fatalError("Core Data could not load either the disk-backed workspace store or the in-memory fallback store. The app cannot continue without a managed object context.")
+        }
 
-		return fallbackContainer
-	}
+        return fallbackContainer
+    }
 
-	static func makeStoreDescription(for profile: WorkspacePersistenceProfile) -> NSPersistentStoreDescription {
-		if profile.usesInMemoryStore {
-			let description = NSPersistentStoreDescription()
-			description.type = NSInMemoryStoreType
-			return description
-		}
+    static func makeStoreDescription(for profile: WorkspacePersistenceProfile) -> NSPersistentStoreDescription {
+        if profile.usesInMemoryStore {
+            let description = NSPersistentStoreDescription()
+            description.type = NSInMemoryStoreType
+            return description
+        }
 
-		return NSPersistentStoreDescription(url: storeURL(for: profile))
-	}
+        return NSPersistentStoreDescription(url: storeURL(for: profile))
+    }
 
-	static func makeContainer(
-		model: NSManagedObjectModel,
-		description: NSPersistentStoreDescription,
-		contextName: String
-	) -> NSPersistentContainer {
-		let container = NSPersistentContainer(name: "WorkspaceStore", managedObjectModel: model)
-		container.persistentStoreDescriptions = [description]
-		container.viewContext.mergePolicy = NSMergePolicy(merge: .mergeByPropertyObjectTrumpMergePolicyType)
-		container.viewContext.automaticallyMergesChangesFromParent = true
-		container.viewContext.name = contextName
-		return container
-	}
+    static func makeContainer(
+        model: NSManagedObjectModel,
+        description: NSPersistentStoreDescription,
+        contextName: String,
+    ) -> NSPersistentContainer {
+        let container = NSPersistentContainer(name: "WorkspaceStore", managedObjectModel: model)
+        container.persistentStoreDescriptions = [description]
+        container.viewContext.mergePolicy = NSMergePolicy(merge: .mergeByPropertyObjectTrumpMergePolicyType)
+        container.viewContext.automaticallyMergesChangesFromParent = true
+        container.viewContext.name = contextName
+        return container
+    }
 
-	static func loadPersistentStores(for container: NSPersistentContainer) -> Bool {
-		var loadError: Error?
-		let semaphore = DispatchSemaphore(value: 0)
-		container.loadPersistentStores { _, error in
-			loadError = error
-			semaphore.signal()
-		}
-		semaphore.wait()
+    static func loadPersistentStores(for container: NSPersistentContainer) -> Bool {
+        var loadError: Error?
+        let semaphore = DispatchSemaphore(value: 0)
+        container.loadPersistentStores { _, error in
+            loadError = error
+            semaphore.signal()
+        }
+        semaphore.wait()
 
-		if let loadError {
-			Logger.persistence.error("Core Data could not load a workspace persistent store description. The store described by this container will remain unavailable for this launch. Error: \(String(describing: loadError), privacy: .public)")
-			return false
-		}
+        if let loadError {
+            Logger.persistence.error("Core Data could not load a workspace persistent store description. The store described by this container will remain unavailable for this launch. Error: \(String(describing: loadError), privacy: .public)")
+            return false
+        }
 
-		return true
-	}
+        return true
+    }
 
-	static func makeManagedObjectModel() -> NSManagedObjectModel {
-		let model = NSManagedObjectModel()
+    static func makeManagedObjectModel() -> NSManagedObjectModel {
+        let model = NSManagedObjectModel()
 
-		let workspaceEntity = NSEntityDescription()
-		workspaceEntity.name = "WorkspaceEntity"
-		workspaceEntity.managedObjectClassName = NSStringFromClass(WorkspaceEntity.self)
+        let workspaceEntity = NSEntityDescription()
+        workspaceEntity.name = "WorkspaceEntity"
+        workspaceEntity.managedObjectClassName = NSStringFromClass(WorkspaceEntity.self)
 
-		let paneNodeEntity = NSEntityDescription()
-		paneNodeEntity.name = "PaneNodeEntity"
-		paneNodeEntity.managedObjectClassName = NSStringFromClass(PaneNodeEntity.self)
+        let paneNodeEntity = NSEntityDescription()
+        paneNodeEntity.name = "PaneNodeEntity"
+        paneNodeEntity.managedObjectClassName = NSStringFromClass(PaneNodeEntity.self)
 
-		let workspacePlacementEntity = NSEntityDescription()
-		workspacePlacementEntity.name = "WorkspacePlacementEntity"
-		workspacePlacementEntity.managedObjectClassName = NSStringFromClass(WorkspacePlacementEntity.self)
+        let workspacePlacementEntity = NSEntityDescription()
+        workspacePlacementEntity.name = "WorkspacePlacementEntity"
+        workspacePlacementEntity.managedObjectClassName = NSStringFromClass(WorkspacePlacementEntity.self)
 
-		let paneSessionSnapshotEntity = NSEntityDescription()
-		paneSessionSnapshotEntity.name = "PaneSessionSnapshotEntity"
-		paneSessionSnapshotEntity.managedObjectClassName = NSStringFromClass(PaneSessionSnapshotEntity.self)
+        let paneSessionSnapshotEntity = NSEntityDescription()
+        paneSessionSnapshotEntity.name = "PaneSessionSnapshotEntity"
+        paneSessionSnapshotEntity.managedObjectClassName = NSStringFromClass(PaneSessionSnapshotEntity.self)
 
-		let workspaceID = attribute(name: "id", type: .UUIDAttributeType)
-		let workspaceTitle = attribute(name: "title", type: .stringAttributeType)
-		let workspaceCreatedAt = attribute(name: "createdAt", type: .dateAttributeType)
-		let workspaceUpdatedAt = attribute(name: "updatedAt", type: .dateAttributeType)
-		let workspaceNotes = attribute(name: "notes", type: .stringAttributeType, isOptional: true)
-		let workspacePreviewText = attribute(name: "previewText", type: .stringAttributeType, isOptional: true)
-		let workspaceSearchText = attribute(name: "searchText", type: .stringAttributeType, isOptional: true)
-		let workspaceSavedWorkspaceID = attribute(name: "savedWorkspaceID", type: .UUIDAttributeType, isOptional: true)
-		let sortOrder = attribute(name: "sortOrder", type: .integer64AttributeType)
+        let workspaceID = attribute(name: "id", type: .UUIDAttributeType)
+        let workspaceTitle = attribute(name: "title", type: .stringAttributeType)
+        let workspaceCreatedAt = attribute(name: "createdAt", type: .dateAttributeType)
+        let workspaceUpdatedAt = attribute(name: "updatedAt", type: .dateAttributeType)
+        let workspaceNotes = attribute(name: "notes", type: .stringAttributeType, isOptional: true)
+        let workspacePreviewText = attribute(name: "previewText", type: .stringAttributeType, isOptional: true)
+        let workspaceSearchText = attribute(name: "searchText", type: .stringAttributeType, isOptional: true)
+        let workspaceSavedWorkspaceID = attribute(name: "savedWorkspaceID", type: .UUIDAttributeType, isOptional: true)
+        let sortOrder = attribute(name: "sortOrder", type: .integer64AttributeType)
 
-		let nodeID = attribute(name: "id", type: .UUIDAttributeType)
-		let nodeKind = attribute(name: "kind", type: .stringAttributeType)
-		let nodeSessionID = attribute(name: "sessionID", type: .UUIDAttributeType, isOptional: true)
-		let nodeAxis = attribute(name: "axis", type: .stringAttributeType, isOptional: true)
-		let nodeFraction = attribute(name: "fraction", type: .doubleAttributeType)
+        let nodeID = attribute(name: "id", type: .UUIDAttributeType)
+        let nodeKind = attribute(name: "kind", type: .stringAttributeType)
+        let nodeSessionID = attribute(name: "sessionID", type: .UUIDAttributeType, isOptional: true)
+        let nodeAxis = attribute(name: "axis", type: .stringAttributeType, isOptional: true)
+        let nodeFraction = attribute(name: "fraction", type: .doubleAttributeType)
 
-		let placementID = attribute(name: "id", type: .UUIDAttributeType)
-		let placementRole = attribute(name: "role", type: .stringAttributeType)
-		let placementWindowID = attribute(name: "windowID", type: .UUIDAttributeType, isOptional: true)
-		let placementSortOrder = attribute(name: "sortOrder", type: .integer64AttributeType)
-		let placementRestoreSortOrder = attribute(name: "restoreSortOrder", type: .integer64AttributeType)
-		let placementCreatedAt = attribute(name: "createdAt", type: .dateAttributeType)
-		let placementUpdatedAt = attribute(name: "updatedAt", type: .dateAttributeType)
-		let placementLastOpenedAt = attribute(name: "lastOpenedAt", type: .dateAttributeType, isOptional: true)
-		let placementIsPinned = attribute(name: "isPinned", type: .booleanAttributeType)
-		let placementTitle = attribute(name: "title", type: .stringAttributeType)
-		let placementPreviewText = attribute(name: "previewText", type: .stringAttributeType, isOptional: true)
-		let placementSearchText = attribute(name: "searchText", type: .stringAttributeType, isOptional: true)
-		let placementPaneCount = attribute(name: "paneCount", type: .integer64AttributeType)
+        let placementID = attribute(name: "id", type: .UUIDAttributeType)
+        let placementRole = attribute(name: "role", type: .stringAttributeType)
+        let placementWindowID = attribute(name: "windowID", type: .UUIDAttributeType, isOptional: true)
+        let placementSortOrder = attribute(name: "sortOrder", type: .integer64AttributeType)
+        let placementRestoreSortOrder = attribute(name: "restoreSortOrder", type: .integer64AttributeType)
+        let placementCreatedAt = attribute(name: "createdAt", type: .dateAttributeType)
+        let placementUpdatedAt = attribute(name: "updatedAt", type: .dateAttributeType)
+        let placementLastOpenedAt = attribute(name: "lastOpenedAt", type: .dateAttributeType, isOptional: true)
+        let placementIsPinned = attribute(name: "isPinned", type: .booleanAttributeType)
+        let placementTitle = attribute(name: "title", type: .stringAttributeType)
+        let placementPreviewText = attribute(name: "previewText", type: .stringAttributeType, isOptional: true)
+        let placementSearchText = attribute(name: "searchText", type: .stringAttributeType, isOptional: true)
+        let placementPaneCount = attribute(name: "paneCount", type: .integer64AttributeType)
 
-		let paneSessionSnapshotID = attribute(name: "id", type: .UUIDAttributeType)
-		let paneSessionSnapshotExecutable = attribute(name: "executable", type: .stringAttributeType)
-		let paneSessionSnapshotArgumentsData = attribute(name: "argumentsData", type: .binaryDataAttributeType)
-		let paneSessionSnapshotEnvironmentData = attribute(name: "environmentData", type: .binaryDataAttributeType, isOptional: true)
-		let paneSessionSnapshotCurrentDirectory = attribute(name: "currentDirectory", type: .stringAttributeType, isOptional: true)
-		let paneSessionSnapshotTitle = attribute(name: "title", type: .stringAttributeType)
-		let paneSessionSnapshotTranscript = attribute(name: "transcript", type: .stringAttributeType, isOptional: true)
-		let paneSessionSnapshotTranscriptByteCount = attribute(name: "transcriptByteCount", type: .integer64AttributeType)
-		let paneSessionSnapshotTranscriptLineCount = attribute(name: "transcriptLineCount", type: .integer64AttributeType)
-		let paneSessionSnapshotPreviewText = attribute(name: "previewText", type: .stringAttributeType, isOptional: true)
+        let paneSessionSnapshotID = attribute(name: "id", type: .UUIDAttributeType)
+        let paneSessionSnapshotExecutable = attribute(name: "executable", type: .stringAttributeType)
+        let paneSessionSnapshotArgumentsData = attribute(name: "argumentsData", type: .binaryDataAttributeType)
+        let paneSessionSnapshotEnvironmentData = attribute(name: "environmentData", type: .binaryDataAttributeType, isOptional: true)
+        let paneSessionSnapshotCurrentDirectory = attribute(name: "currentDirectory", type: .stringAttributeType, isOptional: true)
+        let paneSessionSnapshotTitle = attribute(name: "title", type: .stringAttributeType)
+        let paneSessionSnapshotTranscript = attribute(name: "transcript", type: .stringAttributeType, isOptional: true)
+        let paneSessionSnapshotTranscriptByteCount = attribute(name: "transcriptByteCount", type: .integer64AttributeType)
+        let paneSessionSnapshotTranscriptLineCount = attribute(name: "transcriptLineCount", type: .integer64AttributeType)
+        let paneSessionSnapshotPreviewText = attribute(name: "previewText", type: .stringAttributeType, isOptional: true)
 
-		let workspaceRootNode = NSRelationshipDescription()
-		workspaceRootNode.name = "rootNode"
-		workspaceRootNode.destinationEntity = paneNodeEntity
-		workspaceRootNode.minCount = 0
-		workspaceRootNode.maxCount = 1
-		workspaceRootNode.deleteRule = .cascadeDeleteRule
+        let workspaceRootNode = NSRelationshipDescription()
+        workspaceRootNode.name = "rootNode"
+        workspaceRootNode.destinationEntity = paneNodeEntity
+        workspaceRootNode.minCount = 0
+        workspaceRootNode.maxCount = 1
+        workspaceRootNode.deleteRule = .cascadeDeleteRule
 
-		let nodeWorkspaceRoot = NSRelationshipDescription()
-		nodeWorkspaceRoot.name = "workspaceRoot"
-		nodeWorkspaceRoot.destinationEntity = workspaceEntity
-		nodeWorkspaceRoot.minCount = 0
-		nodeWorkspaceRoot.maxCount = 1
-		nodeWorkspaceRoot.deleteRule = .nullifyDeleteRule
+        let nodeWorkspaceRoot = NSRelationshipDescription()
+        nodeWorkspaceRoot.name = "workspaceRoot"
+        nodeWorkspaceRoot.destinationEntity = workspaceEntity
+        nodeWorkspaceRoot.minCount = 0
+        nodeWorkspaceRoot.maxCount = 1
+        nodeWorkspaceRoot.deleteRule = .nullifyDeleteRule
 
-		workspaceRootNode.inverseRelationship = nodeWorkspaceRoot
-		nodeWorkspaceRoot.inverseRelationship = workspaceRootNode
+        workspaceRootNode.inverseRelationship = nodeWorkspaceRoot
+        nodeWorkspaceRoot.inverseRelationship = workspaceRootNode
 
-		let firstChild = NSRelationshipDescription()
-		firstChild.name = "firstChild"
-		firstChild.destinationEntity = paneNodeEntity
-		firstChild.minCount = 0
-		firstChild.maxCount = 1
-		firstChild.deleteRule = .cascadeDeleteRule
+        let firstChild = NSRelationshipDescription()
+        firstChild.name = "firstChild"
+        firstChild.destinationEntity = paneNodeEntity
+        firstChild.minCount = 0
+        firstChild.maxCount = 1
+        firstChild.deleteRule = .cascadeDeleteRule
 
-		let firstParent = NSRelationshipDescription()
-		firstParent.name = "firstParent"
-		firstParent.destinationEntity = paneNodeEntity
-		firstParent.minCount = 0
-		firstParent.maxCount = 1
-		firstParent.deleteRule = .nullifyDeleteRule
+        let firstParent = NSRelationshipDescription()
+        firstParent.name = "firstParent"
+        firstParent.destinationEntity = paneNodeEntity
+        firstParent.minCount = 0
+        firstParent.maxCount = 1
+        firstParent.deleteRule = .nullifyDeleteRule
 
-		firstChild.inverseRelationship = firstParent
-		firstParent.inverseRelationship = firstChild
+        firstChild.inverseRelationship = firstParent
+        firstParent.inverseRelationship = firstChild
 
-		let secondChild = NSRelationshipDescription()
-		secondChild.name = "secondChild"
-		secondChild.destinationEntity = paneNodeEntity
-		secondChild.minCount = 0
-		secondChild.maxCount = 1
-		secondChild.deleteRule = .cascadeDeleteRule
+        let secondChild = NSRelationshipDescription()
+        secondChild.name = "secondChild"
+        secondChild.destinationEntity = paneNodeEntity
+        secondChild.minCount = 0
+        secondChild.maxCount = 1
+        secondChild.deleteRule = .cascadeDeleteRule
 
-		let secondParent = NSRelationshipDescription()
-		secondParent.name = "secondParent"
-		secondParent.destinationEntity = paneNodeEntity
-		secondParent.minCount = 0
-		secondParent.maxCount = 1
-		secondParent.deleteRule = .nullifyDeleteRule
+        let secondParent = NSRelationshipDescription()
+        secondParent.name = "secondParent"
+        secondParent.destinationEntity = paneNodeEntity
+        secondParent.minCount = 0
+        secondParent.maxCount = 1
+        secondParent.deleteRule = .nullifyDeleteRule
 
-		secondChild.inverseRelationship = secondParent
-		secondParent.inverseRelationship = secondChild
+        secondChild.inverseRelationship = secondParent
+        secondParent.inverseRelationship = secondChild
 
-		let workspacePlacements = NSRelationshipDescription()
-		workspacePlacements.name = "placements"
-		workspacePlacements.destinationEntity = workspacePlacementEntity
-		workspacePlacements.minCount = 0
-		workspacePlacements.maxCount = 0
-		workspacePlacements.isOptional = true
-		workspacePlacements.isOrdered = false
-		workspacePlacements.deleteRule = .nullifyDeleteRule
+        let workspacePlacements = NSRelationshipDescription()
+        workspacePlacements.name = "placements"
+        workspacePlacements.destinationEntity = workspacePlacementEntity
+        workspacePlacements.minCount = 0
+        workspacePlacements.maxCount = 0
+        workspacePlacements.isOptional = true
+        workspacePlacements.isOrdered = false
+        workspacePlacements.deleteRule = .nullifyDeleteRule
 
-		let placementWorkspace = NSRelationshipDescription()
-		placementWorkspace.name = "workspace"
-		placementWorkspace.destinationEntity = workspaceEntity
-		placementWorkspace.minCount = 0
-		placementWorkspace.maxCount = 1
-		placementWorkspace.deleteRule = .nullifyDeleteRule
+        let placementWorkspace = NSRelationshipDescription()
+        placementWorkspace.name = "workspace"
+        placementWorkspace.destinationEntity = workspaceEntity
+        placementWorkspace.minCount = 0
+        placementWorkspace.maxCount = 1
+        placementWorkspace.deleteRule = .nullifyDeleteRule
 
-		workspacePlacements.inverseRelationship = placementWorkspace
-		placementWorkspace.inverseRelationship = workspacePlacements
+        workspacePlacements.inverseRelationship = placementWorkspace
+        placementWorkspace.inverseRelationship = workspacePlacements
 
-		let workspaceSessionSnapshots = NSRelationshipDescription()
-		workspaceSessionSnapshots.name = "sessionSnapshots"
-		workspaceSessionSnapshots.destinationEntity = paneSessionSnapshotEntity
-		workspaceSessionSnapshots.minCount = 0
-		workspaceSessionSnapshots.maxCount = 0
-		workspaceSessionSnapshots.isOptional = true
-		workspaceSessionSnapshots.isOrdered = false
-		workspaceSessionSnapshots.deleteRule = .cascadeDeleteRule
+        let workspaceSessionSnapshots = NSRelationshipDescription()
+        workspaceSessionSnapshots.name = "sessionSnapshots"
+        workspaceSessionSnapshots.destinationEntity = paneSessionSnapshotEntity
+        workspaceSessionSnapshots.minCount = 0
+        workspaceSessionSnapshots.maxCount = 0
+        workspaceSessionSnapshots.isOptional = true
+        workspaceSessionSnapshots.isOrdered = false
+        workspaceSessionSnapshots.deleteRule = .cascadeDeleteRule
 
-		let paneSessionSnapshotWorkspace = NSRelationshipDescription()
-		paneSessionSnapshotWorkspace.name = "workspace"
-		paneSessionSnapshotWorkspace.destinationEntity = workspaceEntity
-		paneSessionSnapshotWorkspace.minCount = 0
-		paneSessionSnapshotWorkspace.maxCount = 1
-		paneSessionSnapshotWorkspace.deleteRule = .nullifyDeleteRule
+        let paneSessionSnapshotWorkspace = NSRelationshipDescription()
+        paneSessionSnapshotWorkspace.name = "workspace"
+        paneSessionSnapshotWorkspace.destinationEntity = workspaceEntity
+        paneSessionSnapshotWorkspace.minCount = 0
+        paneSessionSnapshotWorkspace.maxCount = 1
+        paneSessionSnapshotWorkspace.deleteRule = .nullifyDeleteRule
 
-		workspaceSessionSnapshots.inverseRelationship = paneSessionSnapshotWorkspace
-		paneSessionSnapshotWorkspace.inverseRelationship = workspaceSessionSnapshots
+        workspaceSessionSnapshots.inverseRelationship = paneSessionSnapshotWorkspace
+        paneSessionSnapshotWorkspace.inverseRelationship = workspaceSessionSnapshots
 
-		workspaceEntity.properties = [
-			workspaceID,
-			workspaceTitle,
-			workspaceCreatedAt,
-			workspaceUpdatedAt,
-			workspaceNotes,
-			workspacePreviewText,
-			workspaceSearchText,
-			workspaceSavedWorkspaceID,
-			sortOrder,
-			workspaceRootNode,
-			workspacePlacements,
-			workspaceSessionSnapshots,
-		]
-		paneNodeEntity.properties = [
-			nodeID,
-			nodeKind,
-			nodeSessionID,
-			nodeAxis,
-			nodeFraction,
-			nodeWorkspaceRoot,
-			firstChild,
-			firstParent,
-			secondChild,
-			secondParent,
-		]
-		workspacePlacementEntity.properties = [
-			placementID,
-			placementRole,
-			placementWindowID,
-			placementSortOrder,
-			placementRestoreSortOrder,
-			placementCreatedAt,
-			placementUpdatedAt,
-			placementLastOpenedAt,
-			placementIsPinned,
-			placementTitle,
-			placementPreviewText,
-			placementSearchText,
-			placementPaneCount,
-			placementWorkspace,
-		]
+        workspaceEntity.properties = [
+            workspaceID,
+            workspaceTitle,
+            workspaceCreatedAt,
+            workspaceUpdatedAt,
+            workspaceNotes,
+            workspacePreviewText,
+            workspaceSearchText,
+            workspaceSavedWorkspaceID,
+            sortOrder,
+            workspaceRootNode,
+            workspacePlacements,
+            workspaceSessionSnapshots,
+        ]
+        paneNodeEntity.properties = [
+            nodeID,
+            nodeKind,
+            nodeSessionID,
+            nodeAxis,
+            nodeFraction,
+            nodeWorkspaceRoot,
+            firstChild,
+            firstParent,
+            secondChild,
+            secondParent,
+        ]
+        workspacePlacementEntity.properties = [
+            placementID,
+            placementRole,
+            placementWindowID,
+            placementSortOrder,
+            placementRestoreSortOrder,
+            placementCreatedAt,
+            placementUpdatedAt,
+            placementLastOpenedAt,
+            placementIsPinned,
+            placementTitle,
+            placementPreviewText,
+            placementSearchText,
+            placementPaneCount,
+            placementWorkspace,
+        ]
 
-		paneSessionSnapshotEntity.properties = [
-			paneSessionSnapshotID,
-			paneSessionSnapshotExecutable,
-			paneSessionSnapshotArgumentsData,
-			paneSessionSnapshotEnvironmentData,
-			paneSessionSnapshotCurrentDirectory,
-			paneSessionSnapshotTitle,
-			paneSessionSnapshotTranscript,
-			paneSessionSnapshotTranscriptByteCount,
-			paneSessionSnapshotTranscriptLineCount,
-			paneSessionSnapshotPreviewText,
-			paneSessionSnapshotWorkspace,
-		]
+        paneSessionSnapshotEntity.properties = [
+            paneSessionSnapshotID,
+            paneSessionSnapshotExecutable,
+            paneSessionSnapshotArgumentsData,
+            paneSessionSnapshotEnvironmentData,
+            paneSessionSnapshotCurrentDirectory,
+            paneSessionSnapshotTitle,
+            paneSessionSnapshotTranscript,
+            paneSessionSnapshotTranscriptByteCount,
+            paneSessionSnapshotTranscriptLineCount,
+            paneSessionSnapshotPreviewText,
+            paneSessionSnapshotWorkspace,
+        ]
 
-		model.entities = [
-			workspaceEntity,
-			paneNodeEntity,
-			workspacePlacementEntity,
-			paneSessionSnapshotEntity,
-		]
-		return model
-	}
+        model.entities = [
+            workspaceEntity,
+            paneNodeEntity,
+            workspacePlacementEntity,
+            paneSessionSnapshotEntity,
+        ]
+        return model
+    }
 
-	static func attribute(
-		name: String,
-		type: NSAttributeType,
-		isOptional: Bool = false
-	) -> NSAttributeDescription {
-		let attribute = NSAttributeDescription()
-		attribute.name = name
-		attribute.attributeType = type
-		attribute.isOptional = isOptional
-		return attribute
-	}
+    static func attribute(
+        name: String,
+        type: NSAttributeType,
+        isOptional: Bool = false,
+    ) -> NSAttributeDescription {
+        let attribute = NSAttributeDescription()
+        attribute.name = name
+        attribute.attributeType = type
+        attribute.isOptional = isOptional
+        return attribute
+    }
 }

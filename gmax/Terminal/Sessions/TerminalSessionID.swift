@@ -1,7 +1,7 @@
 import Foundation
 
 struct TerminalSessionID: RawRepresentable, Hashable, Codable, Identifiable {
-	var rawValue = UUID()
+    var rawValue = UUID()
 
-	var id: UUID { rawValue }
+    var id: UUID { rawValue }
 }
