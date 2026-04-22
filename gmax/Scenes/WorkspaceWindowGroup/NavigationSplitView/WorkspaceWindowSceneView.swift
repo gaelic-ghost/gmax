@@ -22,6 +22,7 @@ struct WorkspaceWindowSceneView: View {
     @State private var hasAppliedSceneState = false
     @State private var paneFrames: [PaneID: CGRect] = [:]
     @State private var paneFocusHistory: [PaneID] = []
+    @State private var pendingFocusedPaneID: PaneID?
     @StateObject private var workspaceStore: WorkspaceStore
 
     private let sceneIdentity: WorkspaceSceneIdentity
@@ -151,15 +152,25 @@ struct WorkspaceWindowSceneView: View {
             paneFocusHistory.removeAll { $0 == paneID }
             paneFocusHistory.append(paneID)
         }
+        let requestPaneFocus: (PaneID?) -> Void = { paneID in
+            guard let paneID else {
+                pendingFocusedPaneID = nil
+                focusedTarget = nil
+                return
+            }
+
+            pendingFocusedPaneID = paneID
+            focusPaneTarget(paneID)
+        }
         let createPaneInWorkspace: (WorkspaceID) -> Void = { workspaceID in
             let createdPaneID = workspaceStore.createPane(in: workspaceID)
             prunePaneNavigationState()
-            focusPaneTarget(createdPaneID)
+            requestPaneFocus(createdPaneID)
         }
         let splitPaneInWorkspace: (WorkspaceID, PaneID, SplitDirection) -> Void = { workspaceID, paneID, direction in
             let insertedPaneID = workspaceStore.splitPane(paneID, in: workspaceID, direction: direction)
             prunePaneNavigationState()
-            focusPaneTarget(insertedPaneID)
+            requestPaneFocus(insertedPaneID)
         }
         let closePaneInWorkspace: (WorkspaceID, PaneID) -> Void = { workspaceID, paneID in
             let wasFocusedPane = focusedTarget == .pane(paneID)
@@ -222,7 +233,7 @@ struct WorkspaceWindowSceneView: View {
                     )
             }
 
-            focusPaneTarget(nextPaneID)
+            focusPaneTarget(nextPaneID ?? currentFocusedPaneID)
         }
         let splitFocusedPane: (SplitDirection) -> Void = { direction in
             guard let selectedWorkspaceID, let focusedPaneID else {
@@ -231,7 +242,7 @@ struct WorkspaceWindowSceneView: View {
 
             let insertedPaneID = workspaceStore.splitPane(focusedPaneID, in: selectedWorkspaceID, direction: direction)
             prunePaneNavigationState()
-            focusPaneTarget(insertedPaneID)
+            requestPaneFocus(insertedPaneID)
         }
         let canSplitFocusedPane = selectedWorkspace.flatMap { workspace in
             focusedPaneID.flatMap { workspace.root?.findPane(id: $0) }
@@ -437,11 +448,20 @@ struct WorkspaceWindowSceneView: View {
         .onChange(of: selectedWorkspaceID) { _, _ in
             paneFrames = [:]
             paneFocusHistory = []
+            pendingFocusedPaneID = nil
         }
         .onChange(of: selectedWorkspace?.paneLeaves.map(\.id) ?? []) { _, paneIDs in
             let activePaneIDs = Set(paneIDs)
             paneFrames = paneFrames.filter { activePaneIDs.contains($0.key) }
             paneFocusHistory = paneFocusHistory.filter { activePaneIDs.contains($0) }
+            if let pendingFocusedPaneID {
+                if activePaneIDs.contains(pendingFocusedPaneID) {
+                    focusPaneTarget(pendingFocusedPaneID)
+                    self.pendingFocusedPaneID = nil
+                } else {
+                    self.pendingFocusedPaneID = nil
+                }
+            }
             if case let .pane(paneID) = focusedTarget, !activePaneIDs.contains(paneID) {
                 focusedTarget = isInspectorVisible ? .inspector : nil
             }

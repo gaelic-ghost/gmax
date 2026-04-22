@@ -30,6 +30,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		4976636E2F99911200EC6060 /* gmax.xctestplan */ = {isa = PBXFileReference; lastKnownFileType = text; path = gmax.xctestplan; sourceTree = "<group>"; };
 		49A7A5AF2F6475CF006A22D6 /* gmax.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = gmax.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		49A943452F855AA200F4016C /* AGENTS.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = AGENTS.md; sourceTree = "<group>"; };
 		49A943462F855AA200F4016C /* LICENSE */ = {isa = PBXFileReference; lastKnownFileType = text; path = LICENSE; sourceTree = "<group>"; };
@@ -112,6 +113,7 @@
 		49A7A5A62F6475CF006A22D6 = {
 			isa = PBXGroup;
 			children = (
+				4976636E2F99911200EC6060 /* gmax.xctestplan */,
 				49A943872F855AE900F4016C /* scripts */,
 				49A943452F855AA200F4016C /* AGENTS.md */,
 				49A943462F855AA200F4016C /* LICENSE */,

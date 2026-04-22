@@ -46,7 +46,7 @@ struct ContentPaneLeafView: View {
         let paneActionsHint = "Activate to focus this pane. Additional actions are available for splitting, closing, and restarting the shell."
         let focusBackgroundStyle = isFocused ? AnyShapeStyle(.tint.opacity(0.18)) : AnyShapeStyle(.quaternary.opacity(0.35))
         paneSurface(isFocused: isFocused, paneHostIdentity: paneHostIdentity)
-            .focusable(interactions: .activate)
+			.focusable(interactions: .edit)
             .focused(focusedTarget, equals: .pane(pane.id))
             .background(ContentPaneFrameReporter(paneID: pane.id))
             .background(focusBackgroundStyle)

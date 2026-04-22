@@ -1,0 +1,38 @@
+{
+  "configurations" : [
+    {
+      "id" : "563087FA-F5BA-4908-BC43-1C1CDB969308",
+      "name" : "Test Scheme Action",
+      "options" : {
+
+      }
+    }
+  ],
+  "defaultOptions" : {
+    "performanceAntipatternCheckerEnabled" : true,
+    "targetForVariableExpansion" : {
+      "containerPath" : "container:gmax.xcodeproj",
+      "identifier" : "49A7A5AE2F6475CF006A22D6",
+      "name" : "gmax"
+    }
+  },
+  "testTargets" : [
+    {
+      "parallelizable" : true,
+      "target" : {
+        "containerPath" : "container:gmax.xcodeproj",
+        "identifier" : "49BCD3672F848D2D00BC2479",
+        "name" : "gmaxTests"
+      }
+    },
+    {
+      "parallelizable" : true,
+      "target" : {
+        "containerPath" : "container:gmax.xcodeproj",
+        "identifier" : "49BCD3742F848D4900BC2479",
+        "name" : "gmaxUITests"
+      }
+    }
+  ],
+  "version" : 1
+}
