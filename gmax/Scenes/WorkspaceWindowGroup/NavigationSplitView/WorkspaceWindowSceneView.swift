@@ -152,7 +152,7 @@ struct WorkspaceWindowSceneView: View {
         let applyFocusAssignment: (FocusAssignment) -> Void = { assignment in
             let activePaneIDs = currentActivePaneIDs()
             let normalizedAssignment: FocusAssignment = switch assignment {
-                case .pane(let paneID) where activePaneIDs.contains(paneID):
+                case let .pane(paneID) where activePaneIDs.contains(paneID):
                     .pane(paneID)
                 case .pane:
                     .none
@@ -163,7 +163,7 @@ struct WorkspaceWindowSceneView: View {
             }
 
             focusedTarget = switch normalizedAssignment {
-                case .pane(let paneID):
+                case let .pane(paneID):
                     .pane(paneID)
                 case .inspector:
                     .inspector
@@ -225,7 +225,7 @@ struct WorkspaceWindowSceneView: View {
                 paneFocusHistory: paneFocusHistory,
                 isInspectorVisible: isInspectorVisible,
             ) {
-                case .pane(let paneID):
+                case let .pane(paneID):
                     requestPaneFocus(paneID)
                 case .inspector:
                     applyFocusAssignment(.inspector)
