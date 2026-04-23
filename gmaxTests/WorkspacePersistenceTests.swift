@@ -459,7 +459,6 @@ struct WorkspacePersistenceTests {
         persistence.saveSceneState(
             for: sceneIdentity,
             liveWorkspaces: [workspace],
-            recentlyClosedWorkspaces: [],
             selectedWorkspaceID: workspace.id,
             sessions: TerminalSessionRegistry(
                 workspaces: [workspace],
@@ -489,7 +488,6 @@ struct WorkspacePersistenceTests {
         persistence.saveSceneState(
             for: firstSceneIdentity,
             liveWorkspaces: [firstSceneWorkspace],
-            recentlyClosedWorkspaces: [],
             selectedWorkspaceID: firstSceneWorkspace.id,
             sessions: TerminalSessionRegistry(
                 workspaces: [firstSceneWorkspace],
@@ -499,7 +497,6 @@ struct WorkspacePersistenceTests {
         persistence.saveSceneState(
             for: secondSceneIdentity,
             liveWorkspaces: [secondSceneWorkspace],
-            recentlyClosedWorkspaces: [],
             selectedWorkspaceID: secondSceneWorkspace.id,
             sessions: TerminalSessionRegistry(
                 workspaces: [secondSceneWorkspace],
@@ -524,41 +521,27 @@ struct WorkspacePersistenceTests {
         let persistence = WorkspacePersistenceController.inMemoryForTesting()
         let launchConfiguration = TestSupport.makeLaunchContextBuilder(defaultCurrentDirectory: "/tmp/gmax-tests").makeLaunchConfiguration()
 
-        persistence.saveSceneState(
+        persistence.recordRecentlyClosedWorkspace(
+            RecentlyClosedWorkspaceStateInput(
+                workspace: firstRecentWorkspace,
+                formerIndex: 2,
+                launchConfigurationsBySessionID: [:],
+                titlesBySessionID: [:],
+                transcriptsBySessionID: [:],
+            ),
             for: firstSceneIdentity,
-            liveWorkspaces: [],
-            recentlyClosedWorkspaces: [
-                RecentlyClosedWorkspaceStateInput(
-                    workspace: firstRecentWorkspace,
-                    formerIndex: 2,
-                    launchConfigurationsBySessionID: [:],
-                    titlesBySessionID: [:],
-                    transcriptsBySessionID: [:],
-                ),
-            ],
-            selectedWorkspaceID: nil,
-            sessions: TerminalSessionRegistry(
-                workspaces: [],
-                defaultLaunchConfiguration: launchConfiguration,
-            ),
+            limit: WorkspacePersistenceDefaults.maxRecentlyClosedWorkspaceCount,
         )
-        persistence.saveSceneState(
-            for: secondSceneIdentity,
-            liveWorkspaces: [],
-            recentlyClosedWorkspaces: [
-                RecentlyClosedWorkspaceStateInput(
-                    workspace: secondRecentWorkspace,
-                    formerIndex: 5,
-                    launchConfigurationsBySessionID: [:],
-                    titlesBySessionID: [:],
-                    transcriptsBySessionID: [:],
-                ),
-            ],
-            selectedWorkspaceID: nil,
-            sessions: TerminalSessionRegistry(
-                workspaces: [],
-                defaultLaunchConfiguration: launchConfiguration,
+        persistence.recordRecentlyClosedWorkspace(
+            RecentlyClosedWorkspaceStateInput(
+                workspace: secondRecentWorkspace,
+                formerIndex: 5,
+                launchConfigurationsBySessionID: [:],
+                titlesBySessionID: [:],
+                transcriptsBySessionID: [:],
             ),
+            for: secondSceneIdentity,
+            limit: WorkspacePersistenceDefaults.maxRecentlyClosedWorkspaceCount,
         )
 
         let restoredFirstSceneRecentWorkspaces = persistence.loadRecentlyClosedWorkspaces(for: firstSceneIdentity)

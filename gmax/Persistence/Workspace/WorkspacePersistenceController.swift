@@ -347,7 +347,6 @@ final class WorkspacePersistenceController {
     func saveSceneState(
         for sceneIdentity: WorkspaceSceneIdentity,
         liveWorkspaces: [Workspace],
-        recentlyClosedWorkspaces: [RecentlyClosedWorkspaceStateInput],
         selectedWorkspaceID: WorkspaceID?,
         sessions: TerminalSessionRegistry,
         liveTranscriptsByWorkspaceID: [WorkspaceID: [TerminalSessionID: String]] = [:],
@@ -368,13 +367,11 @@ final class WorkspacePersistenceController {
         context.performAndWait {
             do {
                 let livePlacements = Self.loadPlacements(role: .live, sceneIdentity: sceneIdentity, in: context)
-                let recentPlacements = Self.loadPlacements(role: .recent, sceneIdentity: sceneIdentity, in: context)
-                var existingPlacementsByID = Dictionary(uniqueKeysWithValues: (livePlacements + recentPlacements).map { ($0.id, $0) })
+                var existingPlacementsByID = Dictionary(uniqueKeysWithValues: livePlacements.map { ($0.id, $0) })
                 let existingWorkspaceRequest = NSFetchRequest<WorkspaceEntity>(entityName: "WorkspaceEntity")
                 let existingWorkspaces = try context.fetch(existingWorkspaceRequest)
                 var existingWorkspacesByID = Dictionary(uniqueKeysWithValues: existingWorkspaces.map { ($0.id, $0) })
                 var retainedPlacementIDs: Set<UUID> = []
-                var retainedWorkspaceIDs: Set<UUID> = []
 
                 for (sortOrder, workspace) in liveWorkspaces.enumerated() {
                     let workspaceEntity = try Self.upsertWorkspaceEntity(
@@ -400,39 +397,6 @@ final class WorkspacePersistenceController {
                     placement.workspace = workspaceEntity
                     Self.refreshListingMetadata(on: placement, from: workspaceEntity)
                     retainedPlacementIDs.insert(placement.id)
-                    retainedWorkspaceIDs.insert(workspaceEntity.id)
-                }
-
-                for (stackIndex, recentlyClosedWorkspace) in recentlyClosedWorkspaces.enumerated() {
-                    let workspaceEntity = try Self.upsertWorkspaceEntity(
-                        for: recentlyClosedWorkspace.workspace,
-                        context: context,
-                        existingWorkspacesByID: &existingWorkspacesByID,
-                        sessionSnapshots: Self.makeSessionSnapshots(
-                            for: recentlyClosedWorkspace.workspace,
-                            launchConfigurationsBySessionID: recentlyClosedWorkspace.launchConfigurationsBySessionID,
-                            titlesBySessionID: recentlyClosedWorkspace.titlesBySessionID,
-                            transcriptsBySessionID: recentlyClosedWorkspace.transcriptsBySessionID,
-                        ),
-                    )
-                    let placement = existingPlacementsByID.removeValue(forKey: workspaceEntity.id)
-                        ?? WorkspacePlacementEntity(context: context)
-                    let now = Date()
-                    if placement.objectID.isTemporaryID {
-                        placement.id = workspaceEntity.id
-                        placement.createdAt = now
-                    }
-                    placement.role = WorkspacePlacementRole.recent.rawValue
-                    placement.windowID = sceneIdentity.windowID
-                    placement.sortOrder = Int64(stackIndex)
-                    placement.restoreSortOrder = Int64(recentlyClosedWorkspace.formerIndex)
-                    placement.updatedAt = now
-                    placement.lastOpenedAt = nil
-                    placement.isPinned = false
-                    placement.workspace = workspaceEntity
-                    Self.refreshListingMetadata(on: placement, from: workspaceEntity)
-                    retainedPlacementIDs.insert(placement.id)
-                    retainedWorkspaceIDs.insert(workspaceEntity.id)
                 }
 
                 for stalePlacement in existingPlacementsByID.values where !retainedPlacementIDs.contains(stalePlacement.id) {
@@ -454,7 +418,7 @@ final class WorkspacePersistenceController {
 
                 try Self.deleteOrphanedWorkspaceRecords(
                     existingWorkspacesByID: existingWorkspacesByID,
-                    retainedWorkspaceIDs: retainedWorkspaceIDs,
+                    retainedWorkspaceIDs: try Self.retainedWorkspaceIDs(in: context),
                     context: context,
                 )
 

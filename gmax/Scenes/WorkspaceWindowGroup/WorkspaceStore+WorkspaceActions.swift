@@ -248,7 +248,6 @@ extension WorkspaceStore {
 extension WorkspaceStore {
     private struct PersistenceSnapshot {
         let liveWorkspaces: [Workspace]
-        let recentlyClosedWorkspaces: [RecentlyClosedWorkspaceStateInput]
         let selectedWorkspaceID: WorkspaceID?
         let liveTranscriptsByWorkspaceID: [WorkspaceID: [TerminalSessionID: String]]
     }
@@ -300,31 +299,6 @@ extension WorkspaceStore {
 
     private func makePersistenceSnapshot() -> PersistenceSnapshot {
         let workspacesSnapshot = workspaces
-        let recentlyClosedSnapshot = persistence.loadRecentlyClosedWorkspaces(for: sceneIdentity).map { closedWorkspace in
-            RecentlyClosedWorkspaceStateInput(
-                workspace: closedWorkspace.revision.workspace,
-                formerIndex: closedWorkspace.formerIndex,
-                launchConfigurationsBySessionID: Dictionary(
-                    uniqueKeysWithValues: closedWorkspace.revision.paneSnapshotsBySessionID.map {
-                        ($0.key, $0.value.launchConfiguration)
-                    },
-                ),
-                titlesBySessionID: Dictionary(
-                    uniqueKeysWithValues: closedWorkspace.revision.paneSnapshotsBySessionID.map {
-                        ($0.key, $0.value.title)
-                    },
-                ),
-                transcriptsBySessionID: Dictionary(
-                    uniqueKeysWithValues: closedWorkspace.revision.paneSnapshotsBySessionID.compactMap {
-                        guard let transcript = $0.value.transcript else {
-                            return nil
-                        }
-
-                        return ($0.key, transcript)
-                    },
-                ),
-            )
-        }
         let transcriptsByWorkspaceID = Dictionary(
             uniqueKeysWithValues: workspacesSnapshot.map { workspace in
                 (
@@ -339,7 +313,6 @@ extension WorkspaceStore {
 
         return PersistenceSnapshot(
             liveWorkspaces: workspacesSnapshot,
-            recentlyClosedWorkspaces: recentlyClosedSnapshot,
             selectedWorkspaceID: persistedSelectedWorkspaceID,
             liveTranscriptsByWorkspaceID: transcriptsByWorkspaceID,
         )
@@ -351,12 +324,11 @@ extension WorkspaceStore {
         delivery: String,
     ) {
         Logger.persistence.notice(
-            "Persisting the current window-scoped workspace state. Delivery: \(delivery, privacy: .public). Reason: \(reason.logName, privacy: .public). Window ID: \(self.sceneIdentity.windowID.uuidString, privacy: .public). Live workspace count: \(snapshot.liveWorkspaces.count). Recently closed count: \(snapshot.recentlyClosedWorkspaces.count).",
+            "Persisting the current window-scoped live workspace state. Delivery: \(delivery, privacy: .public). Reason: \(reason.logName, privacy: .public). Window ID: \(self.sceneIdentity.windowID.uuidString, privacy: .public). Live workspace count: \(snapshot.liveWorkspaces.count). Recently closed count: \(self.recentlyClosedWorkspaceCount).",
         )
         persistence.saveSceneState(
             for: sceneIdentity,
             liveWorkspaces: snapshot.liveWorkspaces,
-            recentlyClosedWorkspaces: snapshot.recentlyClosedWorkspaces,
             selectedWorkspaceID: snapshot.selectedWorkspaceID,
             sessions: sessions,
             liveTranscriptsByWorkspaceID: snapshot.liveTranscriptsByWorkspaceID,
