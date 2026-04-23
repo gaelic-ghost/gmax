@@ -10,6 +10,12 @@ import Foundation
 import Testing
 
 struct WorkspacePersistenceProfileTests {
+    @Test func `background save interval default and normalization stay stable`() {
+        #expect(WorkspacePersistenceDefaults.defaultBackgroundSaveIntervalMinutes == 5)
+        #expect(WorkspacePersistenceDefaults.normalizedBackgroundSaveIntervalMinutes(0) == 1)
+        #expect(WorkspacePersistenceDefaults.normalizedBackgroundSaveIntervalMinutes(5) == 5)
+    }
+
     @Test func `debug build defaults to debug store when no environment overrides exist`() {
 #if DEBUG
         let processInfo = ProcessInfoStub(environment: [:])

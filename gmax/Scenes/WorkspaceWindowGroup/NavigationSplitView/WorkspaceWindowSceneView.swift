@@ -1,3 +1,4 @@
+import AppKit
 import OSLog
 import SwiftUI
 
@@ -15,7 +16,10 @@ private enum FocusAssignment: Equatable {
 
 struct WorkspaceWindowSceneView: View {
     @Environment(\.appearsActive) private var appearsActive
+    @Environment(\.scenePhase) private var scenePhase
     @FocusState private var focusedTarget: WorkspaceFocusTarget?
+    @AppStorage(WorkspacePersistenceDefaults.backgroundSaveIntervalMinutesKey)
+    private var backgroundSaveIntervalMinutes = WorkspacePersistenceDefaults.defaultBackgroundSaveIntervalMinutes
     @SceneStorage(WorkspaceWindowSceneStorageKey.selectedWorkspaceID) private var restoredSelectedWorkspaceID: String?
     @SceneStorage(WorkspaceWindowSceneStorageKey.isInspectorVisible) private var restoredInspectorVisible = true
     @SceneStorage(WorkspaceWindowSceneStorageKey.isSidebarVisible) private var restoredSidebarVisible = true
@@ -117,6 +121,9 @@ struct WorkspaceWindowSceneView: View {
             return nil
         }()
         let hasPresentedWorkspaceModal = dismissPresentedWorkspaceModal != nil
+        let normalizedBackgroundSaveIntervalMinutes = WorkspacePersistenceDefaults.normalizedBackgroundSaveIntervalMinutes(
+            backgroundSaveIntervalMinutes,
+        )
         let selectedWorkspace = selectedWorkspaceID.flatMap { selectedWorkspaceID in
             workspaceStore.workspaces.first { $0.id == selectedWorkspaceID }
         }
@@ -201,23 +208,6 @@ struct WorkspaceWindowSceneView: View {
                 await Task.yield()
                 guard pendingFocusedPaneID == paneID else {
                     return
-                }
-
-                focusPaneTarget(paneID)
-                pendingFocusedPaneID = nil
-            }
-        }
-        let restorePaneFocusAfterWindowActivation: (PaneID) -> Void = { paneID in
-            pendingFocusedPaneID = paneID
-            Task { @MainActor in
-                await Task.yield()
-                guard pendingFocusedPaneID == paneID else {
-                    return
-                }
-
-                if focusedTarget == .pane(paneID) {
-                    applyFocusAssignment(.none)
-                    await Task.yield()
                 }
 
                 focusPaneTarget(paneID)
@@ -350,76 +340,35 @@ struct WorkspaceWindowSceneView: View {
             )
             .inspectorColumnWidth(min: 220, ideal: 260, max: 340)
         }
-        .sheet(isPresented: $isSavedWorkspaceLibraryPresented) {
-            SavedWorkspaceLibrarySheet(model: workspaceStore, selectedWorkspaceID: $selectedWorkspaceID)
-        }
-        .alert(
-            "Delete Workspace?",
-            isPresented: Binding(
-                get: { pendingDeletionWorkspace != nil },
+        .modifier(WorkspaceWindowPresentationModifier(
+            workspaceStore: workspaceStore,
+            selectedWorkspaceID: $selectedWorkspaceID,
+            isSavedWorkspaceLibraryPresented: $isSavedWorkspaceLibraryPresented,
+            deleteAlertIsPresented: Binding(
+                get: { workspacePendingDeletionID != nil },
                 set: { isPresented in
                     if !isPresented {
                         dismissWorkspaceDeletion()
                     }
                 },
             ),
-            presenting: pendingDeletionWorkspace,
-        ) { _ in
-            Button("Delete", role: .destructive) {
-                guard let workspacePendingDeletionID else {
-                    Logger.diagnostics.error(
-                        "The app attempted to confirm workspace deletion in the active shell window, but no workspace was pending destructive confirmation.",
-                    )
-                    return
-                }
-
-                workspaceStore.deleteWorkspace(workspacePendingDeletionID)
-                let deletedWorkspaceID = workspacePendingDeletionID.rawValue.uuidString
-                Logger.diagnostics.notice(
-                    "Deleted a workspace after the active shell window confirmed the destructive action. Workspace ID: \(deletedWorkspaceID, privacy: .public)",
-                )
-                self.workspacePendingDeletionID = nil
-                normalizeSelection()
-            }
-            .accessibilityIdentifier("sidebar.deleteWorkspaceConfirmButton")
-
-            Button("Cancel", role: .cancel) {
-                dismissWorkspaceDeletion()
-            }
-            .accessibilityIdentifier("sidebar.deleteWorkspaceCancelButton")
-        } message: { workspace in
-            Text("Delete “\(workspace.title)” and close every pane in it? Your other workspaces stay open.")
-        }
-        .sheet(isPresented: Binding(
-            get: { pendingRenameWorkspace != nil },
-            set: { isPresented in
-                if !isPresented {
-                    dismissWorkspaceRename()
-                }
+            deleteWorkspaceTitle: pendingDeletionWorkspace?.title,
+            confirmDelete: {
+                confirmWorkspaceDeletion(normalizeSelection: normalizeSelection)
             },
-        )) {
-            WorkspaceRenameSheet(
-                title: $workspaceRenameTitleDraft,
-                onCancel: {
-                    dismissWorkspaceRename()
-                },
-                onSave: {
-                    guard let workspacePendingRenameID else {
-                        Logger.diagnostics.error(
-                            "The app attempted to save a workspace rename from the active shell window, but no workspace rename sheet was currently presented.",
-                        )
-                        return
+            cancelDelete: dismissWorkspaceDeletion,
+            renameSheetIsPresented: Binding(
+                get: { pendingRenameWorkspace != nil },
+                set: { isPresented in
+                    if !isPresented {
+                        dismissWorkspaceRename()
                     }
-
-                    workspaceStore.renameWorkspace(workspacePendingRenameID, to: workspaceRenameTitleDraft)
-                    selectedWorkspaceID = workspacePendingRenameID
-                    Logger.diagnostics.notice(
-                        "Saved a workspace rename from the active shell window. Workspace ID: \(workspacePendingRenameID.rawValue.uuidString, privacy: .public). New title: \(workspaceRenameTitleDraft, privacy: .public)",
-                    )
-                    self.workspacePendingRenameID = nil
                 },
-            )
-        }
+            ),
+            workspaceRenameTitleDraft: $workspaceRenameTitleDraft,
+            cancelRename: dismissWorkspaceRename,
+            saveRename: saveWorkspaceRename,
+        ))
         .focusedSceneObject(workspaceStore)
         .focusedSceneValue(\.activeWorkspaceFocusTarget, focusedTarget)
         .focusedSceneValue(\.selectedWorkspaceSelection, $selectedWorkspaceID)
@@ -430,6 +379,82 @@ struct WorkspaceWindowSceneView: View {
         .focusedSceneValue(\.moveFocusedPaneFocus, moveFocusedPaneFocusAction)
         .focusedSceneValue(\.splitFocusedPane, splitFocusedPaneAction)
         .focusedSceneValue(\.closeFocusedPane, closeFocusedPaneAction)
+        .modifier(WorkspaceWindowLifecycleModifier(
+            normalizedBackgroundSaveIntervalMinutes: normalizedBackgroundSaveIntervalMinutes,
+            onInitialTask: {
+                guard !hasAppliedSceneState else {
+                    return
+                }
+
+                applyInitialSceneRestoration(normalizeSelection: normalizeSelection)
+            },
+            onBackgroundSaveTask: {
+                await runPeriodicPersistenceLoop(
+                    every: normalizedBackgroundSaveIntervalMinutes,
+                    workspaceStore: workspaceStore,
+                )
+            },
+            onWillTerminate: {
+                workspaceStore.persistSceneStateNow(
+                    reason: WorkspacePersistenceSaveReason.appWillTerminate,
+                )
+            },
+            selectedWorkspaceIDString: selectedWorkspaceID?.rawValue.uuidString,
+            onSelectedWorkspaceIDStringChange: { restoredSelectedWorkspaceID = $0 },
+            focusedTarget: focusedTarget,
+            onFocusedTargetChange: { newValue in
+                handleFocusedTargetChange(
+                    newValue,
+                    activePaneIDs: activePaneIDs,
+                    recordFocusedPaneInHistory: recordFocusedPaneInHistory,
+                )
+            },
+            workspaceIDs: workspaceStore.workspaces.map(\.id.rawValue),
+            onWorkspaceIDsChange: {
+                normalizeSelection()
+            },
+            selectedWorkspaceID: selectedWorkspaceID,
+            onSelectedWorkspaceChange: {
+                resetPaneNavigationStateForWorkspaceSelection()
+            },
+            selectedWorkspacePaneIDs: selectedWorkspace?.paneLeaves.map(\.id) ?? [],
+            onSelectedWorkspacePaneChange: { paneIDs in
+                handleSelectedWorkspacePaneChange(
+                    paneIDs: paneIDs,
+                    applyFocusAssignment: applyFocusAssignment,
+                )
+            },
+            isInspectorVisible: isInspectorVisible,
+            onInspectorVisibilityChange: { newValue in
+                handleInspectorVisibilityChange(
+                    newValue,
+                    inspectedPaneID: inspectedPaneID,
+                    focusPaneTarget: focusPaneTarget,
+                )
+            },
+            columnVisibility: columnVisibility,
+            onColumnVisibilityChange: { restoredSidebarVisible = $0 == .all },
+            scenePhase: scenePhase,
+            onScenePhaseChange: handleScenePhaseChange,
+            appearsActive: appearsActive,
+            onAppearsActiveChange: { newValue in
+                workspaceStore.persistSceneStateNow(
+                    reason: newValue
+                        ? .windowBecameActive
+                        : .windowResignedActive,
+                )
+                handleWindowAppearanceChange(
+                    newValue,
+                    activePaneIDs: activePaneIDs,
+                    hasPresentedWorkspaceModal: hasPresentedWorkspaceModal,
+                )
+            },
+            onDisappear: {
+                workspaceStore.persistSceneStateNow(
+                    reason: WorkspacePersistenceSaveReason.windowDisappeared,
+                )
+            },
+        ))
         .toolbar {
             ToolbarItem(placement: .navigation) {
                 Button("Open Saved Workspaces", systemImage: "folder", action: openSavedWorkspaceLibrary)
@@ -480,87 +505,291 @@ struct WorkspaceWindowSceneView: View {
                 .accessibilityIdentifier("workspaceWindow.toggleInspectorButton")
             }
         }
-        .task {
-            guard !hasAppliedSceneState else {
-                return
+    }
+
+    private func runPeriodicPersistenceLoop(
+        every intervalMinutes: Int,
+        workspaceStore: WorkspaceStore,
+    ) async {
+        let intervalSeconds = intervalMinutes * 60
+        while !Task.isCancelled {
+            try? await Task.sleep(for: .seconds(intervalSeconds))
+            guard !Task.isCancelled else {
+                break
             }
 
-            hasAppliedSceneState = true
-            let restoredSelection = restoredSelectedWorkspaceID
-                .flatMap(UUID.init(uuidString:))
-                .map { WorkspaceID(rawValue: $0) }
-            selectedWorkspaceID = restoredSelection ?? workspaceStore.workspaces.first?.id
-            normalizeSelection()
-            columnVisibility = restoredSidebarVisible ? .all : .doubleColumn
-            isInspectorVisible = restoredInspectorVisible
-            Logger.diagnostics.notice(
-                """
-                Applied per-window shell scene restoration. Restored workspace selection: \(restoredSelection?.rawValue.uuidString ?? "(none)", privacy: .public). \
-                Normalized workspace selection: \(selectedWorkspaceID?.rawValue.uuidString ?? "(none)", privacy: .public). \
-                Sidebar visibility: \(restoredSidebarVisible ? "visible" : "hidden", privacy: .public). \
-                Inspector visibility: \(restoredInspectorVisible ? "visible" : "hidden", privacy: .public).
-                """,
+            workspaceStore.persistSceneStateNow(
+                reason: WorkspacePersistenceSaveReason.backgroundIntervalElapsed,
             )
         }
-        .onChange(of: selectedWorkspaceID?.rawValue.uuidString) { _, newValue in
-            restoredSelectedWorkspaceID = newValue
-        }
-        .onChange(of: focusedTarget) { _, newValue in
-            guard case let .pane(paneID) = newValue, activePaneIDs.contains(paneID) else {
-                pendingHistoryPaneID = nil
-                return
-            }
+    }
 
-            recordFocusedPaneInHistory(paneID)
+    private func applyInitialSceneRestoration(
+        normalizeSelection: () -> Void,
+    ) {
+        hasAppliedSceneState = true
+
+        let restoredWorkspaceUUID = restoredSelectedWorkspaceID.flatMap(UUID.init(uuidString:))
+        let restoredSelection = restoredWorkspaceUUID.map(WorkspaceID.init(rawValue:))
+        let fallbackWorkspaceID = workspaceStore.workspaces.first?.id
+
+        if let restoredSelection {
+            selectedWorkspaceID = restoredSelection
+        } else {
+            selectedWorkspaceID = fallbackWorkspaceID
         }
-        .onChange(of: workspaceStore.workspaces.map(\.id.rawValue)) { _, _ in
-            normalizeSelection()
-        }
-        .onChange(of: selectedWorkspaceID) { _, _ in
-            paneFrames = [:]
-            paneFocusHistory = []
-            pendingFocusedPaneID = nil
+
+        normalizeSelection()
+        columnVisibility = restoredSidebarVisible ? .all : .doubleColumn
+        isInspectorVisible = restoredInspectorVisible
+
+        Logger.diagnostics.notice(
+            """
+            Applied per-window shell scene restoration. Restored workspace selection: \(restoredSelection?.rawValue.uuidString ?? "(none)", privacy: .public). \
+            Normalized workspace selection: \(selectedWorkspaceID?.rawValue.uuidString ?? "(none)", privacy: .public). \
+            Sidebar visibility: \(restoredSidebarVisible ? "visible" : "hidden", privacy: .public). \
+            Inspector visibility: \(restoredInspectorVisible ? "visible" : "hidden", privacy: .public).
+            """,
+        )
+    }
+
+    private func handleFocusedTargetChange(
+        _ newValue: WorkspaceFocusTarget?,
+        activePaneIDs: Set<PaneID>,
+        recordFocusedPaneInHistory: (PaneID) -> Void,
+    ) {
+        guard let newValue else {
             pendingHistoryPaneID = nil
+            return
         }
-        .onChange(of: selectedWorkspace?.paneLeaves.map(\.id) ?? []) { _, paneIDs in
-            let activePaneIDs = Set(paneIDs)
-            paneFrames = paneFrames.filter { activePaneIDs.contains($0.key) }
-            paneFocusHistory = paneFocusHistory.filter { activePaneIDs.contains($0) }
-            pendingFocusedPaneID = pendingFocusedPaneID.flatMap { activePaneIDs.contains($0) ? $0 : nil }
-            pendingHistoryPaneID = pendingHistoryPaneID.flatMap { activePaneIDs.contains($0) ? $0 : nil }
-            if case let .pane(paneID) = focusedTarget, !activePaneIDs.contains(paneID) {
-                applyFocusAssignment(isInspectorVisible ? .inspector : .none)
-            }
+
+        guard case let .pane(paneID) = newValue else {
+            pendingHistoryPaneID = nil
+            return
         }
-        .onChange(of: isInspectorVisible) { _, newValue in
-            restoredInspectorVisible = newValue
-            if !newValue, focusedTarget == .inspector {
-                focusPaneTarget(inspectedPaneID)
-            }
+
+        let isActivePane = activePaneIDs.contains(paneID)
+        guard isActivePane else {
+            pendingHistoryPaneID = nil
+            return
         }
-        .onChange(of: columnVisibility) { _, newValue in
-            restoredSidebarVisible = newValue == .all
+
+        recordFocusedPaneInHistory(paneID)
+    }
+
+    private func handleWindowAppearanceChange(
+        _ newValue: Bool,
+        activePaneIDs: Set<PaneID>,
+        hasPresentedWorkspaceModal: Bool,
+    ) {
+        guard newValue else {
+            return
         }
-        .onChange(of: appearsActive) { _, newValue in
-            guard newValue else {
+
+        let restoredPaneFocusTarget = paneFocusTargetAfterActivatingWindow(
+            focusedTarget: focusedTarget,
+            survivingPaneIDs: activePaneIDs,
+            paneFocusHistory: paneFocusHistory,
+            isInspectorVisible: isInspectorVisible,
+            hasPresentedWorkspaceModal: hasPresentedWorkspaceModal,
+        )
+
+        guard let restoredPaneFocusTarget else {
+            return
+        }
+
+        if case let .pane(paneID) = restoredPaneFocusTarget {
+            restorePaneFocusAfterWindowActivationDirect(
+                paneID,
+                activePaneIDs: activePaneIDs,
+            )
+            return
+        }
+
+        if restoredPaneFocusTarget == .inspector {
+            applyFocusAssignmentDirect(
+                .inspector,
+                activePaneIDs: activePaneIDs,
+            )
+        }
+    }
+
+    private func applyFocusAssignmentDirect(
+        _ assignment: FocusAssignment,
+        activePaneIDs: Set<PaneID>,
+    ) {
+        let normalizedAssignment: FocusAssignment = switch assignment {
+            case let .pane(paneID) where activePaneIDs.contains(paneID):
+                .pane(paneID)
+            case .pane:
+                .none
+            case .inspector:
+                .inspector
+            case .none:
+                .none
+        }
+
+        focusedTarget = switch normalizedAssignment {
+            case let .pane(paneID):
+                .pane(paneID)
+            case .inspector:
+                .inspector
+            case .none:
+                nil
+        }
+    }
+
+    private func restorePaneFocusAfterWindowActivationDirect(
+        _ paneID: PaneID,
+        activePaneIDs: Set<PaneID>,
+    ) {
+        pendingFocusedPaneID = paneID
+        Task { @MainActor in
+            await Task.yield()
+            guard pendingFocusedPaneID == paneID else {
                 return
             }
 
-            switch paneFocusTargetAfterActivatingWindow(
-                focusedTarget: focusedTarget,
-                survivingPaneIDs: activePaneIDs,
-                paneFocusHistory: paneFocusHistory,
-                isInspectorVisible: isInspectorVisible,
-                hasPresentedWorkspaceModal: hasPresentedWorkspaceModal,
-            ) {
-                case let .pane(paneID):
-                    restorePaneFocusAfterWindowActivation(paneID)
-                case .inspector:
-                    applyFocusAssignment(.inspector)
-                case .sidebar, nil:
-                    break
+            if focusedTarget == .pane(paneID) {
+                applyFocusAssignmentDirect(.none, activePaneIDs: activePaneIDs)
+                await Task.yield()
+            }
+
+            applyFocusAssignmentDirect(.pane(paneID), activePaneIDs: activePaneIDs)
+            pendingFocusedPaneID = nil
+        }
+    }
+
+    private func resetPaneNavigationStateForWorkspaceSelection() {
+        paneFrames = [:]
+        paneFocusHistory = []
+        pendingFocusedPaneID = nil
+        pendingHistoryPaneID = nil
+    }
+
+    private func handleSelectedWorkspacePaneChange(
+        paneIDs: [PaneID],
+        applyFocusAssignment: (FocusAssignment) -> Void,
+    ) {
+        let activePaneIDs = Set(paneIDs)
+        let normalizedState = normalizedPaneNavigationState(activePaneIDs: activePaneIDs)
+        paneFrames = normalizedState.paneFrames
+        paneFocusHistory = normalizedState.paneFocusHistory
+        pendingFocusedPaneID = normalizedState.pendingFocusedPaneID
+        pendingHistoryPaneID = normalizedState.pendingHistoryPaneID
+
+        if case let .pane(paneID) = focusedTarget, !activePaneIDs.contains(paneID) {
+            applyFocusAssignment(isInspectorVisible ? .inspector : .none)
+        }
+    }
+
+    private func handleInspectorVisibilityChange(
+        _ newValue: Bool,
+        inspectedPaneID: PaneID?,
+        focusPaneTarget: (PaneID?) -> Void,
+    ) {
+        restoredInspectorVisible = newValue
+
+        guard !newValue else {
+            return
+        }
+
+        guard focusedTarget == .inspector else {
+            return
+        }
+
+        focusPaneTarget(inspectedPaneID)
+    }
+
+    private func handleScenePhaseChange(_ newValue: ScenePhase) {
+        switch newValue {
+            case .inactive:
+                workspaceStore.persistSceneStateNow(
+                    reason: WorkspacePersistenceSaveReason.sceneBecameInactive,
+                )
+            case .background:
+                workspaceStore.persistSceneStateNow(
+                    reason: WorkspacePersistenceSaveReason.sceneEnteredBackground,
+                )
+            case .active:
+                break
+            @unknown default:
+                break
+        }
+    }
+
+    private func confirmWorkspaceDeletion(
+        normalizeSelection: () -> Void,
+    ) {
+        guard let workspacePendingDeletionID else {
+            Logger.diagnostics.error(
+                "The app attempted to confirm workspace deletion in the active shell window, but no workspace was pending destructive confirmation.",
+            )
+            return
+        }
+
+        workspaceStore.deleteWorkspace(workspacePendingDeletionID)
+        let deletedWorkspaceID = workspacePendingDeletionID.rawValue.uuidString
+        Logger.diagnostics.notice(
+            "Deleted a workspace after the active shell window confirmed the destructive action. Workspace ID: \(deletedWorkspaceID, privacy: .public)",
+        )
+        self.workspacePendingDeletionID = nil
+        normalizeSelection()
+    }
+
+    private func saveWorkspaceRename() {
+        guard let workspacePendingRenameID else {
+            Logger.diagnostics.error(
+                "The app attempted to save a workspace rename from the active shell window, but no workspace rename sheet was currently presented.",
+            )
+            return
+        }
+
+        workspaceStore.renameWorkspace(workspacePendingRenameID, to: workspaceRenameTitleDraft)
+        selectedWorkspaceID = workspacePendingRenameID
+
+        let renamedWorkspaceID = workspacePendingRenameID.rawValue.uuidString
+        Logger.diagnostics.notice(
+            "Saved a workspace rename from the active shell window. Workspace ID: \(renamedWorkspaceID, privacy: .public).",
+        )
+        Logger.diagnostics.notice(
+            "The active shell window applied the latest workspace title change.",
+        )
+
+        self.workspacePendingRenameID = nil
+    }
+
+    private func normalizedPaneNavigationState(
+        activePaneIDs: Set<PaneID>,
+    ) -> (
+        paneFrames: [PaneID: CGRect],
+        paneFocusHistory: [PaneID],
+        pendingFocusedPaneID: PaneID?,
+        pendingHistoryPaneID: PaneID?
+    ) {
+        let filteredPaneFrames = paneFrames.reduce(into: [PaneID: CGRect]()) { result, entry in
+            if activePaneIDs.contains(entry.key) {
+                result[entry.key] = entry.value
             }
         }
+        let filteredPaneFocusHistory = paneFocusHistory.reduce(into: [PaneID]()) { result, paneID in
+            if activePaneIDs.contains(paneID) {
+                result.append(paneID)
+            }
+        }
+        let normalizedPendingFocusedPaneID = pendingFocusedPaneID.flatMap {
+            activePaneIDs.contains($0) ? $0 : nil
+        }
+        let normalizedPendingHistoryPaneID = pendingHistoryPaneID.flatMap {
+            activePaneIDs.contains($0) ? $0 : nil
+        }
+
+        return (
+            paneFrames: filteredPaneFrames,
+            paneFocusHistory: filteredPaneFocusHistory,
+            pendingFocusedPaneID: normalizedPendingFocusedPaneID,
+            pendingHistoryPaneID: normalizedPendingHistoryPaneID
+        )
     }
 }
 
@@ -757,6 +986,128 @@ func paneFocusTargetAfterClosingPane(
     }
 
     return nil
+}
+
+private struct WorkspaceWindowPresentationModifier: ViewModifier {
+    let workspaceStore: WorkspaceStore
+    @Binding var selectedWorkspaceID: WorkspaceID?
+    @Binding var isSavedWorkspaceLibraryPresented: Bool
+    let deleteAlertIsPresented: Binding<Bool>
+    let deleteWorkspaceTitle: String?
+    let confirmDelete: () -> Void
+    let cancelDelete: () -> Void
+    let renameSheetIsPresented: Binding<Bool>
+    @Binding var workspaceRenameTitleDraft: String
+    let cancelRename: () -> Void
+    let saveRename: () -> Void
+
+    func body(content: Content) -> some View {
+        content
+            .sheet(isPresented: $isSavedWorkspaceLibraryPresented) {
+                SavedWorkspaceLibrarySheet(
+                    model: workspaceStore,
+                    selectedWorkspaceID: $selectedWorkspaceID,
+                )
+            }
+            .alert(
+                "Delete Workspace?",
+                isPresented: deleteAlertIsPresented,
+            ) {
+                Button("Delete", role: .destructive) {
+                    confirmDelete()
+                }
+                .accessibilityIdentifier("sidebar.deleteWorkspaceConfirmButton")
+
+                Button("Cancel", role: .cancel) {
+                    cancelDelete()
+                }
+                .accessibilityIdentifier("sidebar.deleteWorkspaceCancelButton")
+            } message: {
+                Text(
+                    "Delete “\(deleteWorkspaceTitle ?? "this workspace")” and close every pane in it? Your other workspaces stay open.",
+                )
+            }
+            .sheet(isPresented: renameSheetIsPresented) {
+                WorkspaceRenameSheet(
+                    title: $workspaceRenameTitleDraft,
+                    onCancel: {
+                        cancelRename()
+                    },
+                    onSave: {
+                        saveRename()
+                    },
+                )
+            }
+    }
+}
+
+private struct WorkspaceWindowLifecycleModifier: ViewModifier {
+    let normalizedBackgroundSaveIntervalMinutes: Int
+    let onInitialTask: () -> Void
+    let onBackgroundSaveTask: @Sendable () async -> Void
+    let onWillTerminate: () -> Void
+    let selectedWorkspaceIDString: String?
+    let onSelectedWorkspaceIDStringChange: (String?) -> Void
+    let focusedTarget: WorkspaceFocusTarget?
+    let onFocusedTargetChange: (WorkspaceFocusTarget?) -> Void
+    let workspaceIDs: [UUID]
+    let onWorkspaceIDsChange: () -> Void
+    let selectedWorkspaceID: WorkspaceID?
+    let onSelectedWorkspaceChange: () -> Void
+    let selectedWorkspacePaneIDs: [PaneID]
+    let onSelectedWorkspacePaneChange: ([PaneID]) -> Void
+    let isInspectorVisible: Bool
+    let onInspectorVisibilityChange: (Bool) -> Void
+    let columnVisibility: NavigationSplitViewVisibility
+    let onColumnVisibilityChange: (NavigationSplitViewVisibility) -> Void
+    let scenePhase: ScenePhase
+    let onScenePhaseChange: (ScenePhase) -> Void
+    let appearsActive: Bool
+    let onAppearsActiveChange: (Bool) -> Void
+    let onDisappear: () -> Void
+
+    func body(content: Content) -> some View {
+        content
+            .task {
+                onInitialTask()
+            }
+            .task(id: normalizedBackgroundSaveIntervalMinutes) {
+                await onBackgroundSaveTask()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in
+                onWillTerminate()
+            }
+            .onChange(of: selectedWorkspaceIDString) { _, newValue in
+                onSelectedWorkspaceIDStringChange(newValue)
+            }
+            .onChange(of: focusedTarget) { _, newValue in
+                onFocusedTargetChange(newValue)
+            }
+            .onChange(of: workspaceIDs) { _, _ in
+                onWorkspaceIDsChange()
+            }
+            .onChange(of: selectedWorkspaceID) { _, _ in
+                onSelectedWorkspaceChange()
+            }
+            .onChange(of: selectedWorkspacePaneIDs) { _, paneIDs in
+                onSelectedWorkspacePaneChange(paneIDs)
+            }
+            .onChange(of: isInspectorVisible) { _, newValue in
+                onInspectorVisibilityChange(newValue)
+            }
+            .onChange(of: columnVisibility) { _, newValue in
+                onColumnVisibilityChange(newValue)
+            }
+            .onChange(of: scenePhase) { _, newValue in
+                onScenePhaseChange(newValue)
+            }
+            .onChange(of: appearsActive) { _, newValue in
+                onAppearsActiveChange(newValue)
+            }
+            .onDisappear {
+                onDisappear()
+            }
+    }
 }
 
 func paneFocusTargetAfterActivatingWindow(

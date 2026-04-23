@@ -8,12 +8,14 @@
 import Foundation
 
 enum WorkspacePersistenceDefaults {
-    static let restoreWorkspacesOnLaunchKey = "workspacePersistence.restoreOnLaunch"
-    static let keepRecentlyClosedWorkspacesKey = "workspacePersistence.keepRecentlyClosed"
-    static let autoSaveClosedWorkspacesKey = "workspacePersistence.autoSaveClosedWorkspaces"
-    static let maxRecentlyClosedWorkspaceCount = 20
+    nonisolated static let restoreWorkspacesOnLaunchKey = "workspacePersistence.restoreOnLaunch"
+    nonisolated static let keepRecentlyClosedWorkspacesKey = "workspacePersistence.keepRecentlyClosed"
+    nonisolated static let autoSaveClosedWorkspacesKey = "workspacePersistence.autoSaveClosedWorkspaces"
+    nonisolated static let backgroundSaveIntervalMinutesKey = "workspacePersistence.backgroundSaveIntervalMinutes"
+    nonisolated static let maxRecentlyClosedWorkspaceCount = 20
+    nonisolated static let defaultBackgroundSaveIntervalMinutes = 5
 
-    static func systemRestoresWindowsByDefault(globalDefaults: UserDefaults = .standard) -> Bool {
+    nonisolated static func systemRestoresWindowsByDefault(globalDefaults: UserDefaults = .standard) -> Bool {
         guard
             let globalDomain = globalDefaults.persistentDomain(forName: UserDefaults.globalDomain),
             let keepsWindows = globalDomain["NSQuitAlwaysKeepsWindows"] as? Bool
@@ -22,5 +24,9 @@ enum WorkspacePersistenceDefaults {
         }
 
         return keepsWindows
+    }
+
+    nonisolated static func normalizedBackgroundSaveIntervalMinutes(_ minutes: Int) -> Int {
+        max(1, minutes)
     }
 }

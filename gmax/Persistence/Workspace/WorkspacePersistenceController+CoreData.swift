@@ -55,7 +55,7 @@ extension WorkspacePersistenceController {
             "Configured workspace persistence using the \(profile.displayName, privacy: .public).",
         )
 
-        if loadPersistentStores(for: primaryContainer) {
+        if loadPersistentStores(for: primaryContainer, profile: profile) {
             return primaryContainer
         }
 
@@ -71,7 +71,7 @@ extension WorkspacePersistenceController {
             contextName: WorkspacePersistenceProfile.inMemory.contextName,
         )
 
-        guard loadPersistentStores(for: fallbackContainer) else {
+        guard loadPersistentStores(for: fallbackContainer, profile: .inMemory) else {
             fatalError("Core Data could not load either the disk-backed workspace store or the in-memory fallback store. The app cannot continue without a managed object context.")
         }
 
@@ -101,17 +101,30 @@ extension WorkspacePersistenceController {
         return container
     }
 
-    static func loadPersistentStores(for container: NSPersistentContainer) -> Bool {
+    static func loadPersistentStores(
+        for container: NSPersistentContainer,
+        profile: WorkspacePersistenceProfile,
+    ) -> Bool {
         var loadError: Error?
+        var loadedStoreDescription: NSPersistentStoreDescription?
         let semaphore = DispatchSemaphore(value: 0)
-        container.loadPersistentStores { _, error in
+        container.loadPersistentStores { description, error in
+            loadedStoreDescription = description
             loadError = error
             semaphore.signal()
         }
         semaphore.wait()
 
         if let loadError {
-            Logger.persistence.error("Core Data could not load a workspace persistent store description. The store described by this container will remain unavailable for this launch. Error: \(String(describing: loadError), privacy: .public)")
+            let requestedStoreLocation = if profile.usesInMemoryStore {
+                "in-memory"
+            } else {
+                storeURL(for: profile).path
+            }
+            let resolvedStoreLocation = loadedStoreDescription?.url?.path ?? requestedStoreLocation
+            Logger.persistence.error(
+                "Core Data could not load the \(profile.displayName, privacy: .public). The requested workspace store will remain unavailable for this launch, and the app may fall back to a different store profile if one is configured. Requested store location: \(requestedStoreLocation, privacy: .public). Resolved store location: \(resolvedStoreLocation, privacy: .public). Error: \(String(describing: loadError), privacy: .public)",
+            )
             return false
         }
 

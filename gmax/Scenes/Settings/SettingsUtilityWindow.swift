@@ -26,6 +26,9 @@ struct SettingsUtilityWindow: View {
     @AppStorage(WorkspacePersistenceDefaults.autoSaveClosedWorkspacesKey)
     private var autoSaveClosedWorkspaces = false
 
+    @AppStorage(WorkspacePersistenceDefaults.backgroundSaveIntervalMinutesKey)
+    private var backgroundSaveIntervalMinutes = WorkspacePersistenceDefaults.defaultBackgroundSaveIntervalMinutes
+
     var body: some View {
         Form {
             TerminalAppearanceSettingsSection(
@@ -44,6 +47,7 @@ struct SettingsUtilityWindow: View {
                 restoreWorkspacesOnLaunch: $restoreWorkspacesOnLaunch,
                 keepRecentlyClosedWorkspaces: $keepRecentlyClosedWorkspaces,
                 autoSaveClosedWorkspaces: $autoSaveClosedWorkspaces,
+                backgroundSaveIntervalMinutes: $backgroundSaveIntervalMinutes,
             )
         }
         .formStyle(.grouped)

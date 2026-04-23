@@ -545,6 +545,7 @@ Recommended semantics:
 - `Keep recently closed workspaces` controls whether close operations populate the undo stack
 - `Auto-save closed workspaces` controls whether closing a workspace also persists it into the saved library automatically
 - `Restore workspaces on launch` controls whether the live session reopens on app launch
+- `Background save interval` controls how often each workspace window performs a periodic persistence flush; the default is five minutes
 
 The intended behavior matrix is:
 

@@ -2,6 +2,30 @@ import Foundation
 import OSLog
 import SwiftUI
 
+enum WorkspacePersistenceSaveReason: String {
+    case workspaceCreated
+    case workspaceRenamed
+    case workspaceDuplicated
+    case workspaceClosed
+    case workspaceDeleted
+    case workspaceUndoClose
+    case workspaceOpenedFromLibrary
+    case paneCreated
+    case paneSplit
+    case paneClosed
+    case paneSplitFractionChanged
+    case appWillTerminate
+    case sceneBecameInactive
+    case sceneEnteredBackground
+    case windowBecameActive
+    case windowResignedActive
+    case windowDisappeared
+    case backgroundIntervalElapsed
+    case unitTestImmediateFlush
+
+    var logName: String { rawValue }
+}
+
 // MARK: - Workspace Lifecycle
 
 // MARK: Workspace creation, duplication, close, restore, and library persistence flows.
@@ -21,7 +45,7 @@ extension WorkspaceStore {
             launchConfiguration: launchContextBuilder.makeLaunchConfiguration(),
         )
         Logger.workspace.notice("Created a new workspace and seeded it with an initial pane. Workspace title: \(workspace.title, privacy: .public). Workspace ID: \(workspace.id.rawValue.uuidString, privacy: .public)")
-        schedulePersistenceSave()
+        schedulePersistenceSave(reason: .workspaceCreated)
         return workspace.id
     }
 
@@ -38,7 +62,7 @@ extension WorkspaceStore {
         let previousTitle = workspaces[workspaceIndex].title
         workspaces[workspaceIndex].title = trimmedTitle
         Logger.workspace.notice("Renamed a workspace. Previous title: \(previousTitle, privacy: .public). New title: \(trimmedTitle, privacy: .public). Workspace ID: \(workspaceID.rawValue.uuidString, privacy: .public)")
-        schedulePersistenceSave()
+        schedulePersistenceSave(reason: .workspaceRenamed)
     }
 
     @discardableResult
@@ -54,7 +78,7 @@ extension WorkspaceStore {
         )
         workspaces.insert(duplicatedWorkspace, at: workspaceIndex + 1)
         Logger.workspace.notice("Duplicated a workspace layout into a new workspace. Source workspace ID: \(workspaceID.rawValue.uuidString, privacy: .public). New workspace title: \(duplicatedWorkspace.title, privacy: .public). New workspace ID: \(duplicatedWorkspace.id.rawValue.uuidString, privacy: .public)")
-        schedulePersistenceSave()
+        schedulePersistenceSave(reason: .workspaceDuplicated)
         return duplicatedWorkspace.id
     }
 
@@ -102,7 +126,7 @@ extension WorkspaceStore {
 
         recentlyClosedWorkspaceCount = recentlyClosedWorkspaces.count
         Logger.workspace.notice("Reopened a recently closed workspace from the in-memory history stack. Workspace title: \(closedWorkspace.workspace.title, privacy: .public). Workspace ID: \(closedWorkspace.workspace.id.rawValue.uuidString, privacy: .public)")
-        schedulePersistenceSave()
+        schedulePersistenceSave(reason: .workspaceUndoClose)
         return closedWorkspace.workspace.id
     }
 
@@ -199,7 +223,7 @@ extension WorkspaceStore {
 
         persistence.markSavedWorkspaceOpened(savedWorkspaceID)
         Logger.workspace.notice("Opened a workspace from the saved-workspace library. Saved workspace title: \(savedWorkspace.title, privacy: .public). Saved workspace ID: \(savedWorkspaceID.rawValue.uuidString, privacy: .public). Restored pane count: \((restoredWorkspace.root?.leaves().count ?? 0))")
-        schedulePersistenceSave()
+        schedulePersistenceSave(reason: .workspaceOpenedFromLibrary)
         return restoredWorkspace.id
     }
 
@@ -218,6 +242,12 @@ extension WorkspaceStore {
 // MARK: Internal helpers that support workspace cloning, restore, close, and persistence workflows.
 
 extension WorkspaceStore {
+    private struct PersistenceSnapshot {
+        let liveWorkspaces: [Workspace]
+        let recentlyClosedWorkspaces: [RecentlyClosedWorkspaceStateInput]
+        let liveTranscriptsByWorkspaceID: [WorkspaceID: [TerminalSessionID: String]]
+    }
+
     struct RecentlyClosedWorkspace {
         let workspace: Workspace
         let formerIndex: Int
@@ -271,8 +301,7 @@ extension WorkspaceStore {
         }
     }
 
-    func schedulePersistenceSave() {
-        pendingPersistenceTask?.cancel()
+    private func makePersistenceSnapshot() -> PersistenceSnapshot {
         let workspacesSnapshot = workspaces
         let recentlyClosedSnapshot = recentlyClosedWorkspaces.map { workspace in
             RecentlyClosedWorkspaceStateInput(
@@ -294,18 +323,54 @@ extension WorkspaceStore {
                 )
             },
         )
+
+        return PersistenceSnapshot(
+            liveWorkspaces: workspacesSnapshot,
+            recentlyClosedWorkspaces: recentlyClosedSnapshot,
+            liveTranscriptsByWorkspaceID: transcriptsByWorkspaceID,
+        )
+    }
+
+    private func persistSceneState(
+        snapshot: PersistenceSnapshot,
+        reason: WorkspacePersistenceSaveReason,
+        delivery: String,
+    ) {
+        Logger.persistence.notice(
+            "Persisting the current window-scoped workspace state. Delivery: \(delivery, privacy: .public). Reason: \(reason.logName, privacy: .public). Window ID: \(self.sceneIdentity.windowID.uuidString, privacy: .public). Live workspace count: \(snapshot.liveWorkspaces.count). Recently closed count: \(snapshot.recentlyClosedWorkspaces.count).",
+        )
+        persistence.saveSceneState(
+            for: sceneIdentity,
+            liveWorkspaces: snapshot.liveWorkspaces,
+            recentlyClosedWorkspaces: snapshot.recentlyClosedWorkspaces,
+            sessions: sessions,
+            liveTranscriptsByWorkspaceID: snapshot.liveTranscriptsByWorkspaceID,
+        )
+    }
+
+    func persistSceneStateNow(reason: WorkspacePersistenceSaveReason) {
+        pendingPersistenceTask?.cancel()
+        let snapshot = makePersistenceSnapshot()
+        persistSceneState(
+            snapshot: snapshot,
+            reason: reason,
+            delivery: "immediate",
+        )
+    }
+
+    func schedulePersistenceSave(reason: WorkspacePersistenceSaveReason) {
+        pendingPersistenceTask?.cancel()
+        let snapshot = makePersistenceSnapshot()
         pendingPersistenceTask = Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(250))
+            try? await Task.sleep(for: .milliseconds(200))
             guard !Task.isCancelled else {
                 return
             }
 
-            persistence.saveSceneState(
-                for: sceneIdentity,
-                liveWorkspaces: workspacesSnapshot,
-                recentlyClosedWorkspaces: recentlyClosedSnapshot,
-                sessions: sessions,
-                liveTranscriptsByWorkspaceID: transcriptsByWorkspaceID,
+            persistSceneState(
+                snapshot: snapshot,
+                reason: reason,
+                delivery: "debounced",
             )
         }
     }
@@ -344,7 +409,10 @@ extension WorkspaceStore {
         let nextSelectedWorkspaceID = workspaces.isEmpty ? nil : workspaces[min(workspaceIndex, workspaces.count - 1)].id
 
         Logger.workspace.notice("Closed a workspace from the live shell. Workspace title: \(workspace.title, privacy: .public). Workspace ID: \(workspace.id.rawValue.uuidString, privacy: .public). Recorded in recently closed: \(recordRecentlyClosed). Saved to library: \(saveToLibrary)")
-        schedulePersistenceSave()
+        let saveReason: WorkspacePersistenceSaveReason = recordRecentlyClosed || saveToLibrary
+            ? .workspaceClosed
+            : .workspaceDeleted
+        schedulePersistenceSave(reason: saveReason)
         return nextSelectedWorkspaceID
     }
 

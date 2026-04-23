@@ -419,6 +419,9 @@ Relevant Apple docs:
 - `.onChange(of: scenePhase)`
   - use for scene-level persistence triggers, cleanup, or low-priority prewarm
     policy
+- `@Environment(\\.appearsActive)`
+  - use for frontmost-window activation changes that are narrower than the
+    coarse scene phase
 - `.restorationBehavior(_:)`
   - use when we need to make restoration participation explicit for a scene
 
@@ -433,8 +436,8 @@ Relevant Apple docs:
   - good for lightweight appearance work, but not a great place for fragile or
     once-only restore logic because views can appear multiple times
 - `.onDisappear`
-  - good for local teardown, but not something to treat as a guaranteed final
-    persistence callback
+  - good for local teardown or a best-effort final flush when a scene window is
+    closed, but not something to treat as the only guaranteed persistence hook
 - `.onChange(of:)`
   - good for writing lightweight scene state like selected workspace ID,
     sidebar visibility, and inspector visibility
@@ -444,8 +447,12 @@ Practical guidance:
 - use the data-driven `WindowGroup` binding as the durable window identity
 - use `SceneStorage` for lightweight UI restoration keys
 - use `.task` or `.task(id:)` for the actual scene rehydration path
+- use `.task(id:)` for per-window periodic background persistence when the
+  interval is user-configurable
 - use `.onChange(of: scenePhase)` for save, flush, or prewarm decisions that
   belong to the whole scene
+- use `appearsActive` when window-to-window activation changes matter more than
+  coarse app or scene activation
 - do not rely on `onAppear` alone as if it were a one-time scene constructor
 
 ## How The Three Buckets Should Behave
@@ -713,6 +720,12 @@ The current persistence model does the following:
    state into the persistence store
 6. intentionally allows different workspace windows to persist and restore
    independent live and recently closed state keyed by `WorkspaceSceneIdentity`
+7. debounces mutation-triggered scene saves by 200 ms
+8. also flushes scene persistence immediately when a window becomes active or
+   inactive, when a scene becomes inactive or backgrounds, when the scene view
+   disappears, and when the app is about to terminate
+9. runs a per-window periodic background save task on a user-configurable
+   interval that defaults to five minutes
 
 ## Recommended Next Follow-Through
 
@@ -725,3 +738,28 @@ are:
 
 Everything else can now evolve incrementally without changing the underlying
 payload-plus-placement model again.
+
+## Manual Persistence Checklist
+
+Use this checklist when validating real window and app lifecycle persistence:
+
+1. Window close flush
+   Open a workspace window, make a visible change like renaming a workspace or splitting panes, then close that window within a second or two. Reopen the same window and confirm the latest live workspaces, pane layout, and recent-close state restored instead of older state.
+2. App quit flush
+   Make a fresh visible change in one or more windows, then quit immediately with `Command-Q`. Relaunch and confirm each restored window kept its latest workspace selection, pane tree, and recent-close state.
+3. App deactivate flush
+   Make a change, then immediately `Command-Tab` away to another app. Come back later and confirm the latest workspace state was persisted even if you left quickly after editing.
+4. Window activation change flush
+   Open two workspace windows with clearly different live state. Change something in window A, activate window B, then reactivate A. Confirm both windows still have their own correct latest state and that switching frontmost windows does not cross-contaminate persistence.
+5. Background interval flush
+   Set the background save interval to one minute in Settings, make a change, leave the window open without further edits, and wait a little over a minute. Then close or force-quit later and relaunch to confirm the periodic flush captured the idle state.
+6. Settings persistence
+   Change the background save interval, quit, relaunch, and confirm Settings still shows the same interval. Repeat once with another value to confirm normalization and storage are stable.
+7. Recent-close restoration
+   With `Keep recently closed workspaces` enabled, close a workspace, switch windows or quit soon after, then relaunch. Confirm the recently closed stack is still window-local and restores with the correct window.
+8. Auto-save closed workspace interaction
+   With `Auto-save closed workspaces` enabled, close a workspace and then immediately close the window or quit the app. Relaunch and confirm both the live-window persistence and saved-workspace-library write happened as expected.
+9. Modal edge cases during lifecycle changes
+   Leave a rename sheet, delete alert, or saved-workspace library open, then deactivate or reactivate the app or switch windows. Confirm persistence still feels correct and does not restore into obviously stale modal state.
+10. Logging spot-check
+   While doing the pass above, watch the `persistence` logs and confirm the save reason names match the action you just performed, without obvious duplicate-flush spam.

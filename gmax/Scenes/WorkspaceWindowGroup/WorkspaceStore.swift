@@ -28,6 +28,8 @@ final class WorkspaceStore: ObservableObject {
                     WorkspacePersistenceDefaults.systemRestoresWindowsByDefault(),
                 WorkspacePersistenceDefaults.keepRecentlyClosedWorkspacesKey: true,
                 WorkspacePersistenceDefaults.autoSaveClosedWorkspacesKey: false,
+                WorkspacePersistenceDefaults.backgroundSaveIntervalMinutesKey:
+                    WorkspacePersistenceDefaults.defaultBackgroundSaveIntervalMinutes,
             ],
         )
         let persistence = persistence ?? .shared

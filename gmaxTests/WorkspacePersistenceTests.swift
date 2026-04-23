@@ -12,6 +12,24 @@ import Testing
 
 @MainActor
 struct WorkspacePersistenceTests {
+    @Test func `persistSceneStateNow writes live workspace changes without waiting for debounce`() throws {
+        let persistence = WorkspacePersistenceController.inMemoryForTesting()
+        let sceneIdentity = WorkspaceSceneIdentity()
+        let model = WorkspaceStore(
+            sceneIdentity: sceneIdentity,
+            workspaces: [TestSupport.makeWorkspace(title: "Workspace 1")],
+            persistence: persistence,
+            launchContextBuilder: TestSupport.makeLaunchContextBuilder(defaultCurrentDirectory: "/tmp/gmax-tests"),
+        )
+
+        let workspaceID = try #require(model.workspaces.first?.id)
+        model.renameWorkspace(workspaceID, to: "Renamed Workspace")
+        model.persistSceneStateNow(reason: .unitTestImmediateFlush)
+
+        let restoredTitles = persistence.loadWorkspaces(for: sceneIdentity).map(\.title)
+        #expect(restoredTitles == ["Renamed Workspace"])
+    }
+
     @Test func `save and open saved workspace restore large nested layout across five panes`() throws {
         let leftTopPane = PaneLeaf()
         let leftBottomPane = PaneLeaf()

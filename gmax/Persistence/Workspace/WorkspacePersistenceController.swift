@@ -38,7 +38,7 @@ final class WorkspacePersistenceController {
         )
 
         precondition(
-            loadPersistentStores(for: container),
+            loadPersistentStores(for: container, profile: .inMemory),
             "The in-memory workspace persistence store must load successfully for tests.",
         )
 
