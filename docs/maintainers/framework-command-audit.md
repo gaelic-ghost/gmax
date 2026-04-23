@@ -247,8 +247,8 @@ Current examples:
   - `workspaceWindow.newWorkspaceButton`
   - `workspaceWindow.toggleInspectorButton`
 - UI-test helper names like:
-  - `assertWorkspaceWindowIsVisible`
-  - `attemptToPresentWorkspaceWindow`
+  - `assertActiveWorkspaceWindowIsVisible`
+  - `attemptToPresentAnotherWorkspaceWindow`
 
 Why this is a gap:
 
@@ -327,12 +327,15 @@ What is not clearly covered:
 - rename presentation through the command layer
 - command enablement and disablement state when scene focus changes
 - behavior when focus is in sidebar versus content versus inspector
-- whether scene-focused values behave correctly across multiple windows
-- whether the command layer keeps targeting the frontmost active scene
+- whether scene-focused values keep the correct target across multiple
+  intentionally independent workspace windows
+- whether the command layer keeps targeting the frontmost active scene rather
+  than another restored workspace window
 
 Why this is a gap:
 
 - the architecture now depends on focused scene context doing the right thing
+  in a deliberately multi-window app
 - that is exactly the area where there is the least direct regression protection
 
 Recommendation:

@@ -8,6 +8,7 @@
 import XCTest
 
 /// Base class for the gmax macOS UI test suites.
+@MainActor
 class GmaxUITestCase: XCTestCase {
     private enum UIProbe {
         static let initialWorkspaceTitle = "Workspace 1"
@@ -28,11 +29,11 @@ class GmaxUITestCase: XCTestCase {
         }
         app.launch()
         app.activate()
-        assertWorkspaceWindowIsVisible(in: app)
+        assertActiveWorkspaceWindowIsVisible(in: app)
         return app
     }
 
-    func mainWorkspaceWindow(in app: XCUIApplication) -> XCUIElement {
+    func activeWorkspaceWindow(in app: XCUIApplication) -> XCUIElement {
         app.windows
             .matching(
                 NSPredicate(format: "identifier BEGINSWITH %@", UIProbe.workspaceWindowIdentifierPrefix),
@@ -40,18 +41,18 @@ class GmaxUITestCase: XCTestCase {
             .firstMatch
     }
 
-    func assertWorkspaceWindowIsVisible(in app: XCUIApplication) {
-        let workspaceList = workspaceSidebar(in: app)
+    func assertActiveWorkspaceWindowIsVisible(in app: XCUIApplication) {
+        let workspaceList = activeWorkspaceSidebar(in: app)
         if workspaceList.waitForExistence(timeout: 2) {
             return
         }
 
-        attemptToPresentWorkspaceWindow(in: app)
+        attemptToPresentAnotherWorkspaceWindow(in: app)
 
         guard workspaceList.waitForExistence(timeout: 5) else {
             XCTFail(
                 """
-                The main shell should expose the workspace sidebar after launch.
+                The active workspace window should expose the workspace sidebar after launch.
                 The UI test harness intentionally avoids accessibility-tree and screenshot diagnostics here because they can trigger external permission flows and destabilize UI automation.
                 """,
             )
@@ -59,11 +60,11 @@ class GmaxUITestCase: XCTestCase {
         }
     }
 
-    func workspaceSidebar(in app: XCUIApplication) -> XCUIElement {
-        mainWorkspaceWindow(in: app).descendants(matching: .any)[UIProbe.sidebarWorkspaceListIdentifier]
+    func activeWorkspaceSidebar(in app: XCUIApplication) -> XCUIElement {
+        activeWorkspaceWindow(in: app).descendants(matching: .any)[UIProbe.sidebarWorkspaceListIdentifier]
     }
 
-    func attemptToPresentWorkspaceWindow(in app: XCUIApplication) {
+    func attemptToPresentAnotherWorkspaceWindow(in app: XCUIApplication) {
         app.typeKey("n", modifierFlags: .command)
     }
 
@@ -134,7 +135,7 @@ class GmaxUITestCase: XCTestCase {
         let button = openSavedWorkspacesButton(in: app)
         XCTAssertTrue(
             button.waitForExistence(timeout: 5),
-            "The main shell toolbar should expose the saved-workspace library button.",
+            "The active workspace window toolbar should expose the saved-workspace library button.",
         )
         button.click()
         XCTAssertTrue(
@@ -210,19 +211,19 @@ class GmaxUITestCase: XCTestCase {
     }
 
     func toggleInspectorButton(in app: XCUIApplication) -> XCUIElement {
-        mainWorkspaceWindow(in: app).buttons["workspaceWindow.toggleInspectorButton"]
+        activeWorkspaceWindow(in: app).buttons["workspaceWindow.toggleInspectorButton"]
     }
 
     func openSavedWorkspacesButton(in app: XCUIApplication) -> XCUIElement {
-        mainWorkspaceWindow(in: app).buttons["workspaceWindow.openSavedWorkspacesButton"]
+        activeWorkspaceWindow(in: app).buttons["workspaceWindow.openSavedWorkspacesButton"]
     }
 
     func newWorkspaceButton(in app: XCUIApplication) -> XCUIElement {
-        mainWorkspaceWindow(in: app).buttons["workspaceWindow.newWorkspaceButton"]
+        activeWorkspaceWindow(in: app).buttons["workspaceWindow.newWorkspaceButton"]
     }
 
     func focusFirstVisiblePane(in app: XCUIApplication) {
-        let pane = mainWorkspaceWindow(in: app)
+        let pane = activeWorkspaceWindow(in: app)
             .descendants(matching: .any)
             .matching(NSPredicate(format: "identifier BEGINSWITH %@", "contentPane.leaf."))
             .firstMatch

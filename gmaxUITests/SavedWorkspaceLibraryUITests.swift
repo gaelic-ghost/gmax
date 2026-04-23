@@ -15,11 +15,11 @@ final class SavedWorkspaceLibraryUITests: GmaxUITestCase {
 
         XCTAssertTrue(
             toolbarButton.waitForExistence(timeout: 5),
-            "The main shell toolbar should expose the new-workspace action.",
+            "The active workspace window toolbar should expose the new-workspace action.",
         )
         XCTAssertTrue(
             toolbarButton.isHittable,
-            "The new-workspace toolbar action should stay directly clickable in the default shell window.",
+            "The new-workspace toolbar action should stay directly clickable in the active workspace window.",
         )
 
         toolbarButton.click()

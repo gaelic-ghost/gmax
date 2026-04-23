@@ -440,6 +440,94 @@ struct WorkspacePersistenceTests {
 
         #expect(restoredWorkspaces.isEmpty)
     }
+
+    @Test func `scene identities restore independent live workspace sets`() {
+        let firstSceneIdentity = WorkspaceSceneIdentity()
+        let secondSceneIdentity = WorkspaceSceneIdentity()
+        let firstSceneWorkspace = TestSupport.makeWorkspace(title: "Window A")
+        let secondSceneWorkspace = TestSupport.makeWorkspace(title: "Window B")
+        let persistence = WorkspacePersistenceController.inMemoryForTesting()
+        let launchConfiguration = TestSupport.makeLaunchContextBuilder(defaultCurrentDirectory: "/tmp/gmax-tests").makeLaunchConfiguration()
+
+        persistence.saveSceneState(
+            for: firstSceneIdentity,
+            liveWorkspaces: [firstSceneWorkspace],
+            recentlyClosedWorkspaces: [],
+            sessions: TerminalSessionRegistry(
+                workspaces: [firstSceneWorkspace],
+                defaultLaunchConfiguration: launchConfiguration,
+            ),
+        )
+        persistence.saveSceneState(
+            for: secondSceneIdentity,
+            liveWorkspaces: [secondSceneWorkspace],
+            recentlyClosedWorkspaces: [],
+            sessions: TerminalSessionRegistry(
+                workspaces: [secondSceneWorkspace],
+                defaultLaunchConfiguration: launchConfiguration,
+            ),
+        )
+
+        let restoredFirstSceneWorkspaces = persistence.loadWorkspaces(for: firstSceneIdentity)
+        let restoredSecondSceneWorkspaces = persistence.loadWorkspaces(for: secondSceneIdentity)
+
+        #expect(restoredFirstSceneWorkspaces.map(\.title) == ["Window A"])
+        #expect(restoredSecondSceneWorkspaces.map(\.title) == ["Window B"])
+        #expect(restoredFirstSceneWorkspaces.first?.id == firstSceneWorkspace.id)
+        #expect(restoredSecondSceneWorkspaces.first?.id == secondSceneWorkspace.id)
+    }
+
+    @Test func `scene identities restore independent recently closed workspaces`() {
+        let firstSceneIdentity = WorkspaceSceneIdentity()
+        let secondSceneIdentity = WorkspaceSceneIdentity()
+        let firstRecentWorkspace = TestSupport.makeWorkspace(title: "Closed in Window A")
+        let secondRecentWorkspace = TestSupport.makeWorkspace(title: "Closed in Window B")
+        let persistence = WorkspacePersistenceController.inMemoryForTesting()
+        let launchConfiguration = TestSupport.makeLaunchContextBuilder(defaultCurrentDirectory: "/tmp/gmax-tests").makeLaunchConfiguration()
+
+        persistence.saveSceneState(
+            for: firstSceneIdentity,
+            liveWorkspaces: [],
+            recentlyClosedWorkspaces: [
+                RecentlyClosedWorkspaceStateInput(
+                    workspace: firstRecentWorkspace,
+                    formerIndex: 2,
+                    launchConfigurationsBySessionID: [:],
+                    titlesBySessionID: [:],
+                    transcriptsBySessionID: [:],
+                ),
+            ],
+            sessions: TerminalSessionRegistry(
+                workspaces: [],
+                defaultLaunchConfiguration: launchConfiguration,
+            ),
+        )
+        persistence.saveSceneState(
+            for: secondSceneIdentity,
+            liveWorkspaces: [],
+            recentlyClosedWorkspaces: [
+                RecentlyClosedWorkspaceStateInput(
+                    workspace: secondRecentWorkspace,
+                    formerIndex: 5,
+                    launchConfigurationsBySessionID: [:],
+                    titlesBySessionID: [:],
+                    transcriptsBySessionID: [:],
+                ),
+            ],
+            sessions: TerminalSessionRegistry(
+                workspaces: [],
+                defaultLaunchConfiguration: launchConfiguration,
+            ),
+        )
+
+        let restoredFirstSceneRecentWorkspaces = persistence.loadRecentlyClosedWorkspaces(for: firstSceneIdentity)
+        let restoredSecondSceneRecentWorkspaces = persistence.loadRecentlyClosedWorkspaces(for: secondSceneIdentity)
+
+        #expect(restoredFirstSceneRecentWorkspaces.map(\.revision.title) == ["Closed in Window A"])
+        #expect(restoredSecondSceneRecentWorkspaces.map(\.revision.title) == ["Closed in Window B"])
+        #expect(restoredFirstSceneRecentWorkspaces.first?.formerIndex == 2)
+        #expect(restoredSecondSceneRecentWorkspaces.first?.formerIndex == 5)
+    }
 }
 
 private indirect enum PaneNodeSignature: Equatable {

@@ -14,6 +14,7 @@ private enum FocusAssignment: Equatable {
 }
 
 struct WorkspaceWindowSceneView: View {
+    @Environment(\.appearsActive) private var appearsActive
     @FocusState private var focusedTarget: WorkspaceFocusTarget?
     @SceneStorage(WorkspaceWindowSceneStorageKey.selectedWorkspaceID) private var restoredSelectedWorkspaceID: String?
     @SceneStorage(WorkspaceWindowSceneStorageKey.isInspectorVisible) private var restoredInspectorVisible = true
@@ -115,6 +116,7 @@ struct WorkspaceWindowSceneView: View {
             }
             return nil
         }()
+        let hasPresentedWorkspaceModal = dismissPresentedWorkspaceModal != nil
         let selectedWorkspace = selectedWorkspaceID.flatMap { selectedWorkspaceID in
             workspaceStore.workspaces.first { $0.id == selectedWorkspaceID }
         }
@@ -199,6 +201,23 @@ struct WorkspaceWindowSceneView: View {
                 await Task.yield()
                 guard pendingFocusedPaneID == paneID else {
                     return
+                }
+
+                focusPaneTarget(paneID)
+                pendingFocusedPaneID = nil
+            }
+        }
+        let restorePaneFocusAfterWindowActivation: (PaneID) -> Void = { paneID in
+            pendingFocusedPaneID = paneID
+            Task { @MainActor in
+                await Task.yield()
+                guard pendingFocusedPaneID == paneID else {
+                    return
+                }
+
+                if focusedTarget == .pane(paneID) {
+                    applyFocusAssignment(.none)
+                    await Task.yield()
                 }
 
                 focusPaneTarget(paneID)
@@ -522,6 +541,26 @@ struct WorkspaceWindowSceneView: View {
         .onChange(of: columnVisibility) { _, newValue in
             restoredSidebarVisible = newValue == .all
         }
+        .onChange(of: appearsActive) { _, newValue in
+            guard newValue else {
+                return
+            }
+
+            switch paneFocusTargetAfterActivatingWindow(
+                focusedTarget: focusedTarget,
+                survivingPaneIDs: activePaneIDs,
+                paneFocusHistory: paneFocusHistory,
+                isInspectorVisible: isInspectorVisible,
+                hasPresentedWorkspaceModal: hasPresentedWorkspaceModal,
+            ) {
+                case let .pane(paneID):
+                    restorePaneFocusAfterWindowActivation(paneID)
+                case .inspector:
+                    applyFocusAssignment(.inspector)
+                case .sidebar, nil:
+                    break
+            }
+        }
     }
 }
 
@@ -575,7 +614,7 @@ private struct PaneNavigationMetrics: Comparable {
     }
 }
 
-private func directionalPaneFocus(
+func directionalPaneFocus(
     from paneID: PaneID,
     paneFrames: [PaneID: CGRect],
     direction: PaneFocusDirection,
@@ -671,7 +710,7 @@ private func navigationMetrics(
             return nil
     }
 
-    let historyRank = history.lastIndex(of: paneID).map { history.distance(from: $0, to: history.endIndex) } ?? 0
+    let historyRank = history.lastIndex(of: paneID).map { history.distance(from: history.startIndex, to: $0) + 1 } ?? 0
     return PaneNavigationMetrics(
         hasPerpendicularOverlap: perpendicularOverlap > 0,
         perpendicularOverlap: perpendicularOverlap,
@@ -715,6 +754,33 @@ func paneFocusTargetAfterClosingPane(
 
     if isInspectorVisible {
         return .inspector
+    }
+
+    return nil
+}
+
+func paneFocusTargetAfterActivatingWindow(
+    focusedTarget: WorkspaceFocusTarget?,
+    survivingPaneIDs: Set<PaneID>,
+    paneFocusHistory: [PaneID],
+    isInspectorVisible: Bool,
+    hasPresentedWorkspaceModal: Bool,
+) -> WorkspaceFocusTarget? {
+    guard !hasPresentedWorkspaceModal else {
+        return focusedTarget
+    }
+
+    switch focusedTarget {
+        case let .pane(paneID)? where survivingPaneIDs.contains(paneID):
+            return .pane(paneID)
+        case .inspector? where isInspectorVisible:
+            return .inspector
+        default:
+            break
+    }
+
+    if let historyFallbackPaneID = paneFocusHistory.last(where: survivingPaneIDs.contains) {
+        return .pane(historyFallbackPaneID)
     }
 
     return nil
