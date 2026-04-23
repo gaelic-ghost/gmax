@@ -7,6 +7,7 @@
 
 import XCTest
 
+/// Base class for the gmax macOS UI test suites.
 class GmaxUITestCase: XCTestCase {
     private enum UIProbe {
         static let initialWorkspaceTitle = "Workspace 1"
@@ -32,9 +33,11 @@ class GmaxUITestCase: XCTestCase {
     }
 
     func mainWorkspaceWindow(in app: XCUIApplication) -> XCUIElement {
-        app.windows.matching(
-            NSPredicate(format: "identifier BEGINSWITH %@", UIProbe.workspaceWindowIdentifierPrefix),
-        ).firstMatch
+        app.windows
+            .matching(
+                NSPredicate(format: "identifier BEGINSWITH %@", UIProbe.workspaceWindowIdentifierPrefix),
+            )
+            .firstMatch
     }
 
     func assertWorkspaceWindowIsVisible(in app: XCUIApplication) {
@@ -219,7 +222,8 @@ class GmaxUITestCase: XCTestCase {
     }
 
     func focusFirstVisiblePane(in app: XCUIApplication) {
-        let pane = mainWorkspaceWindow(in: app).descendants(matching: .any)
+        let pane = mainWorkspaceWindow(in: app)
+            .descendants(matching: .any)
             .matching(NSPredicate(format: "identifier BEGINSWITH %@", "contentPane.leaf."))
             .firstMatch
         XCTAssertTrue(
