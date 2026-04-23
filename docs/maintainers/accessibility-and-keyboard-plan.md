@@ -168,6 +168,9 @@ The pane tree is a custom SwiftUI composition:
 - Keep pane focus changes routed through scene-owned SwiftUI focus state so the visual highlight, inspector, and command context remain synchronized without restoring store-owned runtime focus.
 - Status:
   - `focusable(interactions: .edit)` is already applied to pane cards
+  - the scene now restores the most recently focused surviving pane when a
+    workspace window becomes active again, using the window-level
+    `appearsActive` environment value
   - the remaining work is to validate how that behaves against the embedded terminal host and decide whether additional focus shaping is still needed
 
 #### Split Divider Accessibility

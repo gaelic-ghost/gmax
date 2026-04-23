@@ -471,6 +471,17 @@ Pane close:
 - after pane removal, the scene restores pane focus from the latest surviving
   entry in `paneFocusHistory`
 
+Window reactivation:
+
+- when a workspace window becomes active again, the scene root watches the
+  window-level `appearsActive` environment value instead of relying on the
+  coarser scene phase
+- if no modal is frontmost, the scene restores pane focus from the most recent
+  surviving entry in `paneFocusHistory`
+- if the same pane is already the remembered focus target, the scene briefly
+  clears and reapplies that focus so the pane actually becomes first responder
+  again
+
 Empty workspace close or window close:
 
 - if a scene-owned modal is frontmost, the command layer consults
@@ -564,7 +575,8 @@ The bridge-free focus surface still needs a real behavior pass across:
 - sidebar-to-content transitions
 - inspector focus behavior
 - `Command-W` in every focus region
-- frontmost-window routing when multiple workspace windows exist
+- focus restoration when switching between windows and then returning to a
+  previously active pane
 
 That work is regression coverage for an intentional multi-window product model.
 It is not a question of whether the app should support multiple independent

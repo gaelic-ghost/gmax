@@ -229,6 +229,50 @@ struct PaneManagementTests {
         #expect(target == nil)
     }
 
+    @Test func `activating a window restores the newest surviving pane from history when focus is gone`() {
+        let leftPaneID = PaneID()
+        let rightPaneID = PaneID()
+
+        let target = paneFocusTargetAfterActivatingWindow(
+            focusedTarget: nil,
+            survivingPaneIDs: [leftPaneID, rightPaneID],
+            paneFocusHistory: [leftPaneID, rightPaneID],
+            isInspectorVisible: true,
+            hasPresentedWorkspaceModal: false,
+        )
+
+        #expect(target == .pane(rightPaneID))
+    }
+
+    @Test func `activating a window keeps the current focused pane when it still survives`() {
+        let leftPaneID = PaneID()
+        let rightPaneID = PaneID()
+
+        let target = paneFocusTargetAfterActivatingWindow(
+            focusedTarget: .pane(leftPaneID),
+            survivingPaneIDs: [leftPaneID, rightPaneID],
+            paneFocusHistory: [rightPaneID, leftPaneID],
+            isInspectorVisible: true,
+            hasPresentedWorkspaceModal: false,
+        )
+
+        #expect(target == .pane(leftPaneID))
+    }
+
+    @Test func `activating a window does not reclaim pane focus while a modal is presented`() {
+        let paneID = PaneID()
+
+        let target = paneFocusTargetAfterActivatingWindow(
+            focusedTarget: nil,
+            survivingPaneIDs: [paneID],
+            paneFocusHistory: [paneID],
+            isInspectorVisible: true,
+            hasPresentedWorkspaceModal: true,
+        )
+
+        #expect(target == nil)
+    }
+
     @Test func `directional pane focus prefers overlapping panes over diagonal candidates`() {
         let currentPaneID = PaneID()
         let overlappingLeftPaneID = PaneID()
