@@ -519,8 +519,8 @@ struct WorkspacePersistenceTests {
         let firstRecentWorkspace = TestSupport.makeWorkspace(title: "Closed in Window A")
         let secondRecentWorkspace = TestSupport.makeWorkspace(title: "Closed in Window B")
         let persistence = WorkspacePersistenceController.inMemoryForTesting()
-        persistence.recordWindowRecentWorkspace(
-            WindowRecentWorkspaceInput(
+        persistence.recordWorkspaceInRecentHistory(
+            WindowWorkspaceHistoryInput(
                 workspace: firstRecentWorkspace,
                 formerIndex: 2,
                 launchConfigurationsBySessionID: [:],
@@ -530,8 +530,8 @@ struct WorkspacePersistenceTests {
             for: firstSceneIdentity,
             limit: WorkspacePersistenceDefaults.maxRecentlyClosedWorkspaceCount,
         )
-        persistence.recordWindowRecentWorkspace(
-            WindowRecentWorkspaceInput(
+        persistence.recordWorkspaceInRecentHistory(
+            WindowWorkspaceHistoryInput(
                 workspace: secondRecentWorkspace,
                 formerIndex: 5,
                 launchConfigurationsBySessionID: [:],
@@ -542,8 +542,8 @@ struct WorkspacePersistenceTests {
             limit: WorkspacePersistenceDefaults.maxRecentlyClosedWorkspaceCount,
         )
 
-        let restoredFirstSceneRecentWorkspaces = persistence.loadWindowRecentWorkspaces(for: firstSceneIdentity)
-        let restoredSecondSceneRecentWorkspaces = persistence.loadWindowRecentWorkspaces(for: secondSceneIdentity)
+        let restoredFirstSceneRecentWorkspaces = persistence.loadRecentWorkspaceHistory(for: firstSceneIdentity)
+        let restoredSecondSceneRecentWorkspaces = persistence.loadRecentWorkspaceHistory(for: secondSceneIdentity)
 
         #expect(restoredFirstSceneRecentWorkspaces.map(\.revision.title) == ["Closed in Window A"])
         #expect(restoredSecondSceneRecentWorkspaces.map(\.revision.title) == ["Closed in Window B"])
@@ -557,8 +557,8 @@ struct WorkspacePersistenceTests {
         let recentWorkspace = TestSupport.makeWorkspace(title: "Closed Workspace")
         let persistence = WorkspacePersistenceController.inMemoryForTesting()
 
-        persistence.recordWindowRecentWorkspace(
-            WindowRecentWorkspaceInput(
+        persistence.recordWorkspaceInRecentHistory(
+            WindowWorkspaceHistoryInput(
                 workspace: recentWorkspace,
                 formerIndex: 3,
                 launchConfigurationsBySessionID: [:],
@@ -629,7 +629,7 @@ struct WorkspacePersistenceTests {
             try context.save()
         }
 
-        let restoredRecentWorkspaces = persistence.loadWindowRecentWorkspaces(for: sceneIdentity)
+        let restoredRecentWorkspaces = persistence.loadRecentWorkspaceHistory(for: sceneIdentity)
         let fetchedMigratedWorkspaceEntity = try fetchWorkspaceEntity(id: workspaceID, in: context)
         let migratedWorkspaceEntity = try #require(fetchedMigratedWorkspaceEntity)
         let remainingRecentPlacements = try fetchWindowRecentPlacements(windowID: windowID, in: context)

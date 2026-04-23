@@ -108,7 +108,7 @@ extension WorkspaceStore {
 
     @discardableResult
     func undoCloseWorkspace() -> WorkspaceID? {
-        guard let closedWorkspace = persistence.consumeMostRecentWindowRecentWorkspace(for: sceneIdentity) else {
+        guard let closedWorkspace = persistence.consumeMostRecentWorkspaceInRecentHistory(for: sceneIdentity) else {
             return nil
         }
 
@@ -132,7 +132,7 @@ extension WorkspaceStore {
     }
 
     func clearRecentlyClosedWorkspaces() {
-        persistence.clearWindowRecentWorkspaces(for: sceneIdentity)
+        persistence.clearRecentWorkspaceHistory(for: sceneIdentity)
         refreshRecentlyClosedWorkspaceCount()
         Logger.workspace.notice("Cleared durable recently closed workspace history for the current window.")
     }
@@ -425,8 +425,8 @@ extension WorkspaceStore {
             explicitTranscriptsBySessionID: [:],
         )
 
-        persistence.recordWindowRecentWorkspace(
-            WindowRecentWorkspaceInput(
+        persistence.recordWorkspaceInRecentHistory(
+            WindowWorkspaceHistoryInput(
                 workspace: workspace,
                 formerIndex: formerIndex,
                 launchConfigurationsBySessionID: launchConfigurationsBySessionID,
@@ -440,7 +440,7 @@ extension WorkspaceStore {
     }
 
     private func refreshRecentlyClosedWorkspaceCount() {
-        recentlyClosedWorkspaceCount = persistence.countWindowRecentWorkspaces(for: sceneIdentity)
+        recentlyClosedWorkspaceCount = persistence.countRecentWorkspaceHistory(for: sceneIdentity)
     }
 
     private func captureWorkspaceTranscripts(

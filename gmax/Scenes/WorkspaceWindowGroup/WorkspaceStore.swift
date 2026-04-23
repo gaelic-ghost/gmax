@@ -48,7 +48,7 @@ final class WorkspaceStore: ObservableObject {
                 ? persistence.loadWorkspaces(for: sceneIdentity)
                 : []
             resolvedRecentlyClosedWorkspaceCount = shouldRestorePersistedWorkspaces
-                ? persistence.countWindowRecentWorkspaces(for: sceneIdentity)
+                ? persistence.countRecentWorkspaceHistory(for: sceneIdentity)
                 : 0
             resolvedWindowState = shouldRestorePersistedWorkspaces
                 ? persistence.loadWindowState(for: sceneIdentity)

@@ -63,12 +63,12 @@ final class WorkspacePersistenceController {
         }
     }
 
-    func loadWindowRecentWorkspaces(for sceneIdentity: WorkspaceSceneIdentity) -> [WindowRecentWorkspaceRecord] {
+    func loadRecentWorkspaceHistory(for sceneIdentity: WorkspaceSceneIdentity) -> [WindowWorkspaceHistoryRecord] {
         let context = container.viewContext
         return context.performAndWait {
             do {
-                try Self.migrateLegacyWindowRecentPlacements(for: sceneIdentity, in: context)
-                return try Self.loadWindowRecentWorkspaceEntities(
+                try Self.migrateLegacyRecentWorkspacePlacements(for: sceneIdentity, in: context)
+                return try Self.loadRecentWorkspaceHistoryEntities(
                     for: sceneIdentity,
                     in: context,
                 ).compactMap { workspaceEntity in
@@ -76,7 +76,7 @@ final class WorkspacePersistenceController {
                         return nil
                     }
 
-                    return WindowRecentWorkspaceRecord(
+                    return WindowWorkspaceHistoryRecord(
                         revision: revision,
                         formerIndex: Int(workspaceEntity.recentSortOrder),
                     )
@@ -89,12 +89,12 @@ final class WorkspacePersistenceController {
         }
     }
 
-    func countWindowRecentWorkspaces(for sceneIdentity: WorkspaceSceneIdentity) -> Int {
+    func countRecentWorkspaceHistory(for sceneIdentity: WorkspaceSceneIdentity) -> Int {
         let context = container.viewContext
         return context.performAndWait {
             do {
-                try Self.migrateLegacyWindowRecentPlacements(for: sceneIdentity, in: context)
-                return try Self.loadWindowRecentWorkspaceEntities(
+                try Self.migrateLegacyRecentWorkspacePlacements(for: sceneIdentity, in: context)
+                return try Self.loadRecentWorkspaceHistoryEntities(
                     for: sceneIdentity,
                     in: context,
                 ).count
@@ -106,15 +106,15 @@ final class WorkspacePersistenceController {
         }
     }
 
-    func recordWindowRecentWorkspace(
-        _ recentWorkspace: WindowRecentWorkspaceInput,
+    func recordWorkspaceInRecentHistory(
+        _ recentWorkspace: WindowWorkspaceHistoryInput,
         for sceneIdentity: WorkspaceSceneIdentity,
         limit: Int,
     ) {
         let context = container.viewContext
         context.performAndWait {
             do {
-                try Self.migrateLegacyWindowRecentPlacements(for: sceneIdentity, in: context)
+                try Self.migrateLegacyRecentWorkspacePlacements(for: sceneIdentity, in: context)
                 let existingWorkspaceRequest = NSFetchRequest<WorkspaceEntity>(entityName: "WorkspaceEntity")
                 var existingWorkspacesByID = Dictionary(
                     uniqueKeysWithValues: try context.fetch(existingWorkspaceRequest).map { ($0.id, $0) },
@@ -136,7 +136,7 @@ final class WorkspacePersistenceController {
                 workspaceEntity.recentWindowID = sceneIdentity.windowID
                 workspaceEntity.recentSortOrder = Int64(recentWorkspace.formerIndex)
 
-                let recentWorkspaces = try Self.loadWindowRecentWorkspaceEntities(
+                let recentWorkspaces = try Self.loadRecentWorkspaceHistoryEntities(
                     for: sceneIdentity,
                     in: context,
                 )
@@ -165,14 +165,14 @@ final class WorkspacePersistenceController {
         }
     }
 
-    func consumeMostRecentWindowRecentWorkspace(
+    func consumeMostRecentWorkspaceInRecentHistory(
         for sceneIdentity: WorkspaceSceneIdentity,
-    ) -> WindowRecentWorkspaceRecord? {
+    ) -> WindowWorkspaceHistoryRecord? {
         let context = container.viewContext
         return context.performAndWait {
             do {
-                try Self.migrateLegacyWindowRecentPlacements(for: sceneIdentity, in: context)
-                guard let workspaceEntity = try Self.loadWindowRecentWorkspaceEntities(
+                try Self.migrateLegacyRecentWorkspacePlacements(for: sceneIdentity, in: context)
+                guard let workspaceEntity = try Self.loadRecentWorkspaceHistoryEntities(
                     for: sceneIdentity,
                     in: context,
                 ).first else {
@@ -187,7 +187,7 @@ final class WorkspacePersistenceController {
                     return nil
                 }
 
-                let restoredWorkspace = WindowRecentWorkspaceRecord(
+                let restoredWorkspace = WindowWorkspaceHistoryRecord(
                     revision: revision,
                     formerIndex: Int(workspaceEntity.recentSortOrder),
                 )
@@ -212,12 +212,12 @@ final class WorkspacePersistenceController {
         }
     }
 
-    func clearWindowRecentWorkspaces(for sceneIdentity: WorkspaceSceneIdentity) {
+    func clearRecentWorkspaceHistory(for sceneIdentity: WorkspaceSceneIdentity) {
         let context = container.viewContext
         context.performAndWait {
             do {
-                try Self.migrateLegacyWindowRecentPlacements(for: sceneIdentity, in: context)
-                let recentWorkspaces = try Self.loadWindowRecentWorkspaceEntities(
+                try Self.migrateLegacyRecentWorkspacePlacements(for: sceneIdentity, in: context)
+                let recentWorkspaces = try Self.loadRecentWorkspaceHistoryEntities(
                     for: sceneIdentity,
                     in: context,
                 )
@@ -916,7 +916,7 @@ extension WorkspacePersistenceController {
         }
     }
 
-    private nonisolated static func loadWindowRecentWorkspaceEntities(
+    private nonisolated static func loadRecentWorkspaceHistoryEntities(
         for sceneIdentity: WorkspaceSceneIdentity,
         in context: NSManagedObjectContext,
     ) throws -> [WorkspaceEntity] {
@@ -929,7 +929,7 @@ extension WorkspacePersistenceController {
         return try context.fetch(request)
     }
 
-    private nonisolated static func migrateLegacyWindowRecentPlacements(
+    private nonisolated static func migrateLegacyRecentWorkspacePlacements(
         for sceneIdentity: WorkspaceSceneIdentity,
         in context: NSManagedObjectContext,
     ) throws {
