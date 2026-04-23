@@ -171,7 +171,6 @@ extension WorkspacePersistenceController {
         let workspaceNotes = attribute(name: "notes", type: .stringAttributeType, isOptional: true)
         let workspacePreviewText = attribute(name: "previewText", type: .stringAttributeType, isOptional: true)
         let workspaceSearchText = attribute(name: "searchText", type: .stringAttributeType, isOptional: true)
-        let workspaceSavedWorkspaceID = attribute(name: "savedWorkspaceID", type: .UUIDAttributeType, isOptional: true)
         let sortOrder = attribute(name: "sortOrder", type: .integer64AttributeType)
 
         let nodeID = attribute(name: "id", type: .UUIDAttributeType)
@@ -323,7 +322,6 @@ extension WorkspacePersistenceController {
             workspaceNotes,
             workspacePreviewText,
             workspaceSearchText,
-            workspaceSavedWorkspaceID,
             sortOrder,
             workspaceRootNode,
             workspacePlacements,

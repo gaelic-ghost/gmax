@@ -172,13 +172,13 @@ That split follows SwiftUI's documented intent more closely than asking
 
 ### Stable workspace identity
 
-The current code still carries two identity concepts:
+The current code now uses one durable workspace identity across the live window
+model and the saved-workspace library:
 
-- `WorkspaceID` for the live working copy
-- `SavedWorkspaceID` for the library lineage
-
-That is good enough for the current saved-copy behavior, but it is not the
-preferred long-term product model.
+- `WorkspaceID` is the durable identity
+- library save and reopen operate on that same workspace identity
+- placements, not alternate identifiers, describe whether that workspace is
+  live, recent, or in the library
 
 The preferred model is:
 
@@ -706,7 +706,8 @@ Goals:
 
 Likely work:
 
-- collapse or phase out `SavedWorkspaceID`
+- remove the remaining compatibility seams from the earlier split-identity
+  model
 - migrate current library references onto the durable workspace identity
 - update save/open/delete codepaths to operate on that identity
 
@@ -858,7 +859,6 @@ Current shape:
 ```swift
 WorkspaceEntity
 - id: UUID
-- savedWorkspaceID: UUID?
 - title: String
 - createdAt: Date
 - updatedAt: Date
@@ -1367,15 +1367,18 @@ Current implementation:
 
 - fetch the saved payload revision currently referenced by the stable `.library`
   placement
-- clone that saved payload revision into a new live workspace payload
-- create a `.live` placement for the cloned payload in the active window
+- if the requested workspace is already live in the current store, reuse that
+  same durable workspace identity instead of duplicating it
+- if the workspace is not already live, reactivate that durable workspace
+  identity into a `.live` placement in the active window
 
 Current recommendation:
 
 - library entries are durable saved workspace entries
-- opening from the library always creates a new live working copy
-- editing the reopened live workspace never mutates the saved library revision
-  directly
+- opening from the library should reactivate that same workspace identity rather
+  than cloning a forked working copy
+- currently live workspaces should be hidden from the library query so the user
+  does not take a second-open path by mistake
 
 Preferred follow-through:
 

@@ -609,7 +609,9 @@ The app now has the following workspace-lifecycle surfaces in place:
 - explicit `Save Workspace` and `Open Workspace...` commands
 - `Close Workspace to Library` for one-step archival
 - transcript-backed restore so reopened workspaces preserve shell history
-- reopen-title disambiguation when a saved workspace is opened while its original live workspace is still open
+- stable workspace identity across live and library state
+- library filtering that hides currently live workspaces instead of offering a
+  forked reopen path
 - user-facing settings for restore-on-launch, recently closed workspaces, and auto-save closed workspaces
 
 The command surface is also now split intentionally across:

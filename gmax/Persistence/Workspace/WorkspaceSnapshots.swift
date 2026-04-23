@@ -1,11 +1,5 @@
 import Foundation
 
-struct SavedWorkspaceID: RawRepresentable, Hashable, Codable, Identifiable {
-    var rawValue = UUID()
-
-    var id: UUID { rawValue }
-}
-
 struct WorkspaceSceneIdentity: Codable, Hashable {
     var windowID = UUID()
 }
@@ -36,7 +30,7 @@ struct WorkspaceListing: Hashable, Codable {
 }
 
 struct SavedWorkspaceListing: Identifiable, Hashable, Codable {
-    var id: SavedWorkspaceID
+    var id: WorkspaceID
     var title: String
     var createdAt: Date
     var updatedAt: Date
@@ -48,7 +42,6 @@ struct SavedWorkspaceListing: Identifiable, Hashable, Codable {
 
 struct WorkspaceRevision: Identifiable, Hashable, Codable {
     var id: UUID
-    var savedWorkspaceID: SavedWorkspaceID?
     var title: String
     var createdAt: Date
     var updatedAt: Date

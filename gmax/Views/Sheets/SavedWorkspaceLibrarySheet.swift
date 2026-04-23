@@ -13,7 +13,7 @@ struct SavedWorkspaceLibrarySheet: View {
 
     @Environment(\.dismiss) private var dismiss
     @State private var searchText = ""
-    @State private var selectedSavedWorkspaceID: SavedWorkspaceID?
+    @State private var selectedSavedWorkspaceID: WorkspaceID?
 
     var body: some View {
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -23,13 +23,13 @@ struct SavedWorkspaceLibrarySheet: View {
                 selectedSavedWorkspaceID = savedWorkspaces.first?.id
             }
         }
-        let open: (SavedWorkspaceID) -> Void = { savedWorkspaceID in
+        let open: (WorkspaceID) -> Void = { savedWorkspaceID in
             guard let workspaceID = model.openSavedWorkspace(savedWorkspaceID) else { return }
 
             selectedWorkspaceID = workspaceID
             dismiss()
         }
-        let delete: (SavedWorkspaceID) -> Void = { savedWorkspaceID in
+        let delete: (WorkspaceID) -> Void = { savedWorkspaceID in
             model.deleteSavedWorkspace(savedWorkspaceID)
             selectedSavedWorkspaceID = savedWorkspaces.first { $0.id != savedWorkspaceID }?.id
         }

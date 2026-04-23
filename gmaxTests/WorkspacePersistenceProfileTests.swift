@@ -93,6 +93,7 @@ struct WorkspacePersistenceProfileTests {
         #expect(workspaceUpdatedAt?.defaultValue is Date)
         #expect(placementCreatedAt?.defaultValue is Date)
         #expect(placementUpdatedAt?.defaultValue is Date)
+        #expect(workspaceEntity.attributesByName["savedWorkspaceID"] == nil)
     }
 }
 

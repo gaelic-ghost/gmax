@@ -298,11 +298,11 @@ final class WorkspacePersistenceController {
         let context = container.viewContext
         return context.performAndWait {
             do {
-                let savedWorkspaceID = workspace.savedWorkspaceID ?? SavedWorkspaceID()
                 let now = Date()
-                let workspaceEntity = WorkspaceEntity(context: context)
-                workspaceEntity.id = UUID()
-                workspaceEntity.savedWorkspaceID = savedWorkspaceID.rawValue
+                let workspaceEntity = try Self.requireOrCreateWorkspaceEntity(
+                    id: workspace.id.rawValue,
+                    context: context,
+                )
                 try Self.updateWorkspaceEntity(
                     workspaceEntity,
                     from: workspace,
@@ -314,10 +314,15 @@ final class WorkspacePersistenceController {
 
                 let request = NSFetchRequest<WorkspacePlacementEntity>(entityName: "WorkspacePlacementEntity")
                 request.fetchLimit = 1
-                request.predicate = NSPredicate(format: "id == %@", savedWorkspaceID.rawValue as CVarArg)
+                request.predicate = NSCompoundPredicate(
+                    andPredicateWithSubpredicates: [
+                        NSPredicate(format: "id == %@", workspace.id.rawValue as CVarArg),
+                        NSPredicate(format: "role == %@", WorkspacePlacementRole.library.rawValue),
+                    ],
+                )
                 let placement = try context.fetch(request).first ?? WorkspacePlacementEntity(context: context)
                 if placement.objectID.isTemporaryID {
-                    placement.id = savedWorkspaceID.rawValue
+                    placement.id = workspace.id.rawValue
                     placement.createdAt = now
                 }
                 placement.role = WorkspacePlacementRole.library.rawValue
@@ -365,7 +370,16 @@ final class WorkspacePersistenceController {
                     )
                 }
 
-                return try context.fetch(request).map(Self.makeSavedWorkspaceListing(from:))
+                return try context.fetch(request)
+                    .filter { placement in
+                        let siblingPlacements = (placement.workspace?.placements as? Set<WorkspacePlacementEntity>) ?? []
+                        return !siblingPlacements.contains { siblingPlacement in
+                            siblingPlacement.objectID != placement.objectID
+                                && !siblingPlacement.isDeleted
+                                && siblingPlacement.role == WorkspacePlacementRole.live.rawValue
+                        }
+                    }
+                    .map(Self.makeSavedWorkspaceListing(from:))
             } catch {
                 Logger.persistence.error("Core Data failed to list saved workspaces from the library. The app will continue, but the library index could not be read. Error: \(String(describing: error), privacy: .public)")
                 return []
@@ -373,7 +387,7 @@ final class WorkspacePersistenceController {
         }
     }
 
-    func loadSavedWorkspace(id: SavedWorkspaceID) -> WorkspaceRevision? {
+    func loadSavedWorkspace(id: WorkspaceID) -> WorkspaceRevision? {
         let context = container.viewContext
         return context.performAndWait {
             do {
@@ -385,20 +399,20 @@ final class WorkspacePersistenceController {
                     WorkspacePlacementRole.library.rawValue,
                 )
                 guard let placement = try context.fetch(request).first else {
-                    Logger.persistence.error("The saved-workspace library could not find the requested entry during reopen. The entry may have been deleted or the library selection may be stale. Saved workspace ID: \(id.rawValue.uuidString, privacy: .public)")
+                    Logger.persistence.error("The saved-workspace library could not find the requested workspace during reopen. The entry may have been deleted, still be live in another window, or the library selection may be stale. Workspace ID: \(id.rawValue.uuidString, privacy: .public)")
                     return nil
                 }
 
                 return Self.workspaceRevision(for: placement.workspace, placement: placement)
             } catch {
-                Logger.persistence.error("Core Data failed while reading a saved workspace from the library. The live session remains available, but the requested saved revision could not be loaded. Saved workspace ID: \(id.rawValue.uuidString, privacy: .public). Error: \(String(describing: error), privacy: .public)")
+                Logger.persistence.error("Core Data failed while reading a saved workspace from the library. The live session remains available, but the requested workspace could not be loaded. Workspace ID: \(id.rawValue.uuidString, privacy: .public). Error: \(String(describing: error), privacy: .public)")
                 return nil
             }
         }
     }
 
     @discardableResult
-    func deleteSavedWorkspace(id: SavedWorkspaceID) -> Bool {
+    func deleteSavedWorkspace(id: WorkspaceID) -> Bool {
         let context = container.viewContext
         return context.performAndWait {
             do {
@@ -410,7 +424,7 @@ final class WorkspacePersistenceController {
                     WorkspacePlacementRole.library.rawValue,
                 )
                 guard let placement = try context.fetch(request).first else {
-                    Logger.persistence.error("The saved-workspace library could not find the entry requested for deletion. The library may already be up to date, or the selection may have gone stale. Saved workspace ID: \(id.rawValue.uuidString, privacy: .public)")
+                    Logger.persistence.error("The saved-workspace library could not find the workspace entry requested for deletion. The library may already be up to date, or the selection may have gone stale. Workspace ID: \(id.rawValue.uuidString, privacy: .public)")
                     return false
                 }
 
@@ -430,14 +444,14 @@ final class WorkspacePersistenceController {
                 }
                 return true
             } catch {
-                Logger.persistence.error("Core Data failed to delete a saved workspace from the library. The entry remains available. Saved workspace ID: \(id.rawValue.uuidString, privacy: .public). Error: \(String(describing: error), privacy: .public)")
+                Logger.persistence.error("Core Data failed to delete a saved workspace from the library. The entry remains available. Workspace ID: \(id.rawValue.uuidString, privacy: .public). Error: \(String(describing: error), privacy: .public)")
                 context.rollback()
                 return false
             }
         }
     }
 
-    func markSavedWorkspaceOpened(_ id: SavedWorkspaceID) {
+    func markSavedWorkspaceOpened(_ id: WorkspaceID) {
         let context = container.viewContext
         context.performAndWait {
             do {
@@ -459,7 +473,7 @@ final class WorkspacePersistenceController {
                     try context.save()
                 }
             } catch {
-                Logger.persistence.error("Core Data failed to update the recency metadata for a saved workspace. The entry remains usable, but its last-opened date is stale. Saved workspace ID: \(id.rawValue.uuidString, privacy: .public). Error: \(String(describing: error), privacy: .public)")
+                Logger.persistence.error("Core Data failed to update the recency metadata for a saved workspace. The entry remains usable, but its last-opened date is stale. Workspace ID: \(id.rawValue.uuidString, privacy: .public). Error: \(String(describing: error), privacy: .public)")
                 context.rollback()
             }
         }
@@ -503,7 +517,6 @@ extension WorkspacePersistenceController {
         let workspaceEntity = existingWorkspacesByID.removeValue(forKey: workspace.id.rawValue)
             ?? WorkspaceEntity(context: context)
         workspaceEntity.id = workspace.id.rawValue
-        workspaceEntity.savedWorkspaceID = workspace.savedWorkspaceID?.rawValue
         try updateWorkspaceEntity(
             workspaceEntity,
             from: workspace,
@@ -637,7 +650,6 @@ extension WorkspacePersistenceController {
             id: WorkspaceID(rawValue: workspaceEntity.id),
             title: workspaceEntity.title,
             root: Self.decodeNode(workspaceEntity.rootNode),
-            savedWorkspaceID: workspaceEntity.savedWorkspaceID.map(SavedWorkspaceID.init(rawValue:)),
         )
         guard let root = workspace.root else {
             Logger.persistence.error("A persisted workspace payload decoded without a root pane tree. That payload will be skipped during restore. Workspace payload ID: \(workspaceEntity.id.uuidString, privacy: .public)")
@@ -651,7 +663,6 @@ extension WorkspacePersistenceController {
         let sessionSnapshots = decodeSessionSnapshots(from: workspaceEntity)
         return WorkspaceRevision(
             id: workspaceEntity.id,
-            savedWorkspaceID: workspaceEntity.savedWorkspaceID.map(SavedWorkspaceID.init(rawValue:)),
             title: workspaceEntity.title,
             createdAt: workspaceEntity.createdAt,
             updatedAt: workspaceEntity.updatedAt,
@@ -663,7 +674,6 @@ extension WorkspacePersistenceController {
                 id: WorkspaceID(rawValue: workspaceEntity.id),
                 title: workspace.title,
                 root: root,
-                savedWorkspaceID: workspace.savedWorkspaceID,
             ),
             paneSnapshotsBySessionID: sessionSnapshots,
         )
@@ -715,7 +725,7 @@ extension WorkspacePersistenceController {
 
     private nonisolated static func makeSavedWorkspaceListing(from placement: WorkspacePlacementEntity) -> SavedWorkspaceListing {
         SavedWorkspaceListing(
-            id: SavedWorkspaceID(rawValue: placement.id),
+            id: WorkspaceID(rawValue: placement.id),
             title: placement.title,
             createdAt: placement.createdAt,
             updatedAt: placement.updatedAt,
@@ -772,6 +782,22 @@ extension WorkspacePersistenceController {
             throw CocoaError(.validationMissingMandatoryProperty)
         }
 
+        return entity
+    }
+
+    private nonisolated static func requireOrCreateWorkspaceEntity(
+        id: UUID,
+        context: NSManagedObjectContext,
+    ) throws -> WorkspaceEntity {
+        let request = NSFetchRequest<WorkspaceEntity>(entityName: "WorkspaceEntity")
+        request.fetchLimit = 1
+        request.predicate = NSPredicate(format: "id == %@", id as CVarArg)
+        if let entity = try context.fetch(request).first {
+            return entity
+        }
+
+        let entity = WorkspaceEntity(context: context)
+        entity.id = id
         return entity
     }
 

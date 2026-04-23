@@ -157,13 +157,14 @@ extension WorkspaceStore {
             transcriptsBySessionID: resolvedTranscripts,
         )
         if let summary {
-            Logger.workspace.notice("Saved a workspace to the library. Workspace title: \(workspace.title, privacy: .public). Workspace ID: \(workspace.id.rawValue.uuidString, privacy: .public). Saved workspace ID: \(summary.id.rawValue.uuidString, privacy: .public)")
+            Logger.workspace.notice("Saved a workspace to the library. Workspace title: \(workspace.title, privacy: .public). Workspace ID: \(workspace.id.rawValue.uuidString, privacy: .public). Library entry ID: \(summary.id.rawValue.uuidString, privacy: .public)")
         }
         return summary
     }
 
     func listSavedWorkspaces(matching query: String? = nil) -> [SavedWorkspaceListing] {
-        persistence.listSavedWorkspaces(matching: query)
+        let liveWorkspaceIDs = Set(workspaces.map(\.id))
+        return persistence.listSavedWorkspaces(matching: query).filter { !liveWorkspaceIDs.contains($0.id) }
     }
 
     @discardableResult
@@ -182,9 +183,15 @@ extension WorkspaceStore {
     }
 
     @discardableResult
-    func openSavedWorkspace(_ savedWorkspaceID: SavedWorkspaceID) -> WorkspaceID? {
+    func openSavedWorkspace(_ savedWorkspaceID: WorkspaceID) -> WorkspaceID? {
+        if workspaces.contains(where: { $0.id == savedWorkspaceID }) {
+            persistence.markSavedWorkspaceOpened(savedWorkspaceID)
+            Logger.workspace.notice("Requested a workspace from the saved-workspace library, but that workspace is already live in the current shell model. Reusing the existing workspace identity. Workspace ID: \(savedWorkspaceID.rawValue.uuidString, privacy: .public)")
+            return savedWorkspaceID
+        }
+
         guard let savedWorkspace = persistence.loadSavedWorkspace(id: savedWorkspaceID) else {
-            Logger.workspace.error("The app could not reopen a saved workspace because the requested library entry was missing or unreadable. Check the persistence logs for the exact load failure. Saved workspace ID: \(savedWorkspaceID.rawValue.uuidString, privacy: .public)")
+            Logger.workspace.error("The app could not reopen a saved workspace because the requested library entry was missing or unreadable. Check the persistence logs for the exact load failure. Workspace ID: \(savedWorkspaceID.rawValue.uuidString, privacy: .public)")
             return nil
         }
 
@@ -192,14 +199,11 @@ extension WorkspaceStore {
         var transcriptsBySessionID: [TerminalSessionID: String] = [:]
         var titlesBySessionID: [TerminalSessionID: String] = [:]
         let restoredWorkspace = Workspace(
+            id: WorkspaceID(rawValue: savedWorkspace.id),
             title: {
                 let title = savedWorkspace.title.trimmingCharacters(in: .whitespacesAndNewlines)
                 let baseTitle = title.isEmpty ? "Workspace" : title
-                return uniqueWorkspaceTitle(
-                    startingWith: workspaces.map(\.title).contains(baseTitle)
-                        ? "\(baseTitle) (Opened \(Date.now.formatted(date: .omitted, time: .shortened)))"
-                        : baseTitle,
-                )
+                return uniqueWorkspaceTitle(startingWith: baseTitle)
             }(),
             root: savedWorkspace.workspace.root.map {
                 restoreNode(
@@ -210,7 +214,6 @@ extension WorkspaceStore {
                     titlesBySessionID: &titlesBySessionID,
                 )
             },
-            savedWorkspaceID: savedWorkspace.savedWorkspaceID,
         )
         workspaces.append(restoredWorkspace)
 
@@ -222,18 +225,18 @@ extension WorkspaceStore {
         }
 
         persistence.markSavedWorkspaceOpened(savedWorkspaceID)
-        Logger.workspace.notice("Opened a workspace from the saved-workspace library. Saved workspace title: \(savedWorkspace.title, privacy: .public). Saved workspace ID: \(savedWorkspaceID.rawValue.uuidString, privacy: .public). Restored pane count: \((restoredWorkspace.root?.leaves().count ?? 0))")
+        Logger.workspace.notice("Opened a workspace from the saved-workspace library. Workspace title: \(savedWorkspace.title, privacy: .public). Workspace ID: \(savedWorkspaceID.rawValue.uuidString, privacy: .public). Restored pane count: \((restoredWorkspace.root?.leaves().count ?? 0))")
         schedulePersistenceSave(reason: .workspaceOpenedFromLibrary)
         return restoredWorkspace.id
     }
 
-    func deleteSavedWorkspace(_ savedWorkspaceID: SavedWorkspaceID) {
+    func deleteSavedWorkspace(_ savedWorkspaceID: WorkspaceID) {
         guard persistence.deleteSavedWorkspace(id: savedWorkspaceID) else {
-            Logger.workspace.error("The app could not delete a saved workspace from the library because persistence did not confirm the deletion. Check the persistence logs for the exact failure. Saved workspace ID: \(savedWorkspaceID.rawValue.uuidString, privacy: .public)")
+            Logger.workspace.error("The app could not delete a saved workspace from the library because persistence did not confirm the deletion. Check the persistence logs for the exact failure. Workspace ID: \(savedWorkspaceID.rawValue.uuidString, privacy: .public)")
             return
         }
 
-        Logger.workspace.notice("Deleted a saved workspace from the library. Saved workspace ID: \(savedWorkspaceID.rawValue.uuidString, privacy: .public)")
+        Logger.workspace.notice("Deleted a saved workspace from the library. Workspace ID: \(savedWorkspaceID.rawValue.uuidString, privacy: .public)")
     }
 }
 

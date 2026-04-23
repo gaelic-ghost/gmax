@@ -21,7 +21,6 @@ final class WorkspaceEntity: NSManagedObject {
     @NSManaged var notes: String?
     @NSManaged var previewText: String?
     @NSManaged var searchText: String?
-    @NSManaged var savedWorkspaceID: UUID?
     @NSManaged var sortOrder: Int64
     @NSManaged var rootNode: PaneNodeEntity?
     @NSManaged var placements: NSSet?
