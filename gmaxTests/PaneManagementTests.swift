@@ -229,6 +229,61 @@ struct PaneManagementTests {
         #expect(target == nil)
     }
 
+    @Test func `directional pane focus prefers overlapping panes over diagonal candidates`() {
+        let currentPaneID = PaneID()
+        let overlappingLeftPaneID = PaneID()
+        let diagonalLeftPaneID = PaneID()
+
+        let target = directionalPaneFocus(
+            from: currentPaneID,
+            paneFrames: [
+                currentPaneID: CGRect(x: 100, y: 100, width: 100, height: 100),
+                overlappingLeftPaneID: CGRect(x: 0, y: 120, width: 80, height: 60),
+                diagonalLeftPaneID: CGRect(x: 40, y: 0, width: 50, height: 40),
+            ],
+            direction: .left,
+            history: [diagonalLeftPaneID, overlappingLeftPaneID],
+        )
+
+        #expect(target == overlappingLeftPaneID)
+    }
+
+    @Test func `directional pane focus uses the most recent history entry to break geometric ties`() {
+        let currentPaneID = PaneID()
+        let upperLeftPaneID = PaneID()
+        let lowerLeftPaneID = PaneID()
+
+        let target = directionalPaneFocus(
+            from: currentPaneID,
+            paneFrames: [
+                currentPaneID: CGRect(x: 100, y: 100, width: 100, height: 100),
+                upperLeftPaneID: CGRect(x: 0, y: 80, width: 80, height: 60),
+                lowerLeftPaneID: CGRect(x: 0, y: 160, width: 80, height: 60),
+            ],
+            direction: .left,
+            history: [upperLeftPaneID, lowerLeftPaneID],
+        )
+
+        #expect(target == lowerLeftPaneID)
+    }
+
+    @Test func `directional pane focus returns nil when no pane exists in that direction`() {
+        let currentPaneID = PaneID()
+        let rightPaneID = PaneID()
+
+        let target = directionalPaneFocus(
+            from: currentPaneID,
+            paneFrames: [
+                currentPaneID: CGRect(x: 100, y: 100, width: 100, height: 100),
+                rightPaneID: CGRect(x: 240, y: 100, width: 100, height: 100),
+            ],
+            direction: .left,
+            history: [rightPaneID],
+        )
+
+        #expect(target == nil)
+    }
+
     @Test func `set split fraction updates the workspace tree`() throws {
         let leftPane = PaneLeaf()
         let rightPane = PaneLeaf()

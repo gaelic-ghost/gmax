@@ -575,7 +575,7 @@ private struct PaneNavigationMetrics: Comparable {
     }
 }
 
-private func directionalPaneFocus(
+func directionalPaneFocus(
     from paneID: PaneID,
     paneFrames: [PaneID: CGRect],
     direction: PaneFocusDirection,
@@ -671,7 +671,7 @@ private func navigationMetrics(
             return nil
     }
 
-    let historyRank = history.lastIndex(of: paneID).map { history.distance(from: $0, to: history.endIndex) } ?? 0
+    let historyRank = history.lastIndex(of: paneID).map { history.distance(from: history.startIndex, to: $0) + 1 } ?? 0
     return PaneNavigationMetrics(
         hasPerpendicularOverlap: perpendicularOverlap > 0,
         perpendicularOverlap: perpendicularOverlap,
