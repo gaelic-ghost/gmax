@@ -76,10 +76,94 @@ final class WorkspacePersistenceController {
         }
     }
 
+    func loadWindowState(for sceneIdentity: WorkspaceSceneIdentity) -> WorkspaceWindowStateSnapshot? {
+        let context = container.viewContext
+        return context.performAndWait {
+            let request = NSFetchRequest<WorkspaceWindowStateEntity>(entityName: "WorkspaceWindowStateEntity")
+            request.predicate = NSPredicate(format: "windowID == %@", sceneIdentity.windowID as CVarArg)
+            request.fetchLimit = 1
+
+            do {
+                guard let windowState = try context.fetch(request).first else {
+                    return nil
+                }
+
+                let selectedWorkspaceID = windowState.selectedWorkspaceID.map(WorkspaceID.init(rawValue:))
+                return WorkspaceWindowStateSnapshot(selectedWorkspaceID: selectedWorkspaceID)
+            } catch {
+                Logger.persistence.error(
+                    "Core Data could not load the durable window metadata for the active workspace scene. The app will continue, but this window may fall back to lighter-weight restoration behavior. Window ID: \(sceneIdentity.windowID.uuidString, privacy: .public). Error: \(String(describing: error), privacy: .public)",
+                )
+                context.rollback()
+                return nil
+            }
+        }
+    }
+
+    func loadLiveSceneIdentities(
+        matching sceneIdentities: [WorkspaceSceneIdentity]? = nil,
+    ) -> [WorkspaceSceneIdentity] {
+        let context = container.viewContext
+        return context.performAndWait {
+            let request = NSFetchRequest<WorkspacePlacementEntity>(entityName: "WorkspacePlacementEntity")
+            if let sceneIdentities, !sceneIdentities.isEmpty {
+                request.predicate = NSPredicate(
+                    format: "role == %@ AND windowID IN %@",
+                    WorkspacePlacementRole.live.rawValue,
+                    sceneIdentities.map(\.windowID),
+                )
+            } else {
+                request.predicate = NSPredicate(
+                    format: "role == %@ AND windowID != nil",
+                    WorkspacePlacementRole.live.rawValue,
+                )
+            }
+            request.sortDescriptors = [
+                NSSortDescriptor(key: #keyPath(WorkspacePlacementEntity.updatedAt), ascending: false),
+            ]
+
+            do {
+                let placements = try context.fetch(request)
+                let orderedPersistedSceneIdentities = Self.uniqueSceneIdentities(from: placements)
+
+                guard let sceneIdentities, !sceneIdentities.isEmpty else {
+                    return orderedPersistedSceneIdentities
+                }
+
+                let persistedSceneIdentityByWindowID = Dictionary(
+                    uniqueKeysWithValues: orderedPersistedSceneIdentities.map { ($0.windowID, $0) },
+                )
+                return sceneIdentities.compactMap { persistedSceneIdentityByWindowID[$0.windowID] }
+            } catch {
+                Logger.persistence.error(
+                    "Core Data could not load the list of live workspace window identities for launch restoration. The app will continue, but it may reopen fewer windows than were present in the previous session. Error: \(String(describing: error), privacy: .public)",
+                )
+                context.rollback()
+                return []
+            }
+        }
+    }
+
+    nonisolated private static func uniqueSceneIdentities(from placements: [WorkspacePlacementEntity]) -> [WorkspaceSceneIdentity] {
+        var seenWindowIDs: Set<UUID> = []
+
+        return placements.compactMap { placement in
+            guard let windowID = placement.windowID else {
+                return nil
+            }
+            guard seenWindowIDs.insert(windowID).inserted else {
+                return nil
+            }
+
+            return WorkspaceSceneIdentity(windowID: windowID)
+        }
+    }
+
     func saveSceneState(
         for sceneIdentity: WorkspaceSceneIdentity,
         liveWorkspaces: [Workspace],
         recentlyClosedWorkspaces: [RecentlyClosedWorkspaceStateInput],
+        selectedWorkspaceID: WorkspaceID?,
         sessions: TerminalSessionRegistry,
         liveTranscriptsByWorkspaceID: [WorkspaceID: [TerminalSessionID: String]] = [:],
     ) {
@@ -169,6 +253,19 @@ final class WorkspacePersistenceController {
                 for stalePlacement in existingPlacementsByID.values where !retainedPlacementIDs.contains(stalePlacement.id) {
                     context.delete(stalePlacement)
                 }
+
+                let windowStateRequest = NSFetchRequest<WorkspaceWindowStateEntity>(entityName: "WorkspaceWindowStateEntity")
+                windowStateRequest.predicate = NSPredicate(format: "windowID == %@", sceneIdentity.windowID as CVarArg)
+                windowStateRequest.fetchLimit = 1
+                let now = Date()
+                let windowState = try context.fetch(windowStateRequest).first
+                    ?? WorkspaceWindowStateEntity(context: context)
+                if windowState.objectID.isTemporaryID {
+                    windowState.windowID = sceneIdentity.windowID
+                    windowState.createdAt = now
+                }
+                windowState.selectedWorkspaceID = selectedWorkspaceID?.rawValue
+                windowState.updatedAt = now
 
                 try Self.deleteOrphanedWorkspaceRecords(
                     existingWorkspacesByID: existingWorkspacesByID,

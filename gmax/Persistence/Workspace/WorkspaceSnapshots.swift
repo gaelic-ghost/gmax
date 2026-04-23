@@ -65,6 +65,10 @@ struct PersistedRecentlyClosedWorkspace: Hashable, Codable {
     var formerIndex: Int
 }
 
+struct WorkspaceWindowStateSnapshot: Hashable, Codable {
+    var selectedWorkspaceID: WorkspaceID?
+}
+
 struct RecentlyClosedWorkspaceStateInput {
     var workspace: Workspace
     var formerIndex: Int

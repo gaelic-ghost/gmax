@@ -13,6 +13,7 @@ final class WorkspaceStore: ObservableObject {
     let launchContextBuilder: TerminalLaunchContextBuilder
     let sessions: TerminalSessionRegistry
     let paneControllers: TerminalPaneControllerStore
+    var persistedSelectedWorkspaceID: WorkspaceID?
     var pendingPersistenceTask: Task<Void, Never>?
     var recentlyClosedWorkspaces: [RecentlyClosedWorkspace] = []
 
@@ -36,20 +37,23 @@ final class WorkspaceStore: ObservableObject {
         let launchContextBuilder = launchContextBuilder ?? .live()
         let resolvedWorkspaces: [Workspace]
         let resolvedRecentlyClosedWorkspaces: [RecentlyClosedWorkspace]
+        let resolvedWindowState: WorkspaceWindowStateSnapshot?
 
         if let workspaces {
             resolvedWorkspaces = workspaces
             resolvedRecentlyClosedWorkspaces = []
+            resolvedWindowState = nil
         } else {
-            let shouldRestorePersistedWorkspaces = UserDefaults.standard.bool(
-                forKey: WorkspacePersistenceDefaults.restoreWorkspacesOnLaunchKey,
-            )
+            let shouldRestorePersistedWorkspaces = WorkspacePersistenceDefaults.restoreWorkspacesOnLaunch()
             let persistedWorkspaces = shouldRestorePersistedWorkspaces
                 ? persistence.loadWorkspaces(for: sceneIdentity)
                 : []
             let persistedRecentlyClosedWorkspaces = shouldRestorePersistedWorkspaces
                 ? persistence.loadRecentlyClosedWorkspaces(for: sceneIdentity)
                 : []
+            resolvedWindowState = shouldRestorePersistedWorkspaces
+                ? persistence.loadWindowState(for: sceneIdentity)
+                : nil
             if persistedWorkspaces.isEmpty {
                 let pane = PaneLeaf()
                 resolvedWorkspaces = [Workspace(title: "Workspace 1", root: .leaf(pane))]
@@ -102,5 +106,6 @@ final class WorkspaceStore: ObservableObject {
         self.workspaces = resolvedWorkspaces
         recentlyClosedWorkspaces = resolvedRecentlyClosedWorkspaces
         recentlyClosedWorkspaceCount = resolvedRecentlyClosedWorkspaces.count
+        persistedSelectedWorkspaceID = resolvedWindowState?.selectedWorkspaceID
     }
 }

@@ -60,6 +60,14 @@ final class WorkspacePlacementEntity: NSManagedObject {
     @NSManaged var workspace: WorkspaceEntity?
 }
 
+@objc(WorkspaceWindowStateEntity)
+final class WorkspaceWindowStateEntity: NSManagedObject {
+    @NSManaged var windowID: UUID
+    @NSManaged var selectedWorkspaceID: UUID?
+    @NSManaged var createdAt: Date
+    @NSManaged var updatedAt: Date
+}
+
 @objc(PaneSessionSnapshotEntity)
 final class PaneSessionSnapshotEntity: NSManagedObject {
     @NSManaged var id: UUID

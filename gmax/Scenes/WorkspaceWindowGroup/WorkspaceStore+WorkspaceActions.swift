@@ -245,6 +245,7 @@ extension WorkspaceStore {
     private struct PersistenceSnapshot {
         let liveWorkspaces: [Workspace]
         let recentlyClosedWorkspaces: [RecentlyClosedWorkspaceStateInput]
+        let selectedWorkspaceID: WorkspaceID?
         let liveTranscriptsByWorkspaceID: [WorkspaceID: [TerminalSessionID: String]]
     }
 
@@ -327,6 +328,7 @@ extension WorkspaceStore {
         return PersistenceSnapshot(
             liveWorkspaces: workspacesSnapshot,
             recentlyClosedWorkspaces: recentlyClosedSnapshot,
+            selectedWorkspaceID: persistedSelectedWorkspaceID,
             liveTranscriptsByWorkspaceID: transcriptsByWorkspaceID,
         )
     }
@@ -343,6 +345,7 @@ extension WorkspaceStore {
             for: sceneIdentity,
             liveWorkspaces: snapshot.liveWorkspaces,
             recentlyClosedWorkspaces: snapshot.recentlyClosedWorkspaces,
+            selectedWorkspaceID: snapshot.selectedWorkspaceID,
             sessions: sessions,
             liveTranscriptsByWorkspaceID: snapshot.liveTranscriptsByWorkspaceID,
         )

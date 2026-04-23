@@ -124,4 +124,28 @@ struct WorkspaceLifecycleTests {
         #expect(model.workspaces.count == 1)
         #expect(model.workspaces[0].title == "Workspace 1")
     }
+
+    @Test func `workspace store loads the durable selected workspace for its window`() throws {
+        let persistence = WorkspacePersistenceController.inMemoryForTesting()
+        let sceneIdentity = WorkspaceSceneIdentity()
+        let firstWorkspace = TestSupport.makeWorkspace(title: "Workspace 1")
+        let secondWorkspace = TestSupport.makeWorkspace(title: "Workspace 2")
+        let seedStore = WorkspaceStore(
+            sceneIdentity: sceneIdentity,
+            workspaces: [firstWorkspace, secondWorkspace],
+            persistence: persistence,
+            launchContextBuilder: TestSupport.makeLaunchContextBuilder(defaultCurrentDirectory: "/tmp/gmax-tests"),
+        )
+
+        seedStore.persistedSelectedWorkspaceID = secondWorkspace.id
+        seedStore.persistSceneStateNow(reason: .unitTestImmediateFlush)
+
+        let restoredStore = WorkspaceStore(
+            sceneIdentity: sceneIdentity,
+            persistence: persistence,
+            launchContextBuilder: TestSupport.makeLaunchContextBuilder(defaultCurrentDirectory: "/tmp/gmax-tests"),
+        )
+
+        #expect(restoredStore.persistedSelectedWorkspaceID == secondWorkspace.id)
+    }
 }

@@ -566,6 +566,16 @@ That means `Auto-save closed workspaces` should not depend on `Keep recently clo
 
 This matrix is now implemented in the app settings and close-workspace behavior.
 
+Preferred follow-through:
+
+- keep the user-facing semantics for now
+- but simplify the implementation over time so "recently closed" becomes a
+  durable disk-backed recency query for workspaces associated with the active
+  window identity
+- let `Undo Close Workspace` and any future "Open Recent Workspace" behavior
+  query Core Data by window identity plus latest durable activity timestamp
+  instead of depending on a separate in-memory stack model
+
 ## Command Model
 
 The command model should map to these layers clearly:
@@ -582,6 +592,14 @@ This means `Undo Close Workspace` and `Open Workspace...` should remain distinct
 - open is indexed and library-based
 
 That distinction should remain visible in both commands and internal APIs.
+
+Preferred follow-through:
+
+- keep the command distinction
+- but change the implementation of undo from an in-memory recent-close stack to
+  a disk-backed recency query for the active window's inactive workspaces
+- evolve `Open Workspace...` into a unified library browser that can later show
+  both workspace items and window items
 
 ## Current Implementation Status
 
@@ -625,6 +643,13 @@ Use
 [`workspace-window-state-and-persistence-model.md`](./workspace-window-state-and-persistence-model.md)
 as the current source of truth for persistence structure and follow-through
 work.
+
+That note now also carries the preferred target schema and migration plan for:
+
+- stable durable workspace identity
+- durable window records
+- disk-backed recency by window identity
+- a unified library that can hold both workspace and window items
 
 The remaining medium-term persistence work is about:
 

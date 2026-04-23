@@ -12,6 +12,7 @@ enum WorkspacePersistenceDefaults {
     nonisolated static let keepRecentlyClosedWorkspacesKey = "workspacePersistence.keepRecentlyClosed"
     nonisolated static let autoSaveClosedWorkspacesKey = "workspacePersistence.autoSaveClosedWorkspaces"
     nonisolated static let backgroundSaveIntervalMinutesKey = "workspacePersistence.backgroundSaveIntervalMinutes"
+    nonisolated static let launchRestoreWindowIDsKey = "workspacePersistence.launchRestoreWindowIDs"
     nonisolated static let maxRecentlyClosedWorkspaceCount = 20
     nonisolated static let defaultBackgroundSaveIntervalMinutes = 5
 
@@ -24,6 +25,17 @@ enum WorkspacePersistenceDefaults {
         }
 
         return keepsWindows
+    }
+
+    nonisolated static func restoreWorkspacesOnLaunch(
+        userDefaults: UserDefaults = .standard,
+        globalDefaults: UserDefaults = .standard,
+    ) -> Bool {
+        if let explicitValue = userDefaults.object(forKey: restoreWorkspacesOnLaunchKey) as? Bool {
+            return explicitValue
+        }
+
+        return systemRestoresWindowsByDefault(globalDefaults: globalDefaults)
     }
 
     nonisolated static func normalizedBackgroundSaveIntervalMinutes(_ minutes: Int) -> Int {

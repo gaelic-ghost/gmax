@@ -16,6 +16,7 @@ private enum FocusAssignment: Equatable {
 
 struct WorkspaceWindowSceneView: View {
     @Environment(\.appearsActive) private var appearsActive
+    @Environment(\.openWindow) private var openWindow
     @Environment(\.scenePhase) private var scenePhase
     @FocusState private var focusedTarget: WorkspaceFocusTarget?
     @AppStorage(WorkspacePersistenceDefaults.backgroundSaveIntervalMinutesKey)
@@ -38,9 +39,14 @@ struct WorkspaceWindowSceneView: View {
     @StateObject private var workspaceStore: WorkspaceStore
 
     private let sceneIdentity: WorkspaceSceneIdentity
+    private let windowRestoration: WorkspaceWindowRestorationController
 
-    init(sceneIdentity: WorkspaceSceneIdentity = WorkspaceSceneIdentity()) {
+    init(
+        sceneIdentity: WorkspaceSceneIdentity = WorkspaceSceneIdentity(),
+        windowRestoration: WorkspaceWindowRestorationController,
+    ) {
         self.sceneIdentity = sceneIdentity
+        self.windowRestoration = windowRestoration
         _workspaceStore = StateObject(
             wrappedValue: WorkspaceStore(sceneIdentity: sceneIdentity),
         )
@@ -371,6 +377,7 @@ struct WorkspaceWindowSceneView: View {
         ))
         .focusedSceneObject(workspaceStore)
         .focusedSceneValue(\.activeWorkspaceFocusTarget, focusedTarget)
+        .focusedSceneValue(\.activeWorkspaceSceneIdentity, sceneIdentity)
         .focusedSceneValue(\.selectedWorkspaceSelection, $selectedWorkspaceID)
         .focusedSceneValue(\.dismissPresentedWorkspaceModal, dismissPresentedWorkspaceModal)
         .focusedSceneValue(\.openSavedWorkspaceLibrary, openSavedWorkspaceLibrary)
@@ -386,7 +393,14 @@ struct WorkspaceWindowSceneView: View {
                     return
                 }
 
+                windowRestoration.markWindowOpen(sceneIdentity)
                 applyInitialSceneRestoration(normalizeSelection: normalizeSelection)
+                Task { @MainActor in
+                    await Task.yield()
+                    for sceneIdentity in windowRestoration.consumePendingLaunchRestoreSceneIdentities() {
+                        openWindow(value: sceneIdentity)
+                    }
+                }
             },
             onBackgroundSaveTask: {
                 await runPeriodicPersistenceLoop(
@@ -416,6 +430,7 @@ struct WorkspaceWindowSceneView: View {
             selectedWorkspaceID: selectedWorkspaceID,
             onSelectedWorkspaceChange: {
                 resetPaneNavigationStateForWorkspaceSelection()
+                handleSelectedWorkspacePersistence(selectedWorkspaceID)
             },
             selectedWorkspacePaneIDs: selectedWorkspace?.paneLeaves.map(\.id) ?? [],
             onSelectedWorkspacePaneChange: { paneIDs in
@@ -450,6 +465,7 @@ struct WorkspaceWindowSceneView: View {
                 )
             },
             onDisappear: {
+                windowRestoration.recordWindowClosed(sceneIdentity)
                 workspaceStore.persistSceneStateNow(
                     reason: WorkspacePersistenceSaveReason.windowDisappeared,
                 )
@@ -529,8 +545,9 @@ struct WorkspaceWindowSceneView: View {
     ) {
         hasAppliedSceneState = true
 
-        let restoredWorkspaceUUID = restoredSelectedWorkspaceID.flatMap(UUID.init(uuidString:))
-        let restoredSelection = restoredWorkspaceUUID.map(WorkspaceID.init(rawValue:))
+        let sceneStorageWorkspaceUUID = restoredSelectedWorkspaceID.flatMap(UUID.init(uuidString:))
+        let sceneStorageSelection = sceneStorageWorkspaceUUID.map(WorkspaceID.init(rawValue:))
+        let restoredSelection = workspaceStore.persistedSelectedWorkspaceID ?? sceneStorageSelection
         let fallbackWorkspaceID = workspaceStore.workspaces.first?.id
 
         if let restoredSelection {
@@ -545,7 +562,9 @@ struct WorkspaceWindowSceneView: View {
 
         Logger.diagnostics.notice(
             """
-            Applied per-window shell scene restoration. Restored workspace selection: \(restoredSelection?.rawValue.uuidString ?? "(none)", privacy: .public). \
+            Applied per-window shell scene restoration. Durable selected workspace: \(workspaceStore.persistedSelectedWorkspaceID?.rawValue.uuidString ?? "(none)", privacy: .public). \
+            SceneStorage selected workspace: \(sceneStorageSelection?.rawValue.uuidString ?? "(none)", privacy: .public). \
+            Restored workspace selection: \(restoredSelection?.rawValue.uuidString ?? "(none)", privacy: .public). \
             Normalized workspace selection: \(selectedWorkspaceID?.rawValue.uuidString ?? "(none)", privacy: .public). \
             Sidebar visibility: \(restoredSidebarVisible ? "visible" : "hidden", privacy: .public). \
             Inspector visibility: \(restoredInspectorVisible ? "visible" : "hidden", privacy: .public).
@@ -612,6 +631,10 @@ struct WorkspaceWindowSceneView: View {
                 activePaneIDs: activePaneIDs,
             )
         }
+    }
+
+    private func handleSelectedWorkspacePersistence(_ selectedWorkspaceID: WorkspaceID?) {
+        workspaceStore.persistedSelectedWorkspaceID = selectedWorkspaceID
     }
 
     private func applyFocusAssignmentDirect(
