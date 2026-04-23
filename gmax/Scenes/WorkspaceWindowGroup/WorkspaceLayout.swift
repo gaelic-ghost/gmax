@@ -99,15 +99,6 @@ extension PaneNode {
         }
     }
 
-    nonisolated func lastLeaf() -> PaneLeaf? {
-        switch self {
-            case let .leaf(leaf):
-                leaf
-            case let .split(split):
-                split.second.lastLeaf() ?? split.first.lastLeaf()
-        }
-    }
-
     mutating func split(
         paneID: PaneID,
         direction: SplitDirection,
@@ -187,67 +178,6 @@ extension PaneNode {
                             ),
                         )
                 }
-        }
-    }
-
-    nonisolated func removingPaneWithFallback(id: PaneID) -> (node: PaneNode?, fallbackPaneID: PaneID?) {
-        switch self {
-            case let .leaf(leaf):
-                if leaf.id == id {
-                    return (nil, nil)
-                }
-
-                return (self, nil)
-
-            case let .split(split):
-                let firstContainsPane = split.first.findPane(id: id) != nil
-                let secondContainsPane = split.second.findPane(id: id) != nil
-
-                if firstContainsPane {
-                    let result = split.first.removingPaneWithFallback(id: id)
-                    switch result.node {
-                        case let remaining?:
-                            return (
-                                .split(
-                                    PaneSplit(
-                                        id: split.id,
-                                        axis: split.axis,
-                                        fraction: split.fraction,
-                                        first: remaining,
-                                        second: split.second,
-                                    ),
-                                ),
-                                result.fallbackPaneID,
-                            )
-
-                        case nil:
-                            return (split.second, split.second.firstLeaf()?.id)
-                    }
-                }
-
-                if secondContainsPane {
-                    let result = split.second.removingPaneWithFallback(id: id)
-                    switch result.node {
-                        case let remaining?:
-                            return (
-                                .split(
-                                    PaneSplit(
-                                        id: split.id,
-                                        axis: split.axis,
-                                        fraction: split.fraction,
-                                        first: split.first,
-                                        second: remaining,
-                                    ),
-                                ),
-                                result.fallbackPaneID,
-                            )
-
-                        case nil:
-                            return (split.first, split.first.lastLeaf()?.id)
-                    }
-                }
-
-                return (self, nil)
         }
     }
 

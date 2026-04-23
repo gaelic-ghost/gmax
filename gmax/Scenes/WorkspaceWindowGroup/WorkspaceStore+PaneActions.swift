@@ -85,41 +85,22 @@ extension WorkspaceStore {
         return newPane.id
     }
 
-    @discardableResult
-    func closePane(_ paneID: PaneID, in workspaceID: WorkspaceID) -> PaneID? {
+    func closePane(_ paneID: PaneID, in workspaceID: WorkspaceID) {
         guard let workspaceIndex = workspaces.firstIndex(where: { $0.id == workspaceID }) else {
-            return nil
+            return
         }
         guard let root = workspaces[workspaceIndex].root else {
-            return nil
+            return
         }
 
         let priorLeaves = root.leaves()
         guard priorLeaves.contains(where: { $0.id == paneID }) else {
-            return nil
+            return
         }
 
-        // Pick the fallback from the pane tree shape rather than flat leaf order.
-        // If the closed pane was one side of a split and the opposite branch survives,
-        // focus the nearest leaf in that surviving sibling branch. When the closed pane
-        // lived deeper in the tree, recurse until the removal reaches the closest split
-        // that has to collapse, then use the structurally adjacent survivor from there.
-        // This keeps close behavior tied to the pane ancestry that produced the split,
-        // instead of jumping to an unrelated pane that only happened to survive at a
-        // similar linear index in the leaf list.
-        let removal = root.removingPaneWithFallback(id: paneID)
-        let updatedRoot = removal.node
-        let survivingLeaves = updatedRoot?.leaves() ?? []
-        workspaces[workspaceIndex].root = updatedRoot
+        workspaces[workspaceIndex].root = root.removingPane(id: paneID)
         removeUnreferencedSessions()
-
-        guard !survivingLeaves.isEmpty else {
-            schedulePersistenceSave()
-            return nil
-        }
-
         schedulePersistenceSave()
-        return removal.fallbackPaneID ?? survivingLeaves.last?.id
     }
 
     func setSplitFraction(_ fraction: CGFloat, for splitID: SplitID, in workspaceID: WorkspaceID) {

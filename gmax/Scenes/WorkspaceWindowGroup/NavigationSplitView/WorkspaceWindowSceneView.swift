@@ -217,11 +217,12 @@ struct WorkspaceWindowSceneView: View {
         }
         let closePaneInWorkspace: (WorkspaceID, PaneID) -> Void = { workspaceID, paneID in
             let wasFocusedPane = focusedTarget == .pane(paneID)
-            let fallbackPaneID = workspaceStore.closePane(paneID, in: workspaceID)
+            workspaceStore.closePane(paneID, in: workspaceID)
             prunePaneNavigationState()
+            let historyFallbackPaneID = paneFocusHistory.last
             let applyCloseFallbackFocus = {
-                if let fallbackPaneID {
-                    focusPaneTarget(fallbackPaneID)
+                if let historyFallbackPaneID {
+                    requestPaneFocus(historyFallbackPaneID)
                 } else if isInspectorVisible {
                     applyFocusAssignment(.inspector)
                 } else {
