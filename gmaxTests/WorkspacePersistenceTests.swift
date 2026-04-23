@@ -357,11 +357,13 @@ struct WorkspacePersistenceTests {
         let savedWorkspace = try #require(model.saveWorkspaceToLibrary(workspace.id))
         #expect(model.listSavedWorkspaces().isEmpty)
         #expect(persistence.listSavedWorkspaces().map(\.id) == [savedWorkspace.id])
+        #expect(persistence.listLibraryItems().compactMap(\.workspaceID) == [savedWorkspace.id])
 
         model.deleteSavedWorkspace(savedWorkspace.id)
 
         #expect(model.listSavedWorkspaces().isEmpty)
         #expect(persistence.listSavedWorkspaces().isEmpty)
+        #expect(persistence.listLibraryItems().isEmpty)
     }
 
     @Test func `open saved workspace returns nil when saved workspace pane tree is corrupted`() throws {
@@ -389,8 +391,10 @@ struct WorkspacePersistenceTests {
         let summary = try #require(model.saveWorkspaceToLibrary(workspace.id))
         let context = persistence.container.viewContext
 
-        let savedWorkspacePlacement = try #require(try fetchSavedWorkspacePlacement(id: summary.id.rawValue, in: context))
-        let rootNode = try #require(savedWorkspacePlacement.workspace?.rootNode)
+        let savedWorkspaceLibraryItem = try #require(try fetchWorkspaceLibraryItem(workspaceID: summary.id.rawValue, in: context))
+        let savedWorkspaceID = try #require(savedWorkspaceLibraryItem.workspaceID)
+        let workspaceEntity = try #require(try fetchWorkspaceEntity(id: savedWorkspaceID, in: context))
+        let rootNode = try #require(workspaceEntity.rootNode)
         rootNode.firstChild = nil
         try context.save()
 
@@ -702,6 +706,62 @@ struct WorkspacePersistenceTests {
         #expect(recentMemberships.first?.sortOrder == 4)
         #expect(remainingRecentPlacements.isEmpty)
     }
+
+    @MainActor
+    @Test func `listing saved workspaces migrates legacy library placements onto library items`() throws {
+        let workspace = TestSupport.makeWorkspace(title: "Legacy Saved Workspace")
+        let persistence = WorkspacePersistenceController.inMemoryForTesting()
+        let context = persistence.container.viewContext
+        let sessions = TerminalSessionRegistry(
+            workspaces: [workspace],
+            defaultLaunchConfiguration: .loginShell,
+        )
+        let sceneIdentity = WorkspaceSceneIdentity()
+
+        persistence.saveSceneState(
+            for: sceneIdentity,
+            liveWorkspaces: [workspace],
+            selectedWorkspaceID: workspace.id,
+            sessions: sessions,
+        )
+
+        try context.performAndWait {
+            let workspaceEntity = try #require(try fetchWorkspaceEntity(id: workspace.id.rawValue, in: context))
+            let livePlacement = try #require(
+                try fetchLiveWorkspacePlacement(id: workspace.id.rawValue, windowID: sceneIdentity.windowID, in: context),
+            )
+            context.delete(livePlacement)
+
+            let legacyPlacement = WorkspacePlacementEntity(context: context)
+            legacyPlacement.id = workspace.id.rawValue
+            legacyPlacement.role = WorkspacePersistenceLegacy.libraryPlacementRoleRawValue
+            legacyPlacement.windowID = nil
+            legacyPlacement.sortOrder = 0
+            legacyPlacement.restoreSortOrder = 0
+            legacyPlacement.createdAt = Date()
+            legacyPlacement.updatedAt = Date()
+            legacyPlacement.lastOpenedAt = nil
+            legacyPlacement.isPinned = true
+            legacyPlacement.title = workspace.title
+            legacyPlacement.previewText = "legacy preview"
+            legacyPlacement.searchText = "legacy search"
+            legacyPlacement.paneCount = Int64(workspace.paneCount)
+            legacyPlacement.workspace = workspaceEntity
+
+            try context.save()
+        }
+
+        let listings = persistence.listSavedWorkspaces()
+        let libraryItems = try fetchLibraryItems(in: context)
+        let remainingLegacyPlacements = try fetchLegacyLibraryPlacements(in: context)
+
+        #expect(listings.map(\.id) == [workspace.id])
+        #expect(listings.first?.isPinned == true)
+        #expect(libraryItems.count == 1)
+        #expect(libraryItems.first?.kind == LibraryItemKind.workspace.rawValue)
+        #expect(libraryItems.first?.workspaceID == workspace.id.rawValue)
+        #expect(remainingLegacyPlacements.isEmpty)
+    }
 }
 
 private indirect enum PaneNodeSignature: Equatable {
@@ -724,19 +784,27 @@ private func nodeSignature(from node: PaneNode) -> PaneNodeSignature {
     }
 }
 
-private func fetchSavedWorkspacePlacement(
-    id: UUID,
+private func fetchWorkspaceLibraryItem(
+    workspaceID: UUID,
     in context: NSManagedObjectContext,
-) throws -> WorkspacePlacementEntity? {
-    let request = NSFetchRequest<WorkspacePlacementEntity>(entityName: "WorkspacePlacementEntity")
+) throws -> LibraryItemEntity? {
+    let request = NSFetchRequest<LibraryItemEntity>(entityName: "LibraryItemEntity")
     request.fetchLimit = 1
     request.predicate = NSCompoundPredicate(
         andPredicateWithSubpredicates: [
-            NSPredicate(format: "id == %@", id as CVarArg),
-            NSPredicate(format: "role == %@", WorkspacePlacementRole.library.rawValue),
+            NSPredicate(format: "kind == %@", LibraryItemKind.workspace.rawValue),
+            NSPredicate(format: "workspaceID == %@", workspaceID as CVarArg),
         ],
     )
     return try context.fetch(request).first
+}
+
+private func fetchLibraryItems(
+    in context: NSManagedObjectContext,
+) throws -> [LibraryItemEntity] {
+    let request = NSFetchRequest<LibraryItemEntity>(entityName: "LibraryItemEntity")
+    request.sortDescriptors = [NSSortDescriptor(key: #keyPath(LibraryItemEntity.updatedAt), ascending: false)]
+    return try context.fetch(request)
 }
 
 private func fetchPaneSessionPayloadEntity(
@@ -787,6 +855,14 @@ private func fetchWindowRecentPlacements(
             NSPredicate(format: "windowID == %@", windowID as CVarArg),
         ],
     )
+    return try context.fetch(request)
+}
+
+private func fetchLegacyLibraryPlacements(
+    in context: NSManagedObjectContext,
+) throws -> [WorkspacePlacementEntity] {
+    let request = NSFetchRequest<WorkspacePlacementEntity>(entityName: "WorkspacePlacementEntity")
+    request.predicate = NSPredicate(format: "role == %@", WorkspacePersistenceLegacy.libraryPlacementRoleRawValue)
     return try context.fetch(request)
 }
 

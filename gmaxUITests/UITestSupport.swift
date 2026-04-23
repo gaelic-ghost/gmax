@@ -123,6 +123,26 @@ class GmaxUITestCase: XCTestCase {
         menuItem.click()
     }
 
+    func menuBarAction(
+        menuBarItem title: String,
+        action actionTitle: String,
+        in app: XCUIApplication,
+    ) -> XCUIElement {
+        let menuBarItem = app.menuBars.menuBarItems[title]
+        XCTAssertTrue(
+            menuBarItem.waitForExistence(timeout: 5),
+            "The app menu bar should contain the menu titled \(title).",
+        )
+        menuBarItem.click()
+
+        let menuItem = app.menuBars.menuItems[actionTitle]
+        XCTAssertTrue(
+            menuItem.waitForExistence(timeout: 5),
+            "The \(title) menu should contain the action titled \(actionTitle).",
+        )
+        return menuItem
+    }
+
     func openSavedWorkspaceLibrary(in app: XCUIApplication) {
         app.typeKey("o", modifierFlags: .command)
         XCTAssertTrue(
@@ -202,6 +222,18 @@ class GmaxUITestCase: XCTestCase {
 
     func sidebarWorkspaceRowLabel(titled title: String, in scope: XCUIElement) -> String {
         sidebarWorkspaceRow(titled: title, in: scope).label
+    }
+
+    func waitForSidebarWorkspaceRowLabel(
+        titled title: String,
+        toEqual expectedLabel: String,
+        in scope: XCUIElement,
+        timeout: TimeInterval = 5,
+    ) -> Bool {
+        let row = sidebarWorkspaceRow(titled: title, in: scope)
+        let predicate = NSPredicate(format: "label == %@", expectedLabel)
+        let expectation = XCTNSPredicateExpectation(predicate: predicate, object: row)
+        return XCTWaiter.wait(for: [expectation], timeout: timeout) == .completed
     }
 
     func savedWorkspaceLibraryRow(titled title: String, in app: XCUIApplication) -> XCUIElement {

@@ -6,11 +6,16 @@ struct WorkspaceSceneIdentity: Codable, Hashable {
 
 enum WorkspacePlacementRole: String, Codable, Hashable {
     case live
-    case library
+}
+
+enum LibraryItemKind: String, Codable, Hashable {
+    case workspace
+    case window
 }
 
 enum WorkspacePersistenceLegacy {
     nonisolated static let recentPlacementRoleRawValue = "recent"
+    nonisolated static let libraryPlacementRoleRawValue = "library"
 }
 
 struct WorkspaceSessionSnapshot: Hashable, Codable, Identifiable {
@@ -32,6 +37,21 @@ struct WorkspaceListing: Hashable, Codable {
     var isPinned: Bool
 }
 
+struct LibraryItemListing: Identifiable, Hashable, Codable {
+    var id: UUID
+    var kind: LibraryItemKind
+    var workspaceID: WorkspaceID?
+    var windowID: WorkspaceSceneIdentity?
+    var title: String
+    var createdAt: Date
+    var updatedAt: Date
+    var lastOpenedAt: Date?
+    var isPinned: Bool
+    var previewText: String?
+    var paneCount: Int
+    var workspaceCount: Int
+}
+
 struct SavedWorkspaceListing: Identifiable, Hashable, Codable {
     var id: WorkspaceID
     var title: String
@@ -41,6 +61,43 @@ struct SavedWorkspaceListing: Identifiable, Hashable, Codable {
     var isPinned: Bool
     var previewText: String?
     var paneCount: Int
+
+    nonisolated init(
+        id: WorkspaceID,
+        title: String,
+        createdAt: Date,
+        updatedAt: Date,
+        lastOpenedAt: Date?,
+        isPinned: Bool,
+        previewText: String?,
+        paneCount: Int,
+    ) {
+        self.id = id
+        self.title = title
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+        self.lastOpenedAt = lastOpenedAt
+        self.isPinned = isPinned
+        self.previewText = previewText
+        self.paneCount = paneCount
+    }
+
+    nonisolated init?(libraryItem: LibraryItemListing) {
+        guard libraryItem.kind == .workspace, let workspaceID = libraryItem.workspaceID else {
+            return nil
+        }
+
+        self.init(
+            id: workspaceID,
+            title: libraryItem.title,
+            createdAt: libraryItem.createdAt,
+            updatedAt: libraryItem.updatedAt,
+            lastOpenedAt: libraryItem.lastOpenedAt,
+            isPinned: libraryItem.isPinned,
+            previewText: libraryItem.previewText,
+            paneCount: libraryItem.paneCount,
+        )
+    }
 }
 
 struct WorkspaceRevision: Identifiable, Hashable, Codable {

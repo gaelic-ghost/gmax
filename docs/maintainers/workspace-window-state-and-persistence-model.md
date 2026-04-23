@@ -115,17 +115,19 @@ placement entity:
 
 ### 3. Library workspaces
 
-- the saved workspace library is now backed by stable `.library`
-  `WorkspacePlacementEntity` rows
-- those placements carry lightweight listing metadata for library browsing
-- each `.library` placement points at the current saved `WorkspaceEntity`
-  payload for that library entry
+- the saved workspace library is now backed by explicit `LibraryItemEntity`
+  rows
+- those library items carry lightweight listing metadata for library browsing
+- each workspace-kind library item points at the current saved
+  `WorkspaceEntity` payload for that library entry
 - the library sheet now loads listing values first, then fetches the payload on
   demand when the user opens that saved workspace
 
 The old `WorkspaceSnapshotEntity` graph is gone from the active codebase.
-The runtime model no longer carries a compatibility bridge for older databases;
-the only persistence model we build on now is the payload-plus-placement store.
+The runtime model still carries narrow migration bridges for older databases,
+but the active model is no longer just payload plus placements. Live window
+membership, window recency, and library membership each have their own durable
+Core Data surfaces now.
 
 ## Next Model Direction
 
@@ -179,14 +181,16 @@ model and the saved-workspace library:
 
 - `WorkspaceID` is the durable identity
 - library save and reopen operate on that same workspace identity
-- placements, not alternate identifiers, describe whether that workspace is
-  live, recent, or in the library
+- live window membership, window-scoped recent history, and library membership
+  are now separate durable associations rather than alternate long-lived
+  identifiers for the same workspace
 
 The preferred model is:
 
 - one stable durable workspace identity
 - one current payload for that identity
-- zero or more placements that say where that workspace currently appears
+- zero or more durable associations that say where that workspace currently
+  appears
 - optional later revision history for older saved payloads of that same
   workspace identity
 
@@ -777,11 +781,80 @@ Goals:
 - stop treating library membership as just another generic placement role
 - prepare one combined library that can hold both workspaces and windows
 
-Likely work:
+Concrete implementation cut:
 
-- add `LibraryItemEntity`
-- migrate current `.library` rows into explicit library items
-- add item kind plus unified listing queries
+1. add an explicit `LibraryItemEntity` Core Data surface
+2. keep `WorkspaceEntity` as the durable workspace payload
+3. keep `WorkspaceWindowEntity` as the durable window record
+4. stop using `.library` placement rows as the active library-membership model
+5. introduce one shared library listing surface that can later hold both
+   workspace and window items
+
+Preferred new entity shape:
+
+- `LibraryItemEntity`
+  - `id: UUID`
+  - `kind: String`
+  - `workspaceID: UUID?`
+  - `windowID: UUID?`
+  - `createdAt: Date`
+  - `updatedAt: Date`
+  - `lastOpenedAt: Date?`
+  - `isPinned: Bool`
+  - `title: String`
+  - `previewText: String?`
+  - `searchText: String?`
+  - `paneCount: Int64`
+  - `workspaceCount: Int64`
+
+Preferred new value surfaces:
+
+- `LibraryItemKind`
+  - `.workspace`
+  - `.window`
+- `LibraryItemListing`
+- workspace-specific compatibility wrappers only where the current UI still
+  needs them
+
+Implementation phases:
+
+1. introduce `LibraryItemEntity`, `LibraryItemKind`, and shared listing values
+   without changing visible behavior yet
+2. migrate existing `.library` placement-backed saved workspace rows into
+   explicit workspace-kind library items
+3. move `saveWorkspaceToLibrary`, `listSavedWorkspaces`,
+   `loadSavedWorkspace`, `deleteSavedWorkspace`, and
+   `markSavedWorkspaceOpened` onto library-item-backed queries
+4. keep the current saved-workspace sheet workspace-only for now, but make the
+   persistence and listing APIs read like the combined library they are growing
+   toward
+
+Non-goals for Slice 4:
+
+- do not implement saved-window reopen yet
+- do not ship mixed workspace/window rows in the library UI yet
+- do not add revision-history browsing
+- do not change the product rule that currently live workspaces are hidden from
+  the library
+
+Status target:
+
+- placements mean live window membership
+- library items mean app-wide saved-library membership
+- `.library` placement decoding is migration-only compatibility data
+- Slice 5 can add saved window items without redesigning the persistence center
+  of gravity again
+
+Current progress:
+
+- `LibraryItemEntity`, `LibraryItemKind`, and `LibraryItemListing` are now the
+  active library surfaces
+- saved-workspace persistence methods are compatibility wrappers over that
+  shared library model
+- the current library sheet still renders only workspace rows, but it now reads
+  from the shared library listing, filters workspace rows locally, and acts on
+  shared library item IDs instead of depending on a saved-workspace-specific
+  listing type all the way through the UI
 
 ### Slice 5. Add saved windows to the library
 
@@ -1240,8 +1313,8 @@ The current shape is:
 Recommendation:
 
 - the library list and library detail or form surfaces should be driven by
-  lightweight listing values derived from library entries and their associated
-  placements
+  lightweight listing values derived from explicit library entries and their
+  associated payload records
 - `FetchRequest` or `SectionedFetchRequest` is still much more plausible here
   than it is for the live sidebar if the library ever wants to move closer to
   Core Data-backed view queries
@@ -1257,7 +1330,9 @@ Why:
 
 The current implementation still uses `WorkspacePersistenceController` plus
 lightweight listing values rather than a direct `FetchRequest`, which is fine
-for now.
+for now. The next persistence simplification should move those listing values
+onto explicit library entries rather than continuing to treat library
+membership as a generic placement role.
 
 ## Placement Records As Listing Metadata
 
@@ -1489,24 +1564,25 @@ The likely shape is:
 The current persistence model does the following:
 
 1. uses `WorkspaceEntity` as the canonical payload entity
-2. uses `WorkspacePlacementEntity` to describe whether that payload is
-   `.live` or `.library`, while recent-close state lives on the workspace
-   entity itself
+2. uses `WorkspacePlacementEntity` only for live window membership
 3. uses `WorkspaceWindowEntity` as the durable per-window record for selected
    workspace, open-versus-closed state, and window recency
-4. restores live workspaces from scene-identity-scoped placements, recently
-   closed workspaces from durable workspace-owned window metadata, and
-   restorable windows from durable window records
-5. restores saved library entries from `.library` placements
-6. keeps scene-local UI restoration in `@SceneStorage` instead of mixing that
+4. uses `WindowWorkspaceMembershipEntity` plus workspace recency timestamps for
+   durable per-window recent workspace history
+5. uses `LibraryItemEntity` for saved library membership and listing metadata
+6. restores live workspaces from scene-identity-scoped placements, recently
+   closed workspaces from durable window memberships plus recency, restorable
+   windows from durable window records, and saved library entries from library
+   items
+7. keeps scene-local UI restoration in `@SceneStorage` instead of mixing that
    state into the persistence store
-7. intentionally allows different workspace windows to persist and restore
+8. intentionally allows different workspace windows to persist and restore
    independent live and recently closed state keyed by `WorkspaceSceneIdentity`
-8. debounces mutation-triggered scene saves by 200 ms
-9. also flushes scene persistence immediately when a window becomes active or
+9. debounces mutation-triggered scene saves by 200 ms
+10. also flushes scene persistence immediately when a window becomes active or
    inactive, when a scene becomes inactive or backgrounds, when the scene view
    disappears, and when the app is about to terminate
-10. runs a per-window periodic background save task on a user-configurable
+11. runs a per-window periodic background save task on a user-configurable
    interval that defaults to five minutes
 
 ## Recommended Next Follow-Through
@@ -1516,11 +1592,9 @@ continue simplifying the model rather than adding new side paths.
 
 The preferred follow-through order is:
 
-1. introduce a unified library listing surface that can hold both workspace and
-   window items while preserving separate payload types underneath
-2. decide whether library membership should keep using generic placements or
-   move into explicit library-entry entities once the unified library surface
-   lands
+1. split library membership out from placements by introducing explicit library
+   items while keeping the current saved-workspace UI behavior stable
+2. add saved window items on top of that explicit library-item surface
 3. remove the remaining legacy migration-only fields and compatibility paths
    when the store no longer needs to ingest older databases
 4. decide the exact saved-revision retention policy for later history support

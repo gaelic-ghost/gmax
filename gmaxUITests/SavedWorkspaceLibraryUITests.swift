@@ -47,9 +47,12 @@ final class SavedWorkspaceLibraryUITests: GmaxUITestCase {
             action: "Split Right",
             in: app,
         )
-        XCTAssertEqual(
-            sidebarWorkspaceRowLabel(titled: "Workspace 1", in: app),
-            "Workspace 1, 2 panes",
+        XCTAssertTrue(
+            waitForSidebarWorkspaceRowLabel(
+                titled: "Workspace 1",
+                toEqual: "Workspace 1, 2 panes",
+                in: app,
+            ),
             "Splitting right should update the selected workspace row label with the new pane count.",
         )
         focusFirstVisiblePane(in: app)
@@ -59,17 +62,33 @@ final class SavedWorkspaceLibraryUITests: GmaxUITestCase {
             action: "Split Down",
             in: app,
         )
-        XCTAssertEqual(
-            sidebarWorkspaceRowLabel(titled: "Workspace 1", in: app),
-            "Workspace 1, 3 panes",
+        XCTAssertTrue(
+            waitForSidebarWorkspaceRowLabel(
+                titled: "Workspace 1",
+                toEqual: "Workspace 1, 3 panes",
+                in: app,
+            ),
             "Splitting down should update the selected workspace row label with the new pane count.",
         )
         focusFirstVisiblePane(in: app)
 
+        let closePaneMenuItem = menuBarAction(
+            menuBarItem: "File",
+            action: "Close Pane",
+            in: app,
+        )
+        XCTAssertTrue(
+            closePaneMenuItem.isEnabled,
+            "The File menu should resolve Command-W to Close Pane when a pane is focused in a multi-pane workspace.",
+        )
+
         app.typeKey("w", modifierFlags: .command)
-        XCTAssertEqual(
-            sidebarWorkspaceRowLabel(titled: "Workspace 1", in: app),
-            "Workspace 1, 2 panes",
+        XCTAssertTrue(
+            waitForSidebarWorkspaceRowLabel(
+                titled: "Workspace 1",
+                toEqual: "Workspace 1, 2 panes",
+                in: app,
+            ),
             "The contextual close command should close only the focused pane when the workspace still has multiple panes.",
         )
     }
