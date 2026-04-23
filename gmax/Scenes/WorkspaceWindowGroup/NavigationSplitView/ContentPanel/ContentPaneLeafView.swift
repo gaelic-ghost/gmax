@@ -35,14 +35,6 @@ struct ContentPaneLeafView: View {
         ]
         .compactMap(\.self)
         .joined(separator: ". ")
-        let splitFocusedPane: (SplitDirection) -> Void = { direction in
-            switch direction {
-                case .right:
-                    onSplitRight()
-                case .down:
-                    onSplitDown()
-            }
-        }
         let paneActionsHint = "Activate to focus this pane. Additional actions are available for splitting, closing, and restarting the shell."
         let focusBackgroundStyle = isFocused ? AnyShapeStyle(.tint.opacity(0.18)) : AnyShapeStyle(.quaternary.opacity(0.35))
         paneSurface(isFocused: isFocused, paneHostIdentity: paneHostIdentity)
@@ -51,9 +43,6 @@ struct ContentPaneLeafView: View {
             .background(ContentPaneFrameReporter(paneID: pane.id))
             .background(focusBackgroundStyle)
             .contentShape(Rectangle())
-            .focusedValue(\.moveFocusedPaneFocus, onMovePaneFocus)
-            .focusedValue(\.splitFocusedPane, splitFocusedPane)
-            .focusedValue(\.closeFocusedPane, onClose)
             .accessibilityElement(children: .contain)
             .accessibilityLabel(accessibilityLabel)
             .accessibilityValue(accessibilityValue)

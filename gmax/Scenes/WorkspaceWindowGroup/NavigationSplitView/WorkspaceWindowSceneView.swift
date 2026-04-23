@@ -7,6 +7,12 @@ private enum WorkspaceWindowSceneStorageKey {
     static let isSidebarVisible = "workspaceWindow.isSidebarVisible"
 }
 
+private enum FocusAssignment: Equatable {
+    case none
+    case inspector
+    case pane(PaneID)
+}
+
 struct WorkspaceWindowSceneView: View {
     @FocusState private var focusedTarget: WorkspaceFocusTarget?
     @SceneStorage(WorkspaceWindowSceneStorageKey.selectedWorkspaceID) private var restoredSelectedWorkspaceID: String?
@@ -23,6 +29,7 @@ struct WorkspaceWindowSceneView: View {
     @State private var paneFrames: [PaneID: CGRect] = [:]
     @State private var paneFocusHistory: [PaneID] = []
     @State private var pendingFocusedPaneID: PaneID?
+    @State private var pendingHistoryPaneID: PaneID?
     @StateObject private var workspaceStore: WorkspaceStore
 
     private let sceneIdentity: WorkspaceSceneIdentity
@@ -140,27 +147,63 @@ struct WorkspaceWindowSceneView: View {
             let activePaneIDs = currentActivePaneIDs()
             paneFrames = paneFrames.filter { activePaneIDs.contains($0.key) }
             paneFocusHistory = paneFocusHistory.filter { activePaneIDs.contains($0) }
+            pendingHistoryPaneID = pendingHistoryPaneID.flatMap { activePaneIDs.contains($0) ? $0 : nil }
         }
-        let focusPaneTarget: (PaneID?) -> Void = { paneID in
+        let applyFocusAssignment: (FocusAssignment) -> Void = { assignment in
             let activePaneIDs = currentActivePaneIDs()
-            guard let paneID, activePaneIDs.contains(paneID) else {
-                focusedTarget = nil
-                return
+            let normalizedAssignment: FocusAssignment = switch assignment {
+                case .pane(let paneID) where activePaneIDs.contains(paneID):
+                    .pane(paneID)
+                case .pane:
+                    .none
+                case .inspector:
+                    .inspector
+                case .none:
+                    .none
             }
 
-            focusedTarget = .pane(paneID)
-            paneFocusHistory.removeAll { $0 == paneID }
-            paneFocusHistory.append(paneID)
+            focusedTarget = switch normalizedAssignment {
+                case .pane(let paneID):
+                    .pane(paneID)
+                case .inspector:
+                    .inspector
+                case .none:
+                    nil
+            }
+        }
+        let focusPaneTarget: (PaneID?) -> Void = { paneID in
+            applyFocusAssignment(paneID.map(FocusAssignment.pane) ?? .none)
+        }
+        let recordFocusedPaneInHistory: (PaneID) -> Void = { paneID in
+            pendingHistoryPaneID = paneID
+            Task { @MainActor in
+                await Task.yield()
+                guard pendingHistoryPaneID == paneID else {
+                    return
+                }
+
+                paneFocusHistory.removeAll { $0 == paneID }
+                paneFocusHistory.append(paneID)
+                pendingHistoryPaneID = nil
+            }
         }
         let requestPaneFocus: (PaneID?) -> Void = { paneID in
             guard let paneID else {
                 pendingFocusedPaneID = nil
-                focusedTarget = nil
+                applyFocusAssignment(.none)
                 return
             }
 
             pendingFocusedPaneID = paneID
-            focusPaneTarget(paneID)
+            Task { @MainActor in
+                await Task.yield()
+                guard pendingFocusedPaneID == paneID else {
+                    return
+                }
+
+                focusPaneTarget(paneID)
+                pendingFocusedPaneID = nil
+            }
         }
         let createPaneInWorkspace: (WorkspaceID) -> Void = { workspaceID in
             let createdPaneID = workspaceStore.createPane(in: workspaceID)
@@ -176,23 +219,20 @@ struct WorkspaceWindowSceneView: View {
             let wasFocusedPane = focusedTarget == .pane(paneID)
             let fallbackPaneID = workspaceStore.closePane(paneID, in: workspaceID)
             prunePaneNavigationState()
+            let applyCloseFallbackFocus = {
+                if let fallbackPaneID {
+                    focusPaneTarget(fallbackPaneID)
+                } else if isInspectorVisible {
+                    applyFocusAssignment(.inspector)
+                } else {
+                    applyFocusAssignment(.none)
+                }
+            }
 
             if wasFocusedPane {
-                if let fallbackPaneID {
-                    focusPaneTarget(fallbackPaneID)
-                } else if isInspectorVisible {
-                    focusedTarget = .inspector
-                } else {
-                    focusedTarget = nil
-                }
+                applyCloseFallbackFocus()
             } else if case let .pane(currentPaneID) = focusedTarget, !paneIDsInWorkspace(workspaceID).contains(currentPaneID) {
-                if let fallbackPaneID {
-                    focusPaneTarget(fallbackPaneID)
-                } else if isInspectorVisible {
-                    focusedTarget = .inspector
-                } else {
-                    focusedTarget = nil
-                }
+                applyCloseFallbackFocus()
             }
         }
         let moveFocusedPaneFocus: (PaneFocusDirection) -> Void = { direction in
@@ -202,7 +242,7 @@ struct WorkspaceWindowSceneView: View {
 
             let paneLeaves = selectedWorkspace.paneLeaves
             guard !paneLeaves.isEmpty else {
-                focusedTarget = nil
+                applyFocusAssignment(.none)
                 return
             }
             guard
@@ -247,6 +287,17 @@ struct WorkspaceWindowSceneView: View {
         let canSplitFocusedPane = selectedWorkspace.flatMap { workspace in
             focusedPaneID.flatMap { workspace.root?.findPane(id: $0) }
         } != nil
+        let moveFocusedPaneFocusAction = focusedPaneID == nil ? nil : moveFocusedPaneFocus
+        let splitFocusedPaneAction: ((SplitDirection) -> Void)? = canSplitFocusedPane ? splitFocusedPane : nil
+        let closeFocusedPaneAction: (() -> Void)? = {
+            guard let selectedWorkspaceID, let focusedPaneID else {
+                return nil
+            }
+
+            return {
+                closePaneInWorkspace(selectedWorkspaceID, focusedPaneID)
+            }
+        }()
 
         NavigationSplitView(columnVisibility: $columnVisibility) {
             SidebarPane(
@@ -359,6 +410,9 @@ struct WorkspaceWindowSceneView: View {
         .focusedSceneValue(\.openSavedWorkspaceLibrary, openSavedWorkspaceLibrary)
         .focusedSceneValue(\.presentWorkspaceRename, presentWorkspaceRename)
         .focusedSceneValue(\.presentWorkspaceDeletion, presentWorkspaceDeletion)
+        .focusedSceneValue(\.moveFocusedPaneFocus, moveFocusedPaneFocusAction)
+        .focusedSceneValue(\.splitFocusedPane, splitFocusedPaneAction)
+        .focusedSceneValue(\.closeFocusedPane, closeFocusedPaneAction)
         .toolbar {
             ToolbarItem(placement: .navigation) {
                 Button("Open Saved Workspaces", systemImage: "folder", action: openSavedWorkspaceLibrary)
@@ -436,11 +490,11 @@ struct WorkspaceWindowSceneView: View {
         }
         .onChange(of: focusedTarget) { _, newValue in
             guard case let .pane(paneID) = newValue, activePaneIDs.contains(paneID) else {
+                pendingHistoryPaneID = nil
                 return
             }
 
-            paneFocusHistory.removeAll { $0 == paneID }
-            paneFocusHistory.append(paneID)
+            recordFocusedPaneInHistory(paneID)
         }
         .onChange(of: workspaceStore.workspaces.map(\.id.rawValue)) { _, _ in
             normalizeSelection()
@@ -449,21 +503,16 @@ struct WorkspaceWindowSceneView: View {
             paneFrames = [:]
             paneFocusHistory = []
             pendingFocusedPaneID = nil
+            pendingHistoryPaneID = nil
         }
         .onChange(of: selectedWorkspace?.paneLeaves.map(\.id) ?? []) { _, paneIDs in
             let activePaneIDs = Set(paneIDs)
             paneFrames = paneFrames.filter { activePaneIDs.contains($0.key) }
             paneFocusHistory = paneFocusHistory.filter { activePaneIDs.contains($0) }
-            if let pendingFocusedPaneID {
-                if activePaneIDs.contains(pendingFocusedPaneID) {
-                    focusPaneTarget(pendingFocusedPaneID)
-                    self.pendingFocusedPaneID = nil
-                } else {
-                    self.pendingFocusedPaneID = nil
-                }
-            }
+            pendingFocusedPaneID = pendingFocusedPaneID.flatMap { activePaneIDs.contains($0) ? $0 : nil }
+            pendingHistoryPaneID = pendingHistoryPaneID.flatMap { activePaneIDs.contains($0) ? $0 : nil }
             if case let .pane(paneID) = focusedTarget, !activePaneIDs.contains(paneID) {
-                focusedTarget = isInspectorVisible ? .inspector : nil
+                applyFocusAssignment(isInspectorVisible ? .inspector : .none)
             }
         }
         .onChange(of: isInspectorVisible) { _, newValue in
