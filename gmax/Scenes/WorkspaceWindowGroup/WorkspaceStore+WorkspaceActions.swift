@@ -108,32 +108,33 @@ extension WorkspaceStore {
 
     @discardableResult
     func undoCloseWorkspace() -> WorkspaceID? {
-        guard let closedWorkspace = recentlyClosedWorkspaces.popLast() else {
+        guard let closedWorkspace = persistence.consumeMostRecentRecentlyClosedWorkspace(for: sceneIdentity) else {
             return nil
         }
 
         let insertionIndex = min(closedWorkspace.formerIndex, workspaces.count)
-        workspaces.insert(closedWorkspace.workspace, at: insertionIndex)
+        workspaces.insert(closedWorkspace.revision.workspace, at: insertionIndex)
 
-        for leaf in closedWorkspace.workspace.root?.leaves() ?? [] {
-            let launchConfiguration = closedWorkspace.launchConfigurationsBySessionID[leaf.sessionID]
+        for leaf in closedWorkspace.revision.workspace.root?.leaves() ?? [] {
+            let paneSnapshot = closedWorkspace.revision.paneSnapshotsBySessionID[leaf.sessionID]
+            let launchConfiguration = paneSnapshot?.launchConfiguration
                 ?? launchContextBuilder.makeLaunchConfiguration()
             let session = sessions.ensureSession(id: leaf.sessionID, launchConfiguration: launchConfiguration)
-            session.title = closedWorkspace.titlesBySessionID[leaf.sessionID] ?? session.title
+            session.title = paneSnapshot?.title ?? session.title
             session.currentDirectory = launchConfiguration.currentDirectory
-            session.setRestoredTranscript(closedWorkspace.transcriptsBySessionID[leaf.sessionID])
+            session.setRestoredTranscript(paneSnapshot?.transcript)
         }
 
-        recentlyClosedWorkspaceCount = recentlyClosedWorkspaces.count
-        Logger.workspace.notice("Reopened a recently closed workspace from the in-memory history stack. Workspace title: \(closedWorkspace.workspace.title, privacy: .public). Workspace ID: \(closedWorkspace.workspace.id.rawValue.uuidString, privacy: .public)")
+        refreshRecentlyClosedWorkspaceCount()
+        Logger.workspace.notice("Reopened the most recently closed workspace from durable window-scoped persistence. Workspace title: \(closedWorkspace.revision.workspace.title, privacy: .public). Workspace ID: \(closedWorkspace.revision.workspace.id.rawValue.uuidString, privacy: .public)")
         schedulePersistenceSave(reason: .workspaceUndoClose)
-        return closedWorkspace.workspace.id
+        return closedWorkspace.revision.workspace.id
     }
 
     func clearRecentlyClosedWorkspaces() {
-        recentlyClosedWorkspaces.removeAll()
-        recentlyClosedWorkspaceCount = 0
-        Logger.workspace.notice("Cleared the in-memory recently closed workspace stack for the current app session.")
+        persistence.clearRecentlyClosedWorkspaces(for: sceneIdentity)
+        refreshRecentlyClosedWorkspaceCount()
+        Logger.workspace.notice("Cleared durable recently closed workspace history for the current window.")
     }
 
     @discardableResult
@@ -252,14 +253,6 @@ extension WorkspaceStore {
         let liveTranscriptsByWorkspaceID: [WorkspaceID: [TerminalSessionID: String]]
     }
 
-    struct RecentlyClosedWorkspace {
-        let workspace: Workspace
-        let formerIndex: Int
-        let launchConfigurationsBySessionID: [TerminalSessionID: TerminalLaunchConfiguration]
-        let titlesBySessionID: [TerminalSessionID: String]
-        let transcriptsBySessionID: [TerminalSessionID: String]
-    }
-
     private func uniqueWorkspaceTitle(startingWith baseTitle: String) -> String {
         let normalizedBaseTitle = baseTitle.trimmingCharacters(in: .whitespacesAndNewlines)
         let resolvedBaseTitle = normalizedBaseTitle.isEmpty ? "Workspace" : normalizedBaseTitle
@@ -307,13 +300,29 @@ extension WorkspaceStore {
 
     private func makePersistenceSnapshot() -> PersistenceSnapshot {
         let workspacesSnapshot = workspaces
-        let recentlyClosedSnapshot = recentlyClosedWorkspaces.map { workspace in
+        let recentlyClosedSnapshot = persistence.loadRecentlyClosedWorkspaces(for: sceneIdentity).map { closedWorkspace in
             RecentlyClosedWorkspaceStateInput(
-                workspace: workspace.workspace,
-                formerIndex: workspace.formerIndex,
-                launchConfigurationsBySessionID: workspace.launchConfigurationsBySessionID,
-                titlesBySessionID: workspace.titlesBySessionID,
-                transcriptsBySessionID: workspace.transcriptsBySessionID,
+                workspace: closedWorkspace.revision.workspace,
+                formerIndex: closedWorkspace.formerIndex,
+                launchConfigurationsBySessionID: Dictionary(
+                    uniqueKeysWithValues: closedWorkspace.revision.paneSnapshotsBySessionID.map {
+                        ($0.key, $0.value.launchConfiguration)
+                    },
+                ),
+                titlesBySessionID: Dictionary(
+                    uniqueKeysWithValues: closedWorkspace.revision.paneSnapshotsBySessionID.map {
+                        ($0.key, $0.value.title)
+                    },
+                ),
+                transcriptsBySessionID: Dictionary(
+                    uniqueKeysWithValues: closedWorkspace.revision.paneSnapshotsBySessionID.compactMap {
+                        guard let transcript = $0.value.transcript else {
+                            return nil
+                        }
+
+                        return ($0.key, transcript)
+                    },
+                ),
             )
         }
         let transcriptsByWorkspaceID = Dictionary(
@@ -444,22 +453,22 @@ extension WorkspaceStore {
             explicitTranscriptsBySessionID: [:],
         )
 
-        recentlyClosedWorkspaces.removeAll { $0.workspace.id == workspace.id }
-        recentlyClosedWorkspaces.append(
-            RecentlyClosedWorkspace(
+        persistence.recordRecentlyClosedWorkspace(
+            RecentlyClosedWorkspaceStateInput(
                 workspace: workspace,
                 formerIndex: formerIndex,
                 launchConfigurationsBySessionID: launchConfigurationsBySessionID,
                 titlesBySessionID: titlesBySessionID,
                 transcriptsBySessionID: transcriptsBySessionID,
             ),
+            for: sceneIdentity,
+            limit: WorkspacePersistenceDefaults.maxRecentlyClosedWorkspaceCount,
         )
-        if recentlyClosedWorkspaces.count > WorkspacePersistenceDefaults.maxRecentlyClosedWorkspaceCount {
-            recentlyClosedWorkspaces.removeFirst(
-                recentlyClosedWorkspaces.count - WorkspacePersistenceDefaults.maxRecentlyClosedWorkspaceCount,
-            )
-        }
-        recentlyClosedWorkspaceCount = recentlyClosedWorkspaces.count
+        refreshRecentlyClosedWorkspaceCount()
+    }
+
+    private func refreshRecentlyClosedWorkspaceCount() {
+        recentlyClosedWorkspaceCount = persistence.countRecentlyClosedWorkspaces(for: sceneIdentity)
     }
 
     private func captureWorkspaceTranscripts(

@@ -433,8 +433,8 @@ The current implementation is:
 - `WorkspaceEntity` is the canonical workspace payload row
 - `WorkspacePlacementEntity` tracks whether that payload is `.live`, `.recent`,
   or `.library`, and which scene identity owns the live or recent placement
-- the in-memory recently closed stack in `WorkspaceStore` is restored from and
-  persisted back to `.recent` placements
+- `WorkspaceStore` now treats `.recent` placements as the source of truth for
+  workspace undo and recency instead of keeping a parallel in-memory stack
 - the saved library is browsed through lightweight listing metadata denormalized
   onto `.library` placements
 
@@ -581,14 +581,15 @@ Preferred follow-through:
 The command model should map to these layers clearly:
 
 - `Close Workspace`: remove from live session, then apply the settings matrix above
-- `Undo Close Workspace`: restore from the recently closed stack only
+- `Undo Close Workspace`: restore the most recent durable `.recent` workspace
+  for the active window
 - `Save Workspace`: explicitly persist the current live workspace into the saved library without closing it
 - `Open Workspace...`: browse and reopen saved workspaces from the saved library
 - `Delete Saved Workspace`: remove a saved workspace from the saved library without affecting any currently live workspace
 
 This means `Undo Close Workspace` and `Open Workspace...` should remain distinct:
 
-- undo is temporal and stack-based
+- undo is temporal and window-recency-based
 - open is indexed and library-based
 
 That distinction should remain visible in both commands and internal APIs.

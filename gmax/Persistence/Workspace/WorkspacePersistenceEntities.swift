@@ -18,6 +18,7 @@ final class WorkspaceEntity: NSManagedObject {
     @NSManaged var title: String
     @NSManaged var createdAt: Date
     @NSManaged var updatedAt: Date
+    @NSManaged var lastActiveAt: Date
     @NSManaged var notes: String?
     @NSManaged var previewText: String?
     @NSManaged var searchText: String?

@@ -101,15 +101,14 @@ placement entity:
 
 ### 2. Recently closed workspaces
 
-- `WorkspaceStore.recentlyClosedWorkspaces` is currently an in-memory LIFO
-  stack
-- the stack is restored from `.recent` `WorkspacePlacementEntity` rows for the
-  active scene identity
-- the runtime stack is still store-local in memory, but it now has durable
-  scene-scoped backing
-- this is functional current behavior, not the preferred long-term model
-- the preferred follow-through is to replace this stack with disk-backed
-  recency derived from durable timestamps and window association
+- recently closed workspaces are now driven by durable `.recent`
+  `WorkspacePlacementEntity` rows for the active scene identity
+- `WorkspaceStore` no longer keeps a parallel in-memory workspace undo stack
+- `Undo Close Workspace` now restores the most recent durable `.recent`
+  workspace for the current window
+- recency is driven by durable timestamps such as `lastActiveAt`
+- this is the preferred direction for workspace recency inside Slice 1, even
+  though the later model still wants cleaner explicit library-item entities
 
 ### 3. Library workspaces
 
@@ -270,10 +269,7 @@ second copy from the library."
 
 ### Replace the in-memory recent-close stack with durable recency
 
-The current code still has an in-memory `WorkspaceStore.recentlyClosedWorkspaces`
-stack that is mirrored to `.recent` placements on disk.
-
-That is not the preferred end state.
+This is now the active implementation direction.
 
 The simpler target model is:
 

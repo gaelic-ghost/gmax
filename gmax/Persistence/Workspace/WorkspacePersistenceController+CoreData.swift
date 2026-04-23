@@ -168,6 +168,11 @@ extension WorkspacePersistenceController {
             type: .dateAttributeType,
             defaultValue: migrationDefaultDate,
         )
+        let workspaceLastActiveAt = attribute(
+            name: "lastActiveAt",
+            type: .dateAttributeType,
+            defaultValue: migrationDefaultDate,
+        )
         let workspaceNotes = attribute(name: "notes", type: .stringAttributeType, isOptional: true)
         let workspacePreviewText = attribute(name: "previewText", type: .stringAttributeType, isOptional: true)
         let workspaceSearchText = attribute(name: "searchText", type: .stringAttributeType, isOptional: true)
@@ -319,6 +324,7 @@ extension WorkspacePersistenceController {
             workspaceTitle,
             workspaceCreatedAt,
             workspaceUpdatedAt,
+            workspaceLastActiveAt,
             workspaceNotes,
             workspacePreviewText,
             workspaceSearchText,

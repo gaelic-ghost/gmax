@@ -45,6 +45,7 @@ struct WorkspaceRevision: Identifiable, Hashable, Codable {
     var title: String
     var createdAt: Date
     var updatedAt: Date
+    var lastActiveAt: Date
     var lastOpenedAt: Date?
     var isPinned: Bool
     var notes: String?

@@ -76,6 +76,191 @@ final class WorkspacePersistenceController {
         }
     }
 
+    func countRecentlyClosedWorkspaces(for sceneIdentity: WorkspaceSceneIdentity) -> Int {
+        let context = container.viewContext
+        return context.performAndWait {
+            let request = NSFetchRequest<NSFetchRequestResult>(entityName: "WorkspacePlacementEntity")
+            request.resultType = .countResultType
+            request.predicate = NSCompoundPredicate(
+                andPredicateWithSubpredicates: [
+                    NSPredicate(format: "role == %@", WorkspacePlacementRole.recent.rawValue),
+                    NSPredicate(format: "windowID == %@", sceneIdentity.windowID as CVarArg),
+                ],
+            )
+
+            do {
+                return try context.count(for: request)
+            } catch {
+                Logger.persistence.error("Core Data could not count recently closed workspaces for the active window. The app will continue, but command enablement may be stale. Window ID: \(sceneIdentity.windowID.uuidString, privacy: .public). Error: \(String(describing: error), privacy: .public)")
+                context.rollback()
+                return 0
+            }
+        }
+    }
+
+    func recordRecentlyClosedWorkspace(
+        _ recentlyClosedWorkspace: RecentlyClosedWorkspaceStateInput,
+        for sceneIdentity: WorkspaceSceneIdentity,
+        limit: Int,
+    ) {
+        let context = container.viewContext
+        context.performAndWait {
+            do {
+                let request = NSFetchRequest<WorkspacePlacementEntity>(entityName: "WorkspacePlacementEntity")
+                request.predicate = NSCompoundPredicate(
+                    andPredicateWithSubpredicates: [
+                        NSPredicate(format: "role == %@", WorkspacePlacementRole.recent.rawValue),
+                        NSPredicate(format: "windowID == %@", sceneIdentity.windowID as CVarArg),
+                    ],
+                )
+                let existingRecentPlacements = try context.fetch(request)
+                var existingPlacementsByID = Dictionary(
+                    uniqueKeysWithValues: existingRecentPlacements.map { ($0.id, $0) },
+                )
+                let existingWorkspaceRequest = NSFetchRequest<WorkspaceEntity>(entityName: "WorkspaceEntity")
+                var existingWorkspacesByID = Dictionary(
+                    uniqueKeysWithValues: try context.fetch(existingWorkspaceRequest).map { ($0.id, $0) },
+                )
+                let now = Date()
+
+                let workspaceEntity = try Self.upsertWorkspaceEntity(
+                    for: recentlyClosedWorkspace.workspace,
+                    context: context,
+                    existingWorkspacesByID: &existingWorkspacesByID,
+                    sessionSnapshots: Self.makeSessionSnapshots(
+                        for: recentlyClosedWorkspace.workspace,
+                        launchConfigurationsBySessionID: recentlyClosedWorkspace.launchConfigurationsBySessionID,
+                        titlesBySessionID: recentlyClosedWorkspace.titlesBySessionID,
+                        transcriptsBySessionID: recentlyClosedWorkspace.transcriptsBySessionID,
+                    ),
+                    now: now,
+                )
+                let placement = existingPlacementsByID.removeValue(forKey: workspaceEntity.id)
+                    ?? WorkspacePlacementEntity(context: context)
+                if placement.objectID.isTemporaryID {
+                    placement.id = workspaceEntity.id
+                    placement.createdAt = now
+                }
+                placement.role = WorkspacePlacementRole.recent.rawValue
+                placement.windowID = sceneIdentity.windowID
+                placement.sortOrder = Int64(existingRecentPlacements.count)
+                placement.restoreSortOrder = Int64(recentlyClosedWorkspace.formerIndex)
+                placement.updatedAt = now
+                placement.lastOpenedAt = nil
+                placement.isPinned = false
+                placement.workspace = workspaceEntity
+                Self.refreshListingMetadata(on: placement, from: workspaceEntity)
+
+                let recentPlacements = try context.fetch(request)
+                    .sorted {
+                        let leftDate = $0.workspace?.lastActiveAt ?? $0.updatedAt
+                        let rightDate = $1.workspace?.lastActiveAt ?? $1.updatedAt
+                        return leftDate < rightDate
+                    }
+                if recentPlacements.count > limit {
+                    for stalePlacement in recentPlacements.prefix(recentPlacements.count - limit) {
+                        context.delete(stalePlacement)
+                    }
+                }
+
+                try Self.deleteOrphanedWorkspaceRecords(
+                    existingWorkspacesByID: Dictionary(
+                        uniqueKeysWithValues: try context.fetch(existingWorkspaceRequest).map { ($0.id, $0) },
+                    ),
+                    retainedWorkspaceIDs: try Self.retainedWorkspaceIDs(in: context),
+                    context: context,
+                )
+
+                if context.hasChanges {
+                    try context.save()
+                }
+            } catch {
+                Logger.persistence.error("Core Data could not record a recently closed workspace for the active window. The live session remains available, but undo-close history was not persisted correctly. Window ID: \(sceneIdentity.windowID.uuidString, privacy: .public). Workspace ID: \(recentlyClosedWorkspace.workspace.id.rawValue.uuidString, privacy: .public). Error: \(String(describing: error), privacy: .public)")
+                context.rollback()
+            }
+        }
+    }
+
+    func consumeMostRecentRecentlyClosedWorkspace(
+        for sceneIdentity: WorkspaceSceneIdentity,
+    ) -> PersistedRecentlyClosedWorkspace? {
+        let context = container.viewContext
+        return context.performAndWait {
+            do {
+                let request = NSFetchRequest<WorkspacePlacementEntity>(entityName: "WorkspacePlacementEntity")
+                request.fetchLimit = 1
+                request.predicate = NSCompoundPredicate(
+                    andPredicateWithSubpredicates: [
+                        NSPredicate(format: "role == %@", WorkspacePlacementRole.recent.rawValue),
+                        NSPredicate(format: "windowID == %@", sceneIdentity.windowID as CVarArg),
+                    ],
+                )
+                request.sortDescriptors = [
+                    NSSortDescriptor(key: "workspace.lastActiveAt", ascending: false),
+                    NSSortDescriptor(key: #keyPath(WorkspacePlacementEntity.updatedAt), ascending: false),
+                ]
+
+                guard let placement = try context.fetch(request).first else {
+                    return nil
+                }
+                guard let revision = Self.workspaceRevision(for: placement.workspace, placement: placement) else {
+                    context.delete(placement)
+                    if context.hasChanges {
+                        try context.save()
+                    }
+                    return nil
+                }
+
+                let restoredWorkspace = PersistedRecentlyClosedWorkspace(
+                    revision: revision,
+                    formerIndex: Int(placement.restoreSortOrder),
+                )
+                context.delete(placement)
+                try Self.deleteOrphanedWorkspaceRecords(
+                    existingWorkspacesByID: Dictionary(
+                        uniqueKeysWithValues: try context.fetch(NSFetchRequest<WorkspaceEntity>(entityName: "WorkspaceEntity")).map { ($0.id, $0) },
+                    ),
+                    retainedWorkspaceIDs: try Self.retainedWorkspaceIDs(in: context),
+                    context: context,
+                )
+                if context.hasChanges {
+                    try context.save()
+                }
+                return restoredWorkspace
+            } catch {
+                Logger.persistence.error("Core Data could not restore the most recently closed workspace for the active window. The app will continue, but undo close workspace could not complete. Window ID: \(sceneIdentity.windowID.uuidString, privacy: .public). Error: \(String(describing: error), privacy: .public)")
+                context.rollback()
+                return nil
+            }
+        }
+    }
+
+    func clearRecentlyClosedWorkspaces(for sceneIdentity: WorkspaceSceneIdentity) {
+        let context = container.viewContext
+        context.performAndWait {
+            do {
+                let recentPlacements = Self.loadPlacements(role: .recent, sceneIdentity: sceneIdentity, in: context)
+                for placement in recentPlacements {
+                    context.delete(placement)
+                }
+
+                try Self.deleteOrphanedWorkspaceRecords(
+                    existingWorkspacesByID: Dictionary(
+                        uniqueKeysWithValues: try context.fetch(NSFetchRequest<WorkspaceEntity>(entityName: "WorkspaceEntity")).map { ($0.id, $0) },
+                    ),
+                    retainedWorkspaceIDs: try Self.retainedWorkspaceIDs(in: context),
+                    context: context,
+                )
+                if context.hasChanges {
+                    try context.save()
+                }
+            } catch {
+                Logger.persistence.error("Core Data could not clear recently closed workspaces for the active window. The app will continue, but stale undo-close history may remain visible. Window ID: \(sceneIdentity.windowID.uuidString, privacy: .public). Error: \(String(describing: error), privacy: .public)")
+                context.rollback()
+            }
+        }
+    }
+
     func loadWindowState(for sceneIdentity: WorkspaceSceneIdentity) -> WorkspaceWindowStateSnapshot? {
         let context = container.viewContext
         return context.performAndWait {
@@ -513,6 +698,7 @@ extension WorkspacePersistenceController {
         context: NSManagedObjectContext,
         existingWorkspacesByID: inout [UUID: WorkspaceEntity],
         sessionSnapshots: [WorkspaceSessionSnapshot],
+        now: Date = Date(),
     ) throws -> WorkspaceEntity {
         let workspaceEntity = existingWorkspacesByID.removeValue(forKey: workspace.id.rawValue)
             ?? WorkspaceEntity(context: context)
@@ -523,7 +709,7 @@ extension WorkspacePersistenceController {
             context: context,
             sessionSnapshots: sessionSnapshots,
             notes: workspaceEntity.notes,
-            now: Date(),
+            now: now,
         )
         return workspaceEntity
     }
@@ -541,6 +727,7 @@ extension WorkspacePersistenceController {
             workspaceEntity.createdAt = now
         }
         workspaceEntity.updatedAt = now
+        workspaceEntity.lastActiveAt = now
         workspaceEntity.title = workspace.title
         workspaceEntity.notes = notes
         workspaceEntity.sortOrder = 0
@@ -666,6 +853,7 @@ extension WorkspacePersistenceController {
             title: workspaceEntity.title,
             createdAt: workspaceEntity.createdAt,
             updatedAt: workspaceEntity.updatedAt,
+            lastActiveAt: workspaceEntity.lastActiveAt,
             lastOpenedAt: placement.lastOpenedAt,
             isPinned: placement.isPinned,
             notes: workspaceEntity.notes,
@@ -772,6 +960,18 @@ extension WorkspacePersistenceController {
 
             context.delete(workspaceEntity)
         }
+    }
+
+    private nonisolated static func retainedWorkspaceIDs(in context: NSManagedObjectContext) throws -> Set<UUID> {
+        let placementRequest = NSFetchRequest<WorkspacePlacementEntity>(entityName: "WorkspacePlacementEntity")
+        return Set(
+            try context.fetch(placementRequest).compactMap { placement in
+                guard !placement.isDeleted else {
+                    return nil
+                }
+                return placement.workspace?.id
+            },
+        )
     }
 
     private nonisolated static func requireWorkspaceEntity(id: UUID, context: NSManagedObjectContext) throws -> WorkspaceEntity {

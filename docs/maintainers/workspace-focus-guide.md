@@ -507,7 +507,8 @@ Dedicated window close and reopen:
 - `Undo Close Window` pops the newest closed identity and reopens it with
   `openWindow(value:)`
 - because reopen uses the same `WorkspaceSceneIdentity`, the window restores
-  the same per-window live workspaces, recently closed workspace stack, and
+  the same per-window live workspaces, durable recently closed workspace
+  history, and
   scene-local UI state instead of creating a fresh unrelated window identity
 
 ### Parent-child coordination model
