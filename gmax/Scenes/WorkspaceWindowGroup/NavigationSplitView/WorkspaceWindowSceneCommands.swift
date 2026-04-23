@@ -3,6 +3,7 @@ import SwiftUI
 
 extension FocusedValues {
     @Entry var activeWorkspaceFocusTarget: WorkspaceFocusTarget?
+    @Entry var activeWorkspaceSceneIdentity: WorkspaceSceneIdentity?
     @Entry var selectedWorkspaceSelection: Binding<WorkspaceID?>?
     @Entry var dismissPresentedWorkspaceModal: (() -> Void)?
     @Entry var openSavedWorkspaceLibrary: (() -> Void)?
@@ -15,8 +16,10 @@ extension FocusedValues {
 
 struct WorkspaceWindowSceneCommands: Commands {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.openWindow) private var openWindow
     @FocusedObject private var workspaceStore: WorkspaceStore?
     @FocusedValue(\.activeWorkspaceFocusTarget) private var activeWorkspaceFocusTarget
+    @FocusedValue(\.activeWorkspaceSceneIdentity) private var activeWorkspaceSceneIdentity
     @FocusedValue(\.selectedWorkspaceSelection) private var selectedWorkspaceSelection
     @FocusedValue(\.dismissPresentedWorkspaceModal) private var dismissPresentedWorkspaceModal
     @FocusedValue(\.openSavedWorkspaceLibrary) private var openSavedWorkspaceLibrary
@@ -25,6 +28,7 @@ struct WorkspaceWindowSceneCommands: Commands {
     @FocusedValue(\.moveFocusedPaneFocus) private var moveFocusedPaneFocus
     @FocusedValue(\.splitFocusedPane) private var splitFocusedPane
     @FocusedValue(\.closeFocusedPane) private var closeFocusedPane
+    @ObservedObject private var windowRestoration: WorkspaceWindowRestorationController
 
     var body: some Commands {
         let workspaces = workspaceStore?.workspaces ?? []
@@ -35,6 +39,8 @@ struct WorkspaceWindowSceneCommands: Commands {
         let canSplitFocusedPane = splitFocusedPane != nil
         let canDeleteSelectedWorkspace = selectedWorkspace != nil && workspaces.count > 1
         let canCycleWorkspaces = workspaces.count > 1
+        let canCloseWindow = activeWorkspaceSceneIdentity != nil
+        let canUndoCloseWindow = !windowRestoration.recentlyClosedWindowSceneIdentities.isEmpty
         let closeWorkspaceAction: (() -> Void)? = {
             guard let workspaceStore, let selectedWorkspaceID else {
                 return nil
@@ -43,6 +49,13 @@ struct WorkspaceWindowSceneCommands: Commands {
             return {
                 selectedWorkspaceSelection?.wrappedValue = workspaceStore.closeWorkspace(selectedWorkspaceID)
             }
+        }()
+        let closeWindowAction: (() -> Void)? = {
+            guard canCloseWindow else {
+                return nil
+            }
+
+            return dismiss.callAsFunction
         }()
         let resolvedCloseCommand: (title: String, action: (() -> Void)?) = if let dismissPresentedWorkspaceModal {
             ("Close", dismissPresentedWorkspaceModal)
@@ -129,6 +142,24 @@ struct WorkspaceWindowSceneCommands: Commands {
             }
             .keyboardShortcut("w", modifiers: [.command])
             .disabled(resolvedCloseCommand.action == nil)
+
+            Divider()
+
+            Button("Close Window") {
+                closeWindowAction?()
+            }
+            .keyboardShortcut("w", modifiers: [.command, .option])
+            .disabled(closeWindowAction == nil)
+
+            Button("Undo Close Window") {
+                guard let sceneIdentity = windowRestoration.popMostRecentlyClosedWindow() else {
+                    return
+                }
+
+                openWindow(value: sceneIdentity)
+            }
+            .keyboardShortcut("w", modifiers: [.command, .shift, .option])
+            .disabled(!canUndoCloseWindow)
         }
 
         CommandMenu("Workspace") {
@@ -176,7 +207,6 @@ struct WorkspaceWindowSceneCommands: Commands {
 
                 selectedWorkspaceSelection?.wrappedValue = workspaceStore.closeWorkspace(selectedWorkspaceID)
             }
-            .keyboardShortcut("w", modifiers: [.command, .option])
             .disabled(selectedWorkspaceID == nil || workspaceStore == nil)
 
             Button("Delete Workspace", role: .destructive) {
@@ -276,5 +306,9 @@ struct WorkspaceWindowSceneCommands: Commands {
                 .disabled(!canSplitFocusedPane)
             }
         }
+    }
+
+    init(windowRestoration: WorkspaceWindowRestorationController) {
+        _windowRestoration = ObservedObject(wrappedValue: windowRestoration)
     }
 }

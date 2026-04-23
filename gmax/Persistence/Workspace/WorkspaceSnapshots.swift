@@ -1,19 +1,16 @@
 import Foundation
 
-struct SavedWorkspaceID: RawRepresentable, Hashable, Codable, Identifiable {
-    var rawValue = UUID()
-
-    var id: UUID { rawValue }
-}
-
 struct WorkspaceSceneIdentity: Codable, Hashable {
     var windowID = UUID()
 }
 
 enum WorkspacePlacementRole: String, Codable, Hashable {
     case live
-    case recent
     case library
+}
+
+enum WorkspacePersistenceLegacy {
+    nonisolated static let recentPlacementRoleRawValue = "recent"
 }
 
 struct WorkspaceSessionSnapshot: Hashable, Codable, Identifiable {
@@ -36,7 +33,7 @@ struct WorkspaceListing: Hashable, Codable {
 }
 
 struct SavedWorkspaceListing: Identifiable, Hashable, Codable {
-    var id: SavedWorkspaceID
+    var id: WorkspaceID
     var title: String
     var createdAt: Date
     var updatedAt: Date
@@ -48,10 +45,10 @@ struct SavedWorkspaceListing: Identifiable, Hashable, Codable {
 
 struct WorkspaceRevision: Identifiable, Hashable, Codable {
     var id: UUID
-    var savedWorkspaceID: SavedWorkspaceID?
     var title: String
     var createdAt: Date
     var updatedAt: Date
+    var lastActiveAt: Date
     var lastOpenedAt: Date?
     var isPinned: Bool
     var notes: String?
@@ -60,12 +57,24 @@ struct WorkspaceRevision: Identifiable, Hashable, Codable {
     var paneSnapshotsBySessionID: [TerminalSessionID: WorkspaceSessionSnapshot]
 }
 
-struct PersistedRecentlyClosedWorkspace: Hashable, Codable {
+struct WindowWorkspaceHistoryRecord: Hashable, Codable {
     var revision: WorkspaceRevision
     var formerIndex: Int
 }
 
-struct RecentlyClosedWorkspaceStateInput {
+struct WorkspaceWindowStateSnapshot: Hashable, Codable {
+    var selectedWorkspaceID: WorkspaceID?
+}
+
+struct PersistedWorkspaceWindow: Hashable, Codable, Identifiable {
+    var id: WorkspaceSceneIdentity
+    var selectedWorkspaceID: WorkspaceID?
+    var title: String?
+    var isOpen: Bool
+    var lastActiveAt: Date
+}
+
+struct WindowWorkspaceHistoryInput {
     var workspace: Workspace
     var formerIndex: Int
     var launchConfigurationsBySessionID: [TerminalSessionID: TerminalLaunchConfiguration]

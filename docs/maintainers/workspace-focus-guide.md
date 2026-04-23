@@ -423,15 +423,20 @@ The command scene currently includes:
 
 It also adds:
 
+- `New gmax Window` through the `WindowGroup` scene title
 - `New Workspace` with `Shift-Command-N`
 - `Open Workspace…` with `Command-O`
 - `Save Workspace` with `Command-S`
 - a context-sensitive `Command-W` slot
+- `Close Window` with `Option-Command-W`
+- `Undo Close Window` with `Shift-Option-Command-W`
 - a custom `Workspace` menu
 - a custom `Pane` menu
 
 The `Workspace` menu currently exposes:
 
+- `Close Window`
+- `Undo Close Window`
 - `Undo Close Workspace`
 - `Rename Workspace`
 - `Duplicate Workspace Layout`
@@ -490,6 +495,22 @@ Empty workspace close or window close:
   close behavior from `activeWorkspaceFocusTarget`, the selected workspace,
   whether the selected workspace is empty, and whether the current window
   contains only one workspace
+
+Dedicated window close and reopen:
+
+- `Close Window` is an explicit scene command separate from the adaptive
+  `Command-W` slot
+- `WorkspaceWindowSceneView` publishes the active
+  `WorkspaceSceneIdentity` as scene command context
+- when a window disappears, the scene routes that identity through
+  `WorkspaceWindowRestorationController`, which updates the durable
+  `WorkspaceWindowEntity` record in Core Data
+- `Undo Close Window` pops the newest closed identity and reopens it with
+  `openWindow(value:)`
+- because reopen uses the same `WorkspaceSceneIdentity`, the window restores
+  the same per-window live workspaces, durable recently closed workspace
+  history, and
+  scene-local UI state instead of creating a fresh unrelated window identity
 
 ### Parent-child coordination model
 

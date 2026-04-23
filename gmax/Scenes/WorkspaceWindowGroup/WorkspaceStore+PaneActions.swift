@@ -22,7 +22,7 @@ extension WorkspaceStore {
                 id: pane.sessionID,
                 launchConfiguration: launchContextBuilder.makeLaunchConfiguration(),
             )
-            schedulePersistenceSave()
+            schedulePersistenceSave(reason: .paneCreated)
             return pane.id
         }
 
@@ -81,7 +81,7 @@ extension WorkspaceStore {
                 currentDirectory: inheritedCurrentDirectory,
             ),
         )
-        schedulePersistenceSave()
+        schedulePersistenceSave(reason: .paneSplit)
         return newPane.id
     }
 
@@ -100,7 +100,7 @@ extension WorkspaceStore {
 
         workspaces[workspaceIndex].root = root.removingPane(id: paneID)
         removeUnreferencedSessions()
-        schedulePersistenceSave()
+        schedulePersistenceSave(reason: .paneClosed)
     }
 
     func setSplitFraction(_ fraction: CGFloat, for splitID: SplitID, in workspaceID: WorkspaceID) {
@@ -115,7 +115,7 @@ extension WorkspaceStore {
         }
 
         workspaces[workspaceIndex].root = root
-        schedulePersistenceSave()
+        schedulePersistenceSave(reason: .paneSplitFractionChanged)
     }
 }
 

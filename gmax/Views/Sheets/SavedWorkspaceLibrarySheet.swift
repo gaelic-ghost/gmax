@@ -13,25 +13,30 @@ struct SavedWorkspaceLibrarySheet: View {
 
     @Environment(\.dismiss) private var dismiss
     @State private var searchText = ""
-    @State private var selectedSavedWorkspaceID: SavedWorkspaceID?
+    @State private var selectedSavedWorkspaceID: WorkspaceID?
+    @State private var libraryRefreshToken = 0
 
     var body: some View {
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        let savedWorkspaces = model.listSavedWorkspaces(matching: query.isEmpty ? nil : query)
+        let savedWorkspaces = {
+            _ = libraryRefreshToken
+            return model.listSavedWorkspaces(matching: query.isEmpty ? nil : query)
+        }()
         let normalizeSelection = {
             if !savedWorkspaces.contains(where: { $0.id == selectedSavedWorkspaceID }) {
                 selectedSavedWorkspaceID = savedWorkspaces.first?.id
             }
         }
-        let open: (SavedWorkspaceID) -> Void = { savedWorkspaceID in
+        let open: (WorkspaceID) -> Void = { savedWorkspaceID in
             guard let workspaceID = model.openSavedWorkspace(savedWorkspaceID) else { return }
 
             selectedWorkspaceID = workspaceID
             dismiss()
         }
-        let delete: (SavedWorkspaceID) -> Void = { savedWorkspaceID in
+        let delete: (WorkspaceID) -> Void = { savedWorkspaceID in
             model.deleteSavedWorkspace(savedWorkspaceID)
             selectedSavedWorkspaceID = savedWorkspaces.first { $0.id != savedWorkspaceID }?.id
+            libraryRefreshToken += 1
         }
 
         VStack(spacing: 0) {
@@ -119,24 +124,24 @@ struct SavedWorkspaceLibrarySheet: View {
                 Spacer()
 
                 Button("Delete") {
-                    guard let savedWorkspaceID = selectedSavedWorkspaceID else {
+                    guard let savedWorkspaceID = selectedSavedWorkspaceID ?? savedWorkspaces.first?.id else {
                         return
                     }
 
                     delete(savedWorkspaceID)
                 }
-                .disabled(selectedSavedWorkspaceID == nil)
+                .disabled(savedWorkspaces.isEmpty)
                 .accessibilityIdentifier("savedWorkspaceLibrary.deleteButton")
 
                 Button("Open") {
-                    guard let savedWorkspaceID = selectedSavedWorkspaceID else {
+                    guard let savedWorkspaceID = selectedSavedWorkspaceID ?? savedWorkspaces.first?.id else {
                         return
                     }
 
                     open(savedWorkspaceID)
                 }
                 .keyboardShortcut(.defaultAction)
-                .disabled(selectedSavedWorkspaceID == nil)
+                .disabled(savedWorkspaces.isEmpty)
                 .accessibilityIdentifier("savedWorkspaceLibrary.openButton")
             }
             .padding(16)

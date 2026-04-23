@@ -431,10 +431,13 @@ Why this separation matters:
 The current implementation is:
 
 - `WorkspaceEntity` is the canonical workspace payload row
-- `WorkspacePlacementEntity` tracks whether that payload is `.live`, `.recent`,
-  or `.library`, and which scene identity owns the live or recent placement
-- the in-memory recently closed stack in `WorkspaceStore` is restored from and
-  persisted back to `.recent` placements
+- `WorkspacePlacementEntity` tracks whether that payload is `.live` or
+  `.library`, and which scene identity owns the live placement
+- `WindowWorkspaceMembershipEntity` now carries the durable window-to-workspace
+  association used for workspace undo and recency, while `WorkspaceEntity`
+  contributes the `lastActiveAt` timestamp used to rank inactive candidates
+- `WorkspaceStore` now treats membership-plus-recency as the source of truth
+  for workspace undo instead of keeping a parallel in-memory stack
 - the saved library is browsed through lightweight listing metadata denormalized
   onto `.library` placements
 
@@ -542,18 +545,19 @@ than reopening a second command-planning surface here.
 
 Recommended semantics:
 
-- `Keep recently closed workspaces` controls whether close operations populate the undo stack
+- `Keep recently closed workspaces` controls whether close operations populate durable per-window recent workspace history
 - `Auto-save closed workspaces` controls whether closing a workspace also persists it into the saved library automatically
 - `Restore workspaces on launch` controls whether the live session reopens on app launch
+- `Background save interval` controls how often each workspace window performs a periodic persistence flush; the default is five minutes
 
 The intended behavior matrix is:
 
 | Keep recently closed | Auto-save closed | Close Workspace result |
 | --- | --- | --- |
 | Off | Off | Close removes the workspace from the live session only. It is not undoable and does not enter the saved library. |
-| On | Off | Close removes the workspace from the live session and pushes it into the recently closed stack only. |
+| On | Off | Close removes the workspace from the live session and records it into durable window-local recent workspace history only. |
 | Off | On | Close removes the workspace from the live session and saves it into the library only. |
-| On | On | Close removes the workspace from the live session, pushes it into recently closed, and saves it into the library. |
+| On | On | Close removes the workspace from the live session, records it into durable recent workspace history, and saves it into the library. |
 
 This is the preferred matrix because it keeps each setting orthogonal:
 
@@ -565,22 +569,41 @@ That means `Auto-save closed workspaces` should not depend on `Keep recently clo
 
 This matrix is now implemented in the app settings and close-workspace behavior.
 
+Preferred follow-through:
+
+- keep the user-facing semantics for now
+- but simplify the implementation over time so "recently closed" becomes a
+  durable disk-backed recency query for workspaces associated with the active
+  window identity
+- let `Undo Close Workspace` and any future "Open Recent Workspace" behavior
+  query Core Data by window identity plus latest durable activity timestamp
+  instead of depending on a separate in-memory stack model
+
 ## Command Model
 
 The command model should map to these layers clearly:
 
 - `Close Workspace`: remove from live session, then apply the settings matrix above
-- `Undo Close Workspace`: restore from the recently closed stack only
+- `Undo Close Workspace`: restore the most recent durable workspace associated
+  with the active window
 - `Save Workspace`: explicitly persist the current live workspace into the saved library without closing it
 - `Open Workspace...`: browse and reopen saved workspaces from the saved library
 - `Delete Saved Workspace`: remove a saved workspace from the saved library without affecting any currently live workspace
 
 This means `Undo Close Workspace` and `Open Workspace...` should remain distinct:
 
-- undo is temporal and stack-based
+- undo is temporal and window-recency-based
 - open is indexed and library-based
 
 That distinction should remain visible in both commands and internal APIs.
+
+Preferred follow-through:
+
+- keep the command distinction
+- but change the implementation of undo from an in-memory recent-close stack to
+  a disk-backed recency query for the active window's inactive workspaces
+- evolve `Open Workspace...` into a unified library browser that can later show
+  both workspace items and window items
 
 ## Current Implementation Status
 
@@ -590,7 +613,9 @@ The app now has the following workspace-lifecycle surfaces in place:
 - explicit `Save Workspace` and `Open Workspace...` commands
 - `Close Workspace to Library` for one-step archival
 - transcript-backed restore so reopened workspaces preserve shell history
-- reopen-title disambiguation when a saved workspace is opened while its original live workspace is still open
+- stable workspace identity across live and library state
+- library filtering that hides currently live workspaces instead of offering a
+  forked reopen path
 - user-facing settings for restore-on-launch, recently closed workspaces, and auto-save closed workspaces
 
 The command surface is also now split intentionally across:
@@ -617,13 +642,21 @@ superseded.
 The structural persistence work that actually landed is:
 
 - one canonical `WorkspaceEntity` payload model
-- one `WorkspacePlacementEntity` model for `.live`, `.recent`, and `.library`
+- one `WorkspacePlacementEntity` model for `.live` and `.library`, plus
+  workspace-owned recent metadata for window-scoped undo
 - one data-driven `WindowGroup` scene identity for per-window restore
 
 Use
 [`workspace-window-state-and-persistence-model.md`](./workspace-window-state-and-persistence-model.md)
 as the current source of truth for persistence structure and follow-through
 work.
+
+That note now also carries the preferred target schema and migration plan for:
+
+- stable durable workspace identity
+- durable window records
+- disk-backed recency by window identity
+- a unified library that can hold both workspace and window items
 
 The remaining medium-term persistence work is about:
 

@@ -115,6 +115,8 @@ During an ordinary app launch, expect to see:
 - one or more `app` messages describing whether persisted workspaces were restored
 - one `app` message describing per-scene selection and inspector restoration
 - one `diagnostics` message if inspector visibility was explicitly restored through scene state
+- one or more `persistence` messages when the app performs immediate lifecycle
+  flushes during activation, deactivation, window close, or termination
 
 ### Workspace Actions
 

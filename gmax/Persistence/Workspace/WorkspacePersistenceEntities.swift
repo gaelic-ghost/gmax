@@ -1,7 +1,8 @@
 /*
  WorkspacePersistenceEntities defines the active Core Data managed object
  surface for workspace persistence. These entities model the current payload
- plus placement store used by live, recent, and library workspace state.
+ plus placement store used by live and library workspace state, along with
+ workspace-owned metadata for window-local recency.
  */
 
 import CoreData
@@ -18,10 +19,12 @@ final class WorkspaceEntity: NSManagedObject {
     @NSManaged var title: String
     @NSManaged var createdAt: Date
     @NSManaged var updatedAt: Date
+    @NSManaged var lastActiveAt: Date
+    @NSManaged var recentWindowID: UUID?
+    @NSManaged var recentSortOrder: Int64
     @NSManaged var notes: String?
     @NSManaged var previewText: String?
     @NSManaged var searchText: String?
-    @NSManaged var savedWorkspaceID: UUID?
     @NSManaged var sortOrder: Int64
     @NSManaged var rootNode: PaneNodeEntity?
     @NSManaged var placements: NSSet?
@@ -58,6 +61,35 @@ final class WorkspacePlacementEntity: NSManagedObject {
     @NSManaged var searchText: String?
     @NSManaged var paneCount: Int64
     @NSManaged var workspace: WorkspaceEntity?
+}
+
+@objc(WorkspaceWindowEntity)
+final class WorkspaceWindowEntity: NSManagedObject {
+    @NSManaged var id: UUID
+    @NSManaged var createdAt: Date
+    @NSManaged var updatedAt: Date
+    @NSManaged var lastActiveAt: Date
+    @NSManaged var selectedWorkspaceID: UUID?
+    @NSManaged var title: String?
+    @NSManaged var isOpen: Bool
+}
+
+@objc(WindowWorkspaceMembershipEntity)
+final class WindowWorkspaceMembershipEntity: NSManagedObject {
+    @NSManaged var id: UUID
+    @NSManaged var windowID: UUID
+    @NSManaged var workspaceID: UUID
+    @NSManaged var sortOrder: Int64
+    @NSManaged var createdAt: Date
+    @NSManaged var updatedAt: Date
+}
+
+@objc(WorkspaceWindowStateEntity)
+final class WorkspaceWindowStateEntity: NSManagedObject {
+    @NSManaged var windowID: UUID
+    @NSManaged var selectedWorkspaceID: UUID?
+    @NSManaged var createdAt: Date
+    @NSManaged var updatedAt: Date
 }
 
 @objc(PaneSessionSnapshotEntity)

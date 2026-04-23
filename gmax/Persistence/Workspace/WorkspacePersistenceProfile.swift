@@ -21,6 +21,7 @@ enum WorkspacePersistenceProfile: String {
 
     nonisolated static let environmentKey = "GMAX_PERSISTENCE_PROFILE"
     nonisolated static let uiTestResetStateEnvironmentKey = "GMAX_UI_TEST_RESET_STATE"
+    nonisolated static let xCTestConfigurationFilePathEnvironmentKey = "XCTestConfigurationFilePath"
 
     nonisolated var usesInMemoryStore: Bool {
         self == .inMemory
@@ -74,6 +75,10 @@ enum WorkspacePersistenceProfile: String {
 
         if processInfo.environment[uiTestResetStateEnvironmentKey] == "1" {
             return .uiTestOnDisk
+        }
+
+        if processInfo.environment[xCTestConfigurationFilePathEnvironmentKey] != nil {
+            return .inMemory
         }
 
 #if DEBUG

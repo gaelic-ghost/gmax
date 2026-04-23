@@ -55,7 +55,7 @@ extension WorkspacePersistenceController {
             "Configured workspace persistence using the \(profile.displayName, privacy: .public).",
         )
 
-        if loadPersistentStores(for: primaryContainer) {
+        if loadPersistentStores(for: primaryContainer, profile: profile) {
             return primaryContainer
         }
 
@@ -71,7 +71,7 @@ extension WorkspacePersistenceController {
             contextName: WorkspacePersistenceProfile.inMemory.contextName,
         )
 
-        guard loadPersistentStores(for: fallbackContainer) else {
+        guard loadPersistentStores(for: fallbackContainer, profile: .inMemory) else {
             fatalError("Core Data could not load either the disk-backed workspace store or the in-memory fallback store. The app cannot continue without a managed object context.")
         }
 
@@ -101,17 +101,30 @@ extension WorkspacePersistenceController {
         return container
     }
 
-    static func loadPersistentStores(for container: NSPersistentContainer) -> Bool {
+    static func loadPersistentStores(
+        for container: NSPersistentContainer,
+        profile: WorkspacePersistenceProfile,
+    ) -> Bool {
         var loadError: Error?
+        var loadedStoreDescription: NSPersistentStoreDescription?
         let semaphore = DispatchSemaphore(value: 0)
-        container.loadPersistentStores { _, error in
+        container.loadPersistentStores { description, error in
+            loadedStoreDescription = description
             loadError = error
             semaphore.signal()
         }
         semaphore.wait()
 
         if let loadError {
-            Logger.persistence.error("Core Data could not load a workspace persistent store description. The store described by this container will remain unavailable for this launch. Error: \(String(describing: loadError), privacy: .public)")
+            let requestedStoreLocation = if profile.usesInMemoryStore {
+                "in-memory"
+            } else {
+                storeURL(for: profile).path
+            }
+            let resolvedStoreLocation = loadedStoreDescription?.url?.path ?? requestedStoreLocation
+            Logger.persistence.error(
+                "Core Data could not load the \(profile.displayName, privacy: .public). The requested workspace store will remain unavailable for this launch, and the app may fall back to a different store profile if one is configured. Requested store location: \(requestedStoreLocation, privacy: .public). Resolved store location: \(resolvedStoreLocation, privacy: .public). Error: \(String(describing: loadError), privacy: .public)",
+            )
             return false
         }
 
@@ -133,18 +146,54 @@ extension WorkspacePersistenceController {
         workspacePlacementEntity.name = "WorkspacePlacementEntity"
         workspacePlacementEntity.managedObjectClassName = NSStringFromClass(WorkspacePlacementEntity.self)
 
+        let workspaceWindowEntity = NSEntityDescription()
+        workspaceWindowEntity.name = "WorkspaceWindowEntity"
+        workspaceWindowEntity.managedObjectClassName = NSStringFromClass(WorkspaceWindowEntity.self)
+
+        let windowWorkspaceMembershipEntity = NSEntityDescription()
+        windowWorkspaceMembershipEntity.name = "WindowWorkspaceMembershipEntity"
+        windowWorkspaceMembershipEntity.managedObjectClassName = NSStringFromClass(WindowWorkspaceMembershipEntity.self)
+
+        let workspaceWindowStateEntity = NSEntityDescription()
+        workspaceWindowStateEntity.name = "WorkspaceWindowStateEntity"
+        workspaceWindowStateEntity.managedObjectClassName = NSStringFromClass(WorkspaceWindowStateEntity.self)
+
         let paneSessionSnapshotEntity = NSEntityDescription()
         paneSessionSnapshotEntity.name = "PaneSessionSnapshotEntity"
         paneSessionSnapshotEntity.managedObjectClassName = NSStringFromClass(PaneSessionSnapshotEntity.self)
 
         let workspaceID = attribute(name: "id", type: .UUIDAttributeType)
         let workspaceTitle = attribute(name: "title", type: .stringAttributeType)
-        let workspaceCreatedAt = attribute(name: "createdAt", type: .dateAttributeType)
-        let workspaceUpdatedAt = attribute(name: "updatedAt", type: .dateAttributeType)
+        let migrationDefaultDate = Date()
+
+        let workspaceCreatedAt = attribute(
+            name: "createdAt",
+            type: .dateAttributeType,
+            defaultValue: migrationDefaultDate,
+        )
+        let workspaceUpdatedAt = attribute(
+            name: "updatedAt",
+            type: .dateAttributeType,
+            defaultValue: migrationDefaultDate,
+        )
+        let workspaceLastActiveAt = attribute(
+            name: "lastActiveAt",
+            type: .dateAttributeType,
+            defaultValue: migrationDefaultDate,
+        )
+        let workspaceRecentWindowID = attribute(
+            name: "recentWindowID",
+            type: .UUIDAttributeType,
+            isOptional: true,
+        )
+        let workspaceRecentSortOrder = attribute(
+            name: "recentSortOrder",
+            type: .integer64AttributeType,
+            defaultValue: 0,
+        )
         let workspaceNotes = attribute(name: "notes", type: .stringAttributeType, isOptional: true)
         let workspacePreviewText = attribute(name: "previewText", type: .stringAttributeType, isOptional: true)
         let workspaceSearchText = attribute(name: "searchText", type: .stringAttributeType, isOptional: true)
-        let workspaceSavedWorkspaceID = attribute(name: "savedWorkspaceID", type: .UUIDAttributeType, isOptional: true)
         let sortOrder = attribute(name: "sortOrder", type: .integer64AttributeType)
 
         let nodeID = attribute(name: "id", type: .UUIDAttributeType)
@@ -156,16 +205,72 @@ extension WorkspacePersistenceController {
         let placementID = attribute(name: "id", type: .UUIDAttributeType)
         let placementRole = attribute(name: "role", type: .stringAttributeType)
         let placementWindowID = attribute(name: "windowID", type: .UUIDAttributeType, isOptional: true)
-        let placementSortOrder = attribute(name: "sortOrder", type: .integer64AttributeType)
-        let placementRestoreSortOrder = attribute(name: "restoreSortOrder", type: .integer64AttributeType)
-        let placementCreatedAt = attribute(name: "createdAt", type: .dateAttributeType)
-        let placementUpdatedAt = attribute(name: "updatedAt", type: .dateAttributeType)
+        let placementSortOrder = attribute(name: "sortOrder", type: .integer64AttributeType, defaultValue: 0)
+        let placementRestoreSortOrder = attribute(name: "restoreSortOrder", type: .integer64AttributeType, defaultValue: 0)
+        let placementCreatedAt = attribute(
+            name: "createdAt",
+            type: .dateAttributeType,
+            defaultValue: migrationDefaultDate,
+        )
+        let placementUpdatedAt = attribute(
+            name: "updatedAt",
+            type: .dateAttributeType,
+            defaultValue: migrationDefaultDate,
+        )
         let placementLastOpenedAt = attribute(name: "lastOpenedAt", type: .dateAttributeType, isOptional: true)
-        let placementIsPinned = attribute(name: "isPinned", type: .booleanAttributeType)
+        let placementIsPinned = attribute(name: "isPinned", type: .booleanAttributeType, defaultValue: false)
         let placementTitle = attribute(name: "title", type: .stringAttributeType)
         let placementPreviewText = attribute(name: "previewText", type: .stringAttributeType, isOptional: true)
         let placementSearchText = attribute(name: "searchText", type: .stringAttributeType, isOptional: true)
-        let placementPaneCount = attribute(name: "paneCount", type: .integer64AttributeType)
+        let placementPaneCount = attribute(name: "paneCount", type: .integer64AttributeType, defaultValue: 0)
+
+        let windowID = attribute(name: "id", type: .UUIDAttributeType)
+        let windowCreatedAt = attribute(
+            name: "createdAt",
+            type: .dateAttributeType,
+            defaultValue: migrationDefaultDate,
+        )
+        let windowUpdatedAt = attribute(
+            name: "updatedAt",
+            type: .dateAttributeType,
+            defaultValue: migrationDefaultDate,
+        )
+        let windowLastActiveAt = attribute(
+            name: "lastActiveAt",
+            type: .dateAttributeType,
+            defaultValue: migrationDefaultDate,
+        )
+        let windowSelectedWorkspaceID = attribute(name: "selectedWorkspaceID", type: .UUIDAttributeType, isOptional: true)
+        let windowTitle = attribute(name: "title", type: .stringAttributeType, isOptional: true)
+        let windowIsOpen = attribute(name: "isOpen", type: .booleanAttributeType, defaultValue: false)
+
+        let membershipID = attribute(name: "id", type: .UUIDAttributeType)
+        let membershipWindowID = attribute(name: "windowID", type: .UUIDAttributeType)
+        let membershipWorkspaceID = attribute(name: "workspaceID", type: .UUIDAttributeType)
+        let membershipSortOrder = attribute(name: "sortOrder", type: .integer64AttributeType, defaultValue: 0)
+        let membershipCreatedAt = attribute(
+            name: "createdAt",
+            type: .dateAttributeType,
+            defaultValue: migrationDefaultDate,
+        )
+        let membershipUpdatedAt = attribute(
+            name: "updatedAt",
+            type: .dateAttributeType,
+            defaultValue: migrationDefaultDate,
+        )
+
+        let windowStateWindowID = attribute(name: "windowID", type: .UUIDAttributeType)
+        let windowStateSelectedWorkspaceID = attribute(name: "selectedWorkspaceID", type: .UUIDAttributeType, isOptional: true)
+        let windowStateCreatedAt = attribute(
+            name: "createdAt",
+            type: .dateAttributeType,
+            defaultValue: migrationDefaultDate,
+        )
+        let windowStateUpdatedAt = attribute(
+            name: "updatedAt",
+            type: .dateAttributeType,
+            defaultValue: migrationDefaultDate,
+        )
 
         let paneSessionSnapshotID = attribute(name: "id", type: .UUIDAttributeType)
         let paneSessionSnapshotExecutable = attribute(name: "executable", type: .stringAttributeType)
@@ -272,10 +377,12 @@ extension WorkspacePersistenceController {
             workspaceTitle,
             workspaceCreatedAt,
             workspaceUpdatedAt,
+            workspaceLastActiveAt,
+            workspaceRecentWindowID,
+            workspaceRecentSortOrder,
             workspaceNotes,
             workspacePreviewText,
             workspaceSearchText,
-            workspaceSavedWorkspaceID,
             sortOrder,
             workspaceRootNode,
             workspacePlacements,
@@ -310,6 +417,32 @@ extension WorkspacePersistenceController {
             placementWorkspace,
         ]
 
+        workspaceWindowEntity.properties = [
+            windowID,
+            windowCreatedAt,
+            windowUpdatedAt,
+            windowLastActiveAt,
+            windowSelectedWorkspaceID,
+            windowTitle,
+            windowIsOpen,
+        ]
+
+        windowWorkspaceMembershipEntity.properties = [
+            membershipID,
+            membershipWindowID,
+            membershipWorkspaceID,
+            membershipSortOrder,
+            membershipCreatedAt,
+            membershipUpdatedAt,
+        ]
+
+        workspaceWindowStateEntity.properties = [
+            windowStateWindowID,
+            windowStateSelectedWorkspaceID,
+            windowStateCreatedAt,
+            windowStateUpdatedAt,
+        ]
+
         paneSessionSnapshotEntity.properties = [
             paneSessionSnapshotID,
             paneSessionSnapshotExecutable,
@@ -328,6 +461,9 @@ extension WorkspacePersistenceController {
             workspaceEntity,
             paneNodeEntity,
             workspacePlacementEntity,
+            workspaceWindowEntity,
+            windowWorkspaceMembershipEntity,
+            workspaceWindowStateEntity,
             paneSessionSnapshotEntity,
         ]
         return model
@@ -337,11 +473,13 @@ extension WorkspacePersistenceController {
         name: String,
         type: NSAttributeType,
         isOptional: Bool = false,
+        defaultValue: Any? = nil,
     ) -> NSAttributeDescription {
         let attribute = NSAttributeDescription()
         attribute.name = name
         attribute.attributeType = type
         attribute.isOptional = isOptional
+        attribute.defaultValue = defaultValue
         return attribute
     }
 }

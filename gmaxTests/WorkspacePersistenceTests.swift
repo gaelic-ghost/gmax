@@ -12,6 +12,79 @@ import Testing
 
 @MainActor
 struct WorkspacePersistenceTests {
+    @Test func `persistSceneStateNow writes live workspace changes without waiting for debounce`() throws {
+        let persistence = WorkspacePersistenceController.inMemoryForTesting()
+        let sceneIdentity = WorkspaceSceneIdentity()
+        let model = WorkspaceStore(
+            sceneIdentity: sceneIdentity,
+            workspaces: [TestSupport.makeWorkspace(title: "Workspace 1")],
+            persistence: persistence,
+            launchContextBuilder: TestSupport.makeLaunchContextBuilder(defaultCurrentDirectory: "/tmp/gmax-tests"),
+        )
+
+        let workspaceID = try #require(model.workspaces.first?.id)
+        model.renameWorkspace(workspaceID, to: "Renamed Workspace")
+        model.persistSceneStateNow(reason: .unitTestImmediateFlush)
+
+        let restoredTitles = persistence.loadWorkspaces(for: sceneIdentity).map(\.title)
+        #expect(restoredTitles == ["Renamed Workspace"])
+    }
+
+    @Test func `persistSceneStateNow writes the durable selected workspace for a window`() throws {
+        let persistence = WorkspacePersistenceController.inMemoryForTesting()
+        let sceneIdentity = WorkspaceSceneIdentity()
+        let firstWorkspace = TestSupport.makeWorkspace(title: "Workspace 1")
+        let secondWorkspace = TestSupport.makeWorkspace(title: "Workspace 2")
+        let model = WorkspaceStore(
+            sceneIdentity: sceneIdentity,
+            workspaces: [firstWorkspace, secondWorkspace],
+            persistence: persistence,
+            launchContextBuilder: TestSupport.makeLaunchContextBuilder(defaultCurrentDirectory: "/tmp/gmax-tests"),
+        )
+
+        model.persistedSelectedWorkspaceID = secondWorkspace.id
+        model.persistSceneStateNow(reason: .unitTestImmediateFlush)
+
+        let restoredWindowState = try #require(persistence.loadWindowState(for: sceneIdentity))
+        #expect(restoredWindowState.selectedWorkspaceID == secondWorkspace.id)
+    }
+
+    @Test func `persistSceneStateNow creates an open durable window record`() {
+        let persistence = WorkspacePersistenceController.inMemoryForTesting()
+        let sceneIdentity = WorkspaceSceneIdentity()
+        let workspace = TestSupport.makeWorkspace(title: "Workspace 1")
+        let model = WorkspaceStore(
+            sceneIdentity: sceneIdentity,
+            workspaces: [workspace],
+            persistence: persistence,
+            launchContextBuilder: TestSupport.makeLaunchContextBuilder(defaultCurrentDirectory: "/tmp/gmax-tests"),
+        )
+
+        model.persistedSelectedWorkspaceID = workspace.id
+        model.persistSceneStateNow(reason: .unitTestImmediateFlush)
+
+        #expect(persistence.loadLiveSceneIdentities() == [sceneIdentity])
+    }
+
+    @Test func `markWindowClosed moves a persisted window into recently closed history`() {
+        let persistence = WorkspacePersistenceController.inMemoryForTesting()
+        let sceneIdentity = WorkspaceSceneIdentity()
+        let workspace = TestSupport.makeWorkspace(title: "Workspace 1")
+        let model = WorkspaceStore(
+            sceneIdentity: sceneIdentity,
+            workspaces: [workspace],
+            persistence: persistence,
+            launchContextBuilder: TestSupport.makeLaunchContextBuilder(defaultCurrentDirectory: "/tmp/gmax-tests"),
+        )
+
+        model.persistedSelectedWorkspaceID = workspace.id
+        model.persistSceneStateNow(reason: .unitTestImmediateFlush)
+        persistence.markWindowClosed(sceneIdentity)
+
+        #expect(persistence.loadLiveSceneIdentities().isEmpty)
+        #expect(persistence.loadRecentlyClosedWindowSceneIdentities() == [sceneIdentity])
+    }
+
     @Test func `save and open saved workspace restore large nested layout across five panes`() throws {
         let leftTopPane = PaneLeaf()
         let leftBottomPane = PaneLeaf()
@@ -51,8 +124,9 @@ struct WorkspacePersistenceTests {
             ),
         )
         let persistence = WorkspacePersistenceController.inMemoryForTesting()
+        let siblingWorkspace = TestSupport.makeWorkspace(title: "Workspace 2")
         let model = WorkspaceStore(
-            workspaces: [workspace],
+            workspaces: [workspace, siblingWorkspace],
             persistence: persistence,
             launchContextBuilder: TestSupport.makeLaunchContextBuilder(defaultCurrentDirectory: "/tmp/gmax-tests"),
         )
@@ -83,12 +157,14 @@ struct WorkspacePersistenceTests {
                 ),
             ),
         )
+        model.deleteWorkspace(workspace.id)
         let reopenedWorkspaceID = try #require(model.openSavedWorkspace(summary.id))
         let reopenedWorkspace = try #require(model.workspaces.first(where: { $0.id == reopenedWorkspaceID }))
         let reopenedRoot = try #require(reopenedWorkspace.root)
         let reopenedLeaves = reopenedWorkspace.paneLeaves
 
         #expect(summary.paneCount == 5)
+        #expect(reopenedWorkspaceID == workspace.id)
         #expect(nodeSignature(from: reopenedRoot) == expectedSignature)
         #expect(reopenedWorkspace.paneCount == 5)
         #expect(reopenedLeaves.count == originalLeaves.count)
@@ -126,8 +202,9 @@ struct WorkspacePersistenceTests {
             ),
         )
         let persistence = WorkspacePersistenceController.inMemoryForTesting()
+        let siblingWorkspace = TestSupport.makeWorkspace(title: "Workspace 2")
         let model = WorkspaceStore(
-            workspaces: [workspace],
+            workspaces: [workspace, siblingWorkspace],
             persistence: persistence,
             launchContextBuilder: TestSupport.makeLaunchContextBuilder(defaultCurrentDirectory: "/tmp/gmax-tests"),
         )
@@ -157,12 +234,14 @@ struct WorkspacePersistenceTests {
             ),
         )
 
+        model.deleteWorkspace(workspace.id)
         let reopenedWorkspaceID = try #require(model.openSavedWorkspace(summary.id))
         let reopenedWorkspace = try #require(model.workspaces.first(where: { $0.id == reopenedWorkspaceID }))
         let reopenedRoot = try #require(reopenedWorkspace.root)
         let reopenedLeaves = reopenedWorkspace.paneLeaves
 
         #expect(summary.paneCount == 3)
+        #expect(reopenedWorkspaceID == workspace.id)
         #expect(nodeSignature(from: reopenedRoot) == expectedSignature)
         #expect(reopenedWorkspace.paneCount == 3)
         #expect(reopenedLeaves.count == originalLeaves.count)
@@ -181,8 +260,9 @@ struct WorkspacePersistenceTests {
         let workspace = TestSupport.makeWorkspace(title: "Workspace 1")
         let persistence = WorkspacePersistenceController.inMemoryForTesting()
         let launchContextBuilder = TestSupport.makeLaunchContextBuilder(defaultCurrentDirectory: "/tmp/gmax-tests")
+        let siblingWorkspace = TestSupport.makeWorkspace(title: "Workspace 2")
         let model = WorkspaceStore(
-            workspaces: [workspace],
+            workspaces: [workspace, siblingWorkspace],
             persistence: persistence,
             launchContextBuilder: launchContextBuilder,
         )
@@ -199,19 +279,21 @@ struct WorkspacePersistenceTests {
             ),
         )
 
+        model.deleteWorkspace(workspace.id)
         let reopenedWorkspaceID = try #require(model.openSavedWorkspace(summary.id))
         let reopenedWorkspace = try #require(model.workspaces.first(where: { $0.id == reopenedWorkspaceID }))
         let reopenedPane = try #require(reopenedWorkspace.root?.firstLeaf())
         let reopenedSession = try #require(model.sessions.session(for: reopenedPane.sessionID))
 
-        #expect(model.listSavedWorkspaces().count == 1)
+        #expect(model.listSavedWorkspaces().isEmpty)
+        #expect(reopenedWorkspaceID == workspace.id)
         #expect(reopenedWorkspace.title.starts(with: "Workspace 1"))
         #expect(reopenedSession.title == "Build Shell")
         #expect(reopenedSession.currentDirectory == "/tmp/workspace-library")
         #expect(reopenedSession.consumeRestoredTranscript() == "$ pwd\n/tmp/workspace-library\n")
     }
 
-    @Test func `saved workspace can be opened repeatedly without mutating the stored layout`() throws {
+    @Test func `opening a saved workspace while it is already live reuses the same identity and does not duplicate it`() throws {
         let leftPane = PaneLeaf()
         let topRightPane = PaneLeaf()
         let bottomRightPane = PaneLeaf()
@@ -241,41 +323,45 @@ struct WorkspacePersistenceTests {
         )
 
         let expectedSignature = try #require(workspace.root.map(nodeSignature(from:)))
-        let savedWorkspaceTranscripts: [TerminalSessionID: String] = [
-            leftPane.sessionID: "echo left\n",
-            topRightPane.sessionID: "echo top-right\n",
-            bottomRightPane.sessionID: "echo bottom-right\n",
-        ]
-
         let summary = try #require(
             model.saveWorkspaceToLibrary(
                 workspace.id,
-                transcriptsBySessionID: savedWorkspaceTranscripts,
+                transcriptsBySessionID: [
+                    leftPane.sessionID: "echo left\n",
+                    topRightPane.sessionID: "echo top-right\n",
+                    bottomRightPane.sessionID: "echo bottom-right\n",
+                ],
             ),
         )
 
-        let firstReopenedWorkspaceID = try #require(model.openSavedWorkspace(summary.id))
-        let firstReopenedWorkspace = try #require(model.workspaces.first(where: { $0.id == firstReopenedWorkspaceID }))
-        let firstReopenedPane = try #require(firstReopenedWorkspace.root?.firstLeaf())
-        _ = try #require(model.splitPane(firstReopenedPane.id, in: firstReopenedWorkspaceID, direction: .right))
-        let mutatedFirstWorkspace = try #require(model.workspaces.first(where: { $0.id == firstReopenedWorkspaceID }))
-        #expect(mutatedFirstWorkspace.paneCount == 4)
+        let reopenedWorkspaceID = try #require(model.openSavedWorkspace(summary.id))
+        let reopenedWorkspace = try #require(model.workspaces.first(where: { $0.id == reopenedWorkspaceID }))
+        let reopenedRoot = try #require(reopenedWorkspace.root)
 
-        let secondReopenedWorkspaceID = try #require(model.openSavedWorkspace(summary.id))
-        let secondReopenedWorkspace = try #require(model.workspaces.first(where: { $0.id == secondReopenedWorkspaceID }))
-        let secondReopenedRoot = try #require(secondReopenedWorkspace.root)
-        let secondReopenedLeaves = secondReopenedWorkspace.paneLeaves
+        #expect(reopenedWorkspaceID == workspace.id)
+        #expect(model.workspaces.count == 1)
+        #expect(model.listSavedWorkspaces().isEmpty)
+        #expect(nodeSignature(from: reopenedRoot) == expectedSignature)
+    }
 
-        #expect(model.listSavedWorkspaces().count == 1)
-        #expect(nodeSignature(from: secondReopenedRoot) == expectedSignature)
-        #expect(secondReopenedWorkspace.paneCount == 3)
-        #expect(secondReopenedWorkspace.title != mutatedFirstWorkspace.title)
+    @Test func `deleting a saved workspace removes it from the library listing`() throws {
+        let workspace = TestSupport.makeWorkspace(title: "Workspace 1")
+        let persistence = WorkspacePersistenceController.inMemoryForTesting()
+        let siblingWorkspace = TestSupport.makeWorkspace(title: "Workspace 2")
+        let model = WorkspaceStore(
+            workspaces: [workspace, siblingWorkspace],
+            persistence: persistence,
+            launchContextBuilder: TestSupport.makeLaunchContextBuilder(defaultCurrentDirectory: "/tmp/gmax-tests"),
+        )
 
-        for (index, originalLeaf) in workspace.paneLeaves.enumerated() {
-            let reopenedLeaf = secondReopenedLeaves[index]
-            let restoredSession = try #require(model.sessions.session(for: reopenedLeaf.sessionID))
-            #expect(restoredSession.consumeRestoredTranscript() == savedWorkspaceTranscripts[originalLeaf.sessionID])
-        }
+        let savedWorkspace = try #require(model.saveWorkspaceToLibrary(workspace.id))
+        #expect(model.listSavedWorkspaces().isEmpty)
+        #expect(persistence.listSavedWorkspaces().map(\.id) == [savedWorkspace.id])
+
+        model.deleteSavedWorkspace(savedWorkspace.id)
+
+        #expect(model.listSavedWorkspaces().isEmpty)
+        #expect(persistence.listSavedWorkspaces().isEmpty)
     }
 
     @Test func `open saved workspace returns nil when saved workspace pane tree is corrupted`() throws {
@@ -293,8 +379,9 @@ struct WorkspacePersistenceTests {
             ),
         )
         let persistence = WorkspacePersistenceController.inMemoryForTesting()
+        let siblingWorkspace = TestSupport.makeWorkspace(title: "Workspace 2")
         let model = WorkspaceStore(
-            workspaces: [workspace],
+            workspaces: [workspace, siblingWorkspace],
             persistence: persistence,
             launchContextBuilder: TestSupport.makeLaunchContextBuilder(defaultCurrentDirectory: "/tmp/gmax-tests"),
         )
@@ -302,11 +389,12 @@ struct WorkspacePersistenceTests {
         let summary = try #require(model.saveWorkspaceToLibrary(workspace.id))
         let context = persistence.container.viewContext
 
-        let savedWorkspacePlacement = try #require(try fetchSavedWorkspacePlacement(id: summary.id, in: context))
+        let savedWorkspacePlacement = try #require(try fetchSavedWorkspacePlacement(id: summary.id.rawValue, in: context))
         let rootNode = try #require(savedWorkspacePlacement.workspace?.rootNode)
         rootNode.firstChild = nil
         try context.save()
 
+        model.deleteWorkspace(workspace.id)
         let reopenedWorkspaceID = model.openSavedWorkspace(summary.id)
 
         #expect(reopenedWorkspaceID == nil)
@@ -330,8 +418,9 @@ struct WorkspacePersistenceTests {
         )
         let persistence = WorkspacePersistenceController.inMemoryForTesting()
         let launchContextBuilder = TestSupport.makeLaunchContextBuilder(defaultCurrentDirectory: "/tmp/default-fallback")
+        let siblingWorkspace = TestSupport.makeWorkspace(title: "Workspace 2")
         let model = WorkspaceStore(
-            workspaces: [workspace],
+            workspaces: [workspace, siblingWorkspace],
             persistence: persistence,
             launchContextBuilder: launchContextBuilder,
         )
@@ -358,14 +447,16 @@ struct WorkspacePersistenceTests {
         )
         let context = persistence.container.viewContext
 
-        let missingSessionEntity = try #require(try fetchPaneSessionPayloadEntity(id: rightPane.sessionID, in: context))
+        let missingSessionEntity = try #require(try fetchPaneSessionPayloadEntity(id: rightPane.sessionID.rawValue, in: context))
         context.delete(missingSessionEntity)
         try context.save()
 
+        model.deleteWorkspace(workspace.id)
         let reopenedWorkspaceID = try #require(model.openSavedWorkspace(summary.id))
         let reopenedWorkspace = try #require(model.workspaces.first(where: { $0.id == reopenedWorkspaceID }))
         let reopenedLeaves = reopenedWorkspace.paneLeaves
         #expect(reopenedLeaves.count == 2)
+        #expect(reopenedWorkspaceID == workspace.id)
 
         let unaffectedSession = try #require(model.sessions.session(for: reopenedLeaves[0].sessionID))
         #expect(unaffectedSession.title == "Left Shell")
@@ -401,6 +492,7 @@ struct WorkspacePersistenceTests {
 
         #expect(nextSelectedWorkspaceID == secondWorkspace.id)
         #expect(model.workspaces.count == 2)
+        #expect(reopenedWorkspaceID == firstWorkspace.id)
         #expect(reopenedWorkspace.title == "Workspace 1")
     }
 
@@ -423,7 +515,7 @@ struct WorkspacePersistenceTests {
         persistence.saveSceneState(
             for: sceneIdentity,
             liveWorkspaces: [workspace],
-            recentlyClosedWorkspaces: [],
+            selectedWorkspaceID: workspace.id,
             sessions: TerminalSessionRegistry(
                 workspaces: [workspace],
                 defaultLaunchConfiguration: TestSupport.makeLaunchContextBuilder(defaultCurrentDirectory: "/tmp/gmax-tests").makeLaunchConfiguration(),
@@ -431,7 +523,7 @@ struct WorkspacePersistenceTests {
         )
         let context = persistence.container.viewContext
 
-        let workspaceEntity = try #require(try fetchWorkspaceEntity(id: workspace.id, in: context))
+        let workspaceEntity = try #require(try fetchWorkspaceEntity(id: workspace.id.rawValue, in: context))
         let rootNode = try #require(workspaceEntity.rootNode)
         rootNode.axis = nil
         try context.save()
@@ -452,7 +544,7 @@ struct WorkspacePersistenceTests {
         persistence.saveSceneState(
             for: firstSceneIdentity,
             liveWorkspaces: [firstSceneWorkspace],
-            recentlyClosedWorkspaces: [],
+            selectedWorkspaceID: firstSceneWorkspace.id,
             sessions: TerminalSessionRegistry(
                 workspaces: [firstSceneWorkspace],
                 defaultLaunchConfiguration: launchConfiguration,
@@ -461,7 +553,7 @@ struct WorkspacePersistenceTests {
         persistence.saveSceneState(
             for: secondSceneIdentity,
             liveWorkspaces: [secondSceneWorkspace],
-            recentlyClosedWorkspaces: [],
+            selectedWorkspaceID: secondSceneWorkspace.id,
             sessions: TerminalSessionRegistry(
                 workspaces: [secondSceneWorkspace],
                 defaultLaunchConfiguration: launchConfiguration,
@@ -483,50 +575,132 @@ struct WorkspacePersistenceTests {
         let firstRecentWorkspace = TestSupport.makeWorkspace(title: "Closed in Window A")
         let secondRecentWorkspace = TestSupport.makeWorkspace(title: "Closed in Window B")
         let persistence = WorkspacePersistenceController.inMemoryForTesting()
-        let launchConfiguration = TestSupport.makeLaunchContextBuilder(defaultCurrentDirectory: "/tmp/gmax-tests").makeLaunchConfiguration()
-
-        persistence.saveSceneState(
+        persistence.recordWorkspaceInRecentHistory(
+            WindowWorkspaceHistoryInput(
+                workspace: firstRecentWorkspace,
+                formerIndex: 2,
+                launchConfigurationsBySessionID: [:],
+                titlesBySessionID: [:],
+                transcriptsBySessionID: [:],
+            ),
             for: firstSceneIdentity,
-            liveWorkspaces: [],
-            recentlyClosedWorkspaces: [
-                RecentlyClosedWorkspaceStateInput(
-                    workspace: firstRecentWorkspace,
-                    formerIndex: 2,
-                    launchConfigurationsBySessionID: [:],
-                    titlesBySessionID: [:],
-                    transcriptsBySessionID: [:],
-                ),
-            ],
-            sessions: TerminalSessionRegistry(
-                workspaces: [],
-                defaultLaunchConfiguration: launchConfiguration,
-            ),
+            limit: WorkspacePersistenceDefaults.maxRecentlyClosedWorkspaceCount,
         )
-        persistence.saveSceneState(
-            for: secondSceneIdentity,
-            liveWorkspaces: [],
-            recentlyClosedWorkspaces: [
-                RecentlyClosedWorkspaceStateInput(
-                    workspace: secondRecentWorkspace,
-                    formerIndex: 5,
-                    launchConfigurationsBySessionID: [:],
-                    titlesBySessionID: [:],
-                    transcriptsBySessionID: [:],
-                ),
-            ],
-            sessions: TerminalSessionRegistry(
-                workspaces: [],
-                defaultLaunchConfiguration: launchConfiguration,
+        persistence.recordWorkspaceInRecentHistory(
+            WindowWorkspaceHistoryInput(
+                workspace: secondRecentWorkspace,
+                formerIndex: 5,
+                launchConfigurationsBySessionID: [:],
+                titlesBySessionID: [:],
+                transcriptsBySessionID: [:],
             ),
+            for: secondSceneIdentity,
+            limit: WorkspacePersistenceDefaults.maxRecentlyClosedWorkspaceCount,
         )
 
-        let restoredFirstSceneRecentWorkspaces = persistence.loadRecentlyClosedWorkspaces(for: firstSceneIdentity)
-        let restoredSecondSceneRecentWorkspaces = persistence.loadRecentlyClosedWorkspaces(for: secondSceneIdentity)
+        let restoredFirstSceneRecentWorkspaces = persistence.loadRecentWorkspaceHistory(for: firstSceneIdentity)
+        let restoredSecondSceneRecentWorkspaces = persistence.loadRecentWorkspaceHistory(for: secondSceneIdentity)
 
         #expect(restoredFirstSceneRecentWorkspaces.map(\.revision.title) == ["Closed in Window A"])
         #expect(restoredSecondSceneRecentWorkspaces.map(\.revision.title) == ["Closed in Window B"])
         #expect(restoredFirstSceneRecentWorkspaces.first?.formerIndex == 2)
         #expect(restoredSecondSceneRecentWorkspaces.first?.formerIndex == 5)
+    }
+
+    @MainActor
+    @Test func `recording window recent workspace stores membership history instead of creating a recent placement`() throws {
+        let sceneIdentity = WorkspaceSceneIdentity()
+        let recentWorkspace = TestSupport.makeWorkspace(title: "Closed Workspace")
+        let persistence = WorkspacePersistenceController.inMemoryForTesting()
+
+        persistence.recordWorkspaceInRecentHistory(
+            WindowWorkspaceHistoryInput(
+                workspace: recentWorkspace,
+                formerIndex: 3,
+                launchConfigurationsBySessionID: [:],
+                titlesBySessionID: [:],
+                transcriptsBySessionID: [:],
+            ),
+            for: sceneIdentity,
+            limit: WorkspacePersistenceDefaults.maxRecentlyClosedWorkspaceCount,
+        )
+
+        let context = persistence.container.viewContext
+        let workspaceID = recentWorkspace.id.rawValue
+        let windowID = sceneIdentity.windowID
+        let fetchedWorkspaceEntity = try fetchWorkspaceEntity(id: workspaceID, in: context)
+        let workspaceEntity = try #require(fetchedWorkspaceEntity)
+        let recentMemberships = try fetchWindowWorkspaceMemberships(windowID: windowID, in: context)
+        let recentPlacements = try fetchWindowRecentPlacements(windowID: windowID, in: context)
+
+        #expect(workspaceEntity.recentWindowID == nil)
+        #expect(workspaceEntity.recentSortOrder == 0)
+        #expect(recentMemberships.map(\.workspaceID) == [workspaceID])
+        #expect(recentMemberships.first?.sortOrder == 3)
+        #expect(recentPlacements.isEmpty)
+    }
+
+    @MainActor
+    @Test func `loading window recent workspaces migrates legacy recent placements onto workspace memberships`() throws {
+        let sceneIdentity = WorkspaceSceneIdentity()
+        let recentWorkspace = TestSupport.makeWorkspace(title: "Legacy Closed Workspace")
+        let persistence = WorkspacePersistenceController.inMemoryForTesting()
+        let sessions = TerminalSessionRegistry(
+            workspaces: [recentWorkspace],
+            defaultLaunchConfiguration: .loginShell,
+        )
+        let context = persistence.container.viewContext
+        let workspaceID = recentWorkspace.id.rawValue
+        let workspaceTitle = recentWorkspace.title
+        let workspacePaneCount = Int64(recentWorkspace.root?.leaves().count ?? 0)
+        let windowID = sceneIdentity.windowID
+
+        persistence.saveSceneState(
+            for: sceneIdentity,
+            liveWorkspaces: [recentWorkspace],
+            selectedWorkspaceID: recentWorkspace.id,
+            sessions: sessions,
+        )
+
+        try context.performAndWait {
+            let fetchedWorkspaceEntity = try fetchWorkspaceEntity(id: workspaceID, in: context)
+            let workspaceEntity = try #require(fetchedWorkspaceEntity)
+            let fetchedLivePlacement = try fetchLiveWorkspacePlacement(id: workspaceID, windowID: windowID, in: context)
+            let livePlacement = try #require(fetchedLivePlacement)
+            context.delete(livePlacement)
+
+            let placement = WorkspacePlacementEntity(context: context)
+            placement.id = workspaceID
+            placement.role = WorkspacePersistenceLegacy.recentPlacementRoleRawValue
+            placement.windowID = windowID
+            placement.sortOrder = 0
+            placement.restoreSortOrder = 4
+            placement.createdAt = Date()
+            placement.updatedAt = Date()
+            placement.lastOpenedAt = nil
+            placement.isPinned = false
+            placement.title = workspaceTitle
+            placement.previewText = nil
+            placement.searchText = nil
+            placement.paneCount = workspacePaneCount
+            placement.workspace = workspaceEntity
+
+            try context.save()
+        }
+
+        let restoredRecentWorkspaces = persistence.loadRecentWorkspaceHistory(for: sceneIdentity)
+        let fetchedMigratedWorkspaceEntity = try fetchWorkspaceEntity(id: workspaceID, in: context)
+        let migratedWorkspaceEntity = try #require(fetchedMigratedWorkspaceEntity)
+        let recentMemberships = try fetchWindowWorkspaceMemberships(windowID: windowID, in: context)
+        let remainingRecentPlacements = try fetchWindowRecentPlacements(windowID: windowID, in: context)
+
+        #expect(restoredRecentWorkspaces.map(\.revision.title) == ["Legacy Closed Workspace"])
+        #expect(restoredRecentWorkspaces.first?.formerIndex == 4)
+        #expect(migratedWorkspaceEntity.recentWindowID == nil)
+        #expect(migratedWorkspaceEntity.recentSortOrder == 0)
+        #expect(recentMemberships.map(\.workspaceID) == [workspaceID])
+        #expect(recentMemberships.first?.sortOrder == 4)
+        #expect(remainingRecentPlacements.isEmpty)
     }
 }
 
@@ -550,40 +724,78 @@ private func nodeSignature(from node: PaneNode) -> PaneNodeSignature {
     }
 }
 
-@MainActor
 private func fetchSavedWorkspacePlacement(
-    id: SavedWorkspaceID,
+    id: UUID,
     in context: NSManagedObjectContext,
 ) throws -> WorkspacePlacementEntity? {
     let request = NSFetchRequest<WorkspacePlacementEntity>(entityName: "WorkspacePlacementEntity")
     request.fetchLimit = 1
     request.predicate = NSCompoundPredicate(
         andPredicateWithSubpredicates: [
-            NSPredicate(format: "id == %@", id.rawValue as CVarArg),
+            NSPredicate(format: "id == %@", id as CVarArg),
             NSPredicate(format: "role == %@", WorkspacePlacementRole.library.rawValue),
         ],
     )
     return try context.fetch(request).first
 }
 
-@MainActor
 private func fetchPaneSessionPayloadEntity(
-    id: TerminalSessionID,
+    id: UUID,
     in context: NSManagedObjectContext,
 ) throws -> PaneSessionSnapshotEntity? {
     let request = NSFetchRequest<PaneSessionSnapshotEntity>(entityName: "PaneSessionSnapshotEntity")
     request.fetchLimit = 1
-    request.predicate = NSPredicate(format: "id == %@", id.rawValue as CVarArg)
+    request.predicate = NSPredicate(format: "id == %@", id as CVarArg)
     return try context.fetch(request).first
 }
 
-@MainActor
+private func fetchLiveWorkspacePlacement(
+    id: UUID,
+    windowID: UUID,
+    in context: NSManagedObjectContext,
+) throws -> WorkspacePlacementEntity? {
+    let request = NSFetchRequest<WorkspacePlacementEntity>(entityName: "WorkspacePlacementEntity")
+    request.fetchLimit = 1
+    request.predicate = NSCompoundPredicate(
+        andPredicateWithSubpredicates: [
+            NSPredicate(format: "id == %@", id as CVarArg),
+            NSPredicate(format: "role == %@", WorkspacePlacementRole.live.rawValue),
+            NSPredicate(format: "windowID == %@", windowID as CVarArg),
+        ],
+    )
+    return try context.fetch(request).first
+}
+
 private func fetchWorkspaceEntity(
-    id: WorkspaceID,
+    id: UUID,
     in context: NSManagedObjectContext,
 ) throws -> WorkspaceEntity? {
     let request = NSFetchRequest<WorkspaceEntity>(entityName: "WorkspaceEntity")
     request.fetchLimit = 1
-    request.predicate = NSPredicate(format: "id == %@", id.rawValue as CVarArg)
+    request.predicate = NSPredicate(format: "id == %@", id as CVarArg)
     return try context.fetch(request).first
+}
+
+private func fetchWindowRecentPlacements(
+    windowID: UUID,
+    in context: NSManagedObjectContext,
+) throws -> [WorkspacePlacementEntity] {
+    let request = NSFetchRequest<WorkspacePlacementEntity>(entityName: "WorkspacePlacementEntity")
+    request.predicate = NSCompoundPredicate(
+        andPredicateWithSubpredicates: [
+            NSPredicate(format: "role == %@", WorkspacePersistenceLegacy.recentPlacementRoleRawValue),
+            NSPredicate(format: "windowID == %@", windowID as CVarArg),
+        ],
+    )
+    return try context.fetch(request)
+}
+
+private func fetchWindowWorkspaceMemberships(
+    windowID: UUID,
+    in context: NSManagedObjectContext,
+) throws -> [WindowWorkspaceMembershipEntity] {
+    let request = NSFetchRequest<WindowWorkspaceMembershipEntity>(entityName: "WindowWorkspaceMembershipEntity")
+    request.predicate = NSPredicate(format: "windowID == %@", windowID as CVarArg)
+    request.sortDescriptors = [NSSortDescriptor(key: #keyPath(WindowWorkspaceMembershipEntity.sortOrder), ascending: true)]
+    return try context.fetch(request)
 }

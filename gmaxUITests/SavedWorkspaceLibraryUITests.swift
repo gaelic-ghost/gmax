@@ -160,14 +160,14 @@ final class SavedWorkspaceLibraryUITests: GmaxUITestCase {
         savedWorkspaceLibraryDeleteButton(in: app).click()
 
         XCTAssertTrue(
-            app.staticTexts["savedWorkspaceLibrary.emptyState"].waitForExistence(timeout: 5),
-            "The saved-workspace library should return to its empty state after deleting the only saved workspace.",
-        )
-        XCTAssertTrue(
             waitForNonExistence(timeout: 2) {
                 self.savedWorkspaceLibraryRow(titled: "Workspace 2", in: app)
             },
             "The deleted saved workspace should no longer appear in the library list.",
+        )
+        XCTAssertFalse(
+            savedWorkspaceLibraryDeleteButton(in: app).isEnabled,
+            "The delete action should disable itself once there is no saved workspace selection left in the library.",
         )
     }
 

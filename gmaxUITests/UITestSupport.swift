@@ -168,6 +168,20 @@ class GmaxUITestCase: XCTestCase {
         return app.buttons["Delete"]
     }
 
+    func savedWorkspaceLibraryEmptyState(in app: XCUIApplication) -> XCUIElement {
+        let identifiedElement = app.descendants(matching: .any)["savedWorkspaceLibrary.emptyState"]
+        if identifiedElement.exists {
+            return identifiedElement
+        }
+
+        let titledElement = app.staticTexts["No Saved Workspaces"]
+        if titledElement.exists {
+            return titledElement
+        }
+
+        return identifiedElement
+    }
+
     func sidebarDeleteWorkspaceCancelButton(in app: XCUIApplication) -> XCUIElement {
         app.buttons["sidebar.deleteWorkspaceCancelButton"]
     }

@@ -66,7 +66,7 @@ The good news:
 
 The bigger problems are not "the whole model is wrong." The bigger problems are:
 
-- one overloaded close command slot now carries too much context-sensitive behavior
+- the adaptive `Command-W` slot still carries a lot of context-sensitive behavior
 - naming drift still leaks shell-era vocabulary into live implementation and tests
 - the command surface mixes scene-owned closures and direct store mutation in a way that is coherent but not yet explicit enough
 - test coverage around command and focus behavior is thin compared with the importance of this surface
@@ -117,7 +117,7 @@ the store's responsibilities here.
 
 ## Findings
 
-## 1. The current `Command-W` slot is doing too many jobs
+## 1. The current adaptive `Command-W` slot is still doing too many jobs
 
 Severity: high
 
@@ -132,6 +132,7 @@ Current behavior:
 - if the active focus target is a pane, `Command-W` becomes `Close Pane`
 - else the scene resolves close behavior from the active focus target plus the selected workspace state
 - window close remains the final scene-owned fallback when no narrower close target applies
+- a separate explicit `Close Window` command and `Undo Close Window` command now exist alongside that adaptive slot
 
 Why this was called out:
 
@@ -153,6 +154,8 @@ Recorded decision:
 - if focus is in the sidebar and a workspace listing is focused, `Command-W` closes that workspace
 - if focus is on the only workspace in a window and that workspace has no panes, `Command-W` closes the window
 - if focus is in the inspector, `Command-W` does nothing
+- `Close Window` remains available as a dedicated explicit action with its own shortcut
+- `Undo Close Window` reopens the most recently closed `WorkspaceSceneIdentity` with `openWindow(value:)`
 
 Implementation follow-through:
 
@@ -199,6 +202,7 @@ Recommendation:
 - document this boundary as intentional:
   - store owns workspace graph and mutations
   - scene owns presentation and per-window UI state
+  - scene-owned window restoration state owns the recently closed window identity stack
 - if a redesign happens later, preserve that distinction unless there is a strong reason to collapse it
 
 ## 3. The focused-value key registry and command implementation are coupled more tightly than they need to be
