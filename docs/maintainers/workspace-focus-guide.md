@@ -52,6 +52,14 @@ What remains is not another architecture reset. The remaining work is product
 verification, accessibility follow-through, naming cleanup, and stronger
 multi-window command coverage.
 
+The current shipped shape is:
+
+- pane leaves participate in scene focus with `.focusable(interactions: .edit)`
+- `WorkspaceWindowSceneView` is the single runtime owner of pane focus
+- pane split, close, and navigation commands are derived at the scene root
+- pane close restores the latest surviving focused pane from scene-local
+  history
+
 ## Research Workflow
 
 Before relying on any rule in this note:
@@ -117,8 +125,7 @@ These are not open planning questions anymore:
 - the workspace window owns a scene-local focus namespace
 - the scene owns window-local selection, sidebar and inspector visibility, and
   modal presentation state
-- pane containers own pane identity, pane-local command publication, and visual
-  focus treatment
+- pane containers own pane identity and visual focus treatment
 - the sidebar stays native and list-driven
 - the inspector is a real focus region, but pane-oriented commands disable when
   focus leaves content and moves there
@@ -162,11 +169,15 @@ into SwiftTerm through a custom bridge.
 Pane containers own:
 
 - pane focus identity
-- pane-local command exports such as close, split, and navigation actions
 - visual focus treatment for the active pane
+- terminal hosting and pane-local accessibility surfaces
 
 Pane identity is a workspace-window concern. It is not stored as live runtime
 state on the workspace model.
+
+Pane command behavior is still pane-targeted, but the command closures are now
+published from the scene root based on the active pane focus target rather than
+from each pane leaf through separate `focusedValue` writes.
 
 ### SwiftTerm responsibilities
 
@@ -223,10 +234,11 @@ Good examples in `gmax`:
 Use `focusedValue` or `focusedObject` when the command should only be available
 while a specific view or its descendants are focused.
 
-Good examples in `gmax`:
-
-- split the focused pane
-- close the focused pane
+In `gmax`, this is still the right tool for genuinely subtree-local context.
+But after the pane-focus cleanup, pane split, close, and directional navigation
+are no longer exported from each `ContentPaneLeafView`. Those command closures
+are now scene-owned and derived from `focusedTarget` at the scene root so the
+window has a single writer for pane command context.
 
 If the pane is not the focused part of the scene, the command should normally
 disable rather than guessing a target through an app-global backchannel.
@@ -335,6 +347,9 @@ Scene-wide publication from `WorkspaceWindowSceneView`:
 - `.focusedSceneValue(\.openSavedWorkspaceLibrary, openSavedWorkspaceLibrary)`
 - `.focusedSceneValue(\.presentWorkspaceRename, presentWorkspaceRename)`
 - `.focusedSceneValue(\.presentWorkspaceDeletion, presentWorkspaceDeletion)`
+- `.focusedSceneValue(\.moveFocusedPaneFocus, moveFocusedPaneFocusAction)`
+- `.focusedSceneValue(\.splitFocusedPane, splitFocusedPaneAction)`
+- `.focusedSceneValue(\.closeFocusedPane, closeFocusedPaneAction)`
 
 Those values represent scene-scoped state and scene-scoped actions:
 
@@ -343,24 +358,25 @@ Those values represent scene-scoped state and scene-scoped actions:
 - how to dismiss the frontmost scene-owned modal in this window
 - how to open the saved workspace sheet in this window
 - how to present rename and deletion flows in this window
+- how to move, split, or close the currently focused pane in this window
 - the store that backs this window
 
-Focused-subtree publication from content views:
+Focused-subtree publication from content views is now minimal:
 
-- `ContentPaneLeafView` publishes `.focusedValue(\.moveFocusedPaneFocus,
-  onMovePaneFocus)`
-- `ContentPaneLeafView` publishes `.focusedValue(\.splitFocusedPane,
-  splitFocusedPane)`
-- `ContentPaneLeafView` publishes `.focusedValue(\.closeFocusedPane, onClose)`
+- `ContentPaneLeafView` participates in scene focus with `.focusable` and
+  `.focused(...)`
+- pane leaves publish pane geometry upward through `PreferenceKey`
+- pane leaves no longer publish split, close, or navigation closures through
+  `focusedValue`
 
-That creates a layered command context:
+That creates a simpler command context:
 
-- scene-wide workspace selection and presentation actions come from the scene
-  root
-- pane-specific navigation, split, and close behavior comes from the focused
-  pane
-- scene commands derive empty-workspace close behavior from the active focus
-  target plus selected workspace state
+- scene-wide workspace selection, pane actions, and presentation actions come
+  from the scene root
+- pane leaves participate in the focus system, but they are not additional
+  command-context writers
+- scene commands derive empty-workspace and pane close behavior from the active
+  focus target plus selected workspace state
 
 ### Current `FocusedValues` surface
 
@@ -446,10 +462,11 @@ Sheet dismissal:
 
 Pane close:
 
-- when a pane leaf is focused, `ContentPaneLeafView` publishes
+- when the active focus target is a pane, the scene root publishes
   `closeFocusedPane`
-- when the command layer sees that focused value, `Command-W` becomes
-  `Close Pane`
+- `Command-W` becomes `Close Pane`
+- after pane removal, the scene restores pane focus from the latest surviving
+  entry in `paneFocusHistory`
 
 Empty workspace close or window close:
 
@@ -507,8 +524,8 @@ The current implementation is strongest in these areas:
   state
 - menu commands are attached at the scene boundary rather than routed through a
   custom global command system
-- pane-specific command behavior uses focused values instead of hidden global
-  selection guesses
+- pane-specific command behavior is derived from the scene-owned focus target
+  instead of hidden global selection guesses or per-pane command writers
 - child-to-container layout signaling uses `PreferenceKey` for geometry rather
   than command routing
 - settings are isolated in a separate scene instead of being folded into the

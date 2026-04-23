@@ -60,7 +60,7 @@ The good news:
 
 - scene commands live on the scene
 - scene-wide context is published with `focusedSceneObject` and `focusedSceneValue`
-- pane-specific context is published with `focusedValue`
+- pane-specific command behavior is derived from the scene-owned focus target
 - pane geometry uses `PreferenceKey` as a real child-to-container signal instead of a command backchannel
 - ordinary window content is still mostly driven by straightforward parent-child state ownership rather than a custom routing layer
 
@@ -97,12 +97,12 @@ The current architecture uses:
 
 - `focusedSceneObject(workspaceStore)`
 - `focusedSceneValue` for scene-wide command context
-- `focusedValue` for the focused pane close action
+- scene-owned pane action closures derived from the focused pane target
 
 That matches Apple's intended distinction between:
 
 - scene-wide active window context
-- focused-subtree context
+- focused-subtree participation
 
 This is one of the healthiest parts of the current architecture.
 
@@ -178,14 +178,15 @@ Direct store examples:
 - create workspace
 - duplicate workspace
 - close workspace
-- move pane focus
-- split pane
 
 Scene-owned closure examples:
 
 - open saved workspace library
 - present rename flow
 - present deletion flow
+- move pane focus
+- split pane
+- close pane
 
 Why this is a gap:
 
