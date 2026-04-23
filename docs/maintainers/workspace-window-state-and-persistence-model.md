@@ -813,7 +813,7 @@ Preferred new value surfaces:
   - `.workspace`
   - `.window`
 - `LibraryItemListing`
-- workspace-specific compatibility wrappers only where the current UI still
+- workspace-specific save and reopen actions only where the current UI still
   needs them
 
 Implementation phases:
@@ -822,9 +822,8 @@ Implementation phases:
    without changing visible behavior yet
 2. migrate existing `.library` placement-backed saved workspace rows into
    explicit workspace-kind library items
-3. move `saveWorkspaceToLibrary`, `listSavedWorkspaces`,
-   `loadSavedWorkspace`, `deleteSavedWorkspace`, and
-   `markSavedWorkspaceOpened` onto library-item-backed queries
+3. move library save, load, delete, and last-opened metadata updates onto
+   library-item-backed queries
 4. keep the current saved-workspace sheet workspace-only for now, but make the
    persistence and listing APIs read like the combined library they are growing
    toward
@@ -849,12 +848,12 @@ Current progress:
 
 - `LibraryItemEntity`, `LibraryItemKind`, and `LibraryItemListing` are now the
   active library surfaces
-- saved-workspace persistence methods are compatibility wrappers over that
-  shared library model
 - the current library sheet still renders only workspace rows, but it now reads
   from the shared library listing, filters workspace rows locally, and acts on
   shared library item IDs instead of depending on a saved-workspace-specific
   listing type all the way through the UI
+- the old `SavedWorkspaceListing` compatibility type and its wrapper methods are
+  gone from the active model surface
 
 ### Slice 5. Add saved windows to the library
 

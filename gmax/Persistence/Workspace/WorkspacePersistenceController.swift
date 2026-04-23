@@ -558,44 +558,14 @@ final class WorkspacePersistenceController {
         transcriptsBySessionID: [TerminalSessionID: String] = [:],
         notes: String? = nil,
         isPinned: Bool? = nil,
-    ) -> SavedWorkspaceListing? {
+    ) -> LibraryItemListing? {
         upsertWorkspaceLibraryItem(
             from: workspace,
             sessions: sessions,
             transcriptsBySessionID: transcriptsBySessionID,
             notes: notes,
             isPinned: isPinned,
-        ).flatMap(SavedWorkspaceListing.init(libraryItem:))
-    }
-
-    func listSavedWorkspaces(matching query: String? = nil) -> [SavedWorkspaceListing] {
-        listLibraryItems(matching: query).compactMap(SavedWorkspaceListing.init(libraryItem:))
-    }
-
-    func loadSavedWorkspace(id: WorkspaceID) -> WorkspaceRevision? {
-        let context = container.viewContext
-        return context.performAndWait {
-            do {
-                try Self.migrateLegacyLibraryItems(in: context)
-                guard let libraryItem = try Self.loadLibraryItem(
-                    kind: .workspace,
-                    workspaceID: id.rawValue,
-                    in: context,
-                ) else {
-                    Logger.persistence.error("The saved-workspace library could not find the requested workspace during reopen. The entry may have been deleted, still be live in another window, or the library selection may be stale. Workspace ID: \(id.rawValue.uuidString, privacy: .public)")
-                    return nil
-                }
-
-                return try Self.workspaceRevision(
-                    for: Self.loadWorkspaceEntity(id: id.rawValue, in: context),
-                    lastOpenedAt: libraryItem.lastOpenedAt,
-                    isPinned: libraryItem.isPinned,
-                )
-            } catch {
-                Logger.persistence.error("Core Data failed while reading a saved workspace from the library. The live session remains available, but the requested workspace could not be loaded. Workspace ID: \(id.rawValue.uuidString, privacy: .public). Error: \(String(describing: error), privacy: .public)")
-                return nil
-            }
-        }
+        )
     }
 
     func loadWorkspaceLibraryItem(id: UUID) -> WorkspaceRevision? {
@@ -660,31 +630,6 @@ final class WorkspacePersistenceController {
         }
     }
 
-    @discardableResult
-    func deleteSavedWorkspace(id: WorkspaceID) -> Bool {
-        let context = container.viewContext
-        let libraryItemID = context.performAndWait {
-            do {
-                try Self.migrateLegacyLibraryItems(in: context)
-                return try Self.loadLibraryItem(
-                    kind: .workspace,
-                    workspaceID: id.rawValue,
-                    in: context,
-                )?.id
-            } catch {
-                Logger.persistence.error("Core Data failed to delete a saved workspace from the library. The entry remains available. Workspace ID: \(id.rawValue.uuidString, privacy: .public). Error: \(String(describing: error), privacy: .public)")
-                context.rollback()
-                return nil
-            }
-        }
-        guard let libraryItemID else {
-            Logger.persistence.error("The saved-workspace library could not find the workspace entry requested for deletion. The library may already be up to date, or the selection may have gone stale. Workspace ID: \(id.rawValue.uuidString, privacy: .public)")
-            return false
-        }
-
-        return deleteLibraryItem(id: libraryItemID)
-    }
-
     func markLibraryItemOpened(_ id: UUID) {
         let context = container.viewContext
         context.performAndWait {
@@ -705,29 +650,6 @@ final class WorkspacePersistenceController {
                 context.rollback()
             }
         }
-    }
-
-    func markSavedWorkspaceOpened(_ id: WorkspaceID) {
-        let context = container.viewContext
-        let libraryItemID = context.performAndWait {
-            do {
-                try Self.migrateLegacyLibraryItems(in: context)
-                return try Self.loadLibraryItem(
-                    kind: .workspace,
-                    workspaceID: id.rawValue,
-                    in: context,
-                )?.id
-            } catch {
-                Logger.persistence.error("Core Data failed to update the recency metadata for a saved workspace. The entry remains usable, but its last-opened date is stale. Workspace ID: \(id.rawValue.uuidString, privacy: .public). Error: \(String(describing: error), privacy: .public)")
-                context.rollback()
-                return nil
-            }
-        }
-        guard let libraryItemID else {
-            return
-        }
-
-        markLibraryItemOpened(libraryItemID)
     }
 }
 
@@ -1039,10 +961,6 @@ extension WorkspacePersistenceController {
             paneCount: Int(libraryItem.paneCount),
             workspaceCount: Int(libraryItem.workspaceCount),
         )
-    }
-
-    private nonisolated static func makeSavedWorkspaceListing(from libraryItem: LibraryItemEntity) -> SavedWorkspaceListing? {
-        makeLibraryItemListing(from: libraryItem).flatMap(SavedWorkspaceListing.init(libraryItem:))
     }
 
     private nonisolated static func makeSearchText(

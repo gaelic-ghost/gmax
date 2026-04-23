@@ -18,11 +18,18 @@ struct SavedWorkspaceLibrarySheet: View {
 
     var body: some View {
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let liveWorkspaceIDs = Set(model.workspaces.map(\.id))
         let workspaceLibraryItems = {
             _ = libraryRefreshToken
             return model
                 .listLibraryItems(matching: query.isEmpty ? nil : query)
-                .filter { $0.kind == .workspace && $0.workspaceID != nil }
+                .filter { libraryItem in
+                    guard libraryItem.kind == .workspace, let workspaceID = libraryItem.workspaceID else {
+                        return false
+                    }
+
+                    return !liveWorkspaceIDs.contains(workspaceID)
+                }
         }()
         let normalizeSelection = {
             if !workspaceLibraryItems.contains(where: { $0.id == selectedLibraryItemID }) {
