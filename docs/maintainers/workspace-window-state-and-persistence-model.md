@@ -389,8 +389,15 @@ Preferred enum:
 ```swift
 enum WorkspacePlacementRole: String, Codable, Hashable {
     case live
-    case windowRecent = "recent"
     case library
+}
+```
+
+Legacy compatibility:
+
+```swift
+enum WorkspacePersistenceLegacy {
+    static let recentPlacementRoleRawValue = "recent"
 }
 ```
 
@@ -713,6 +720,13 @@ Likely work:
 - migrate current library references onto the durable workspace identity
 - update save/open/delete codepaths to operate on that identity
 
+Status:
+
+- complete
+- live and library now operate on one durable `WorkspaceID`
+- active placement roles are now just `.live` and `.library`
+- legacy `"recent"` placement rows remain migration-only compatibility data
+
 ### Slice 2. Introduce durable window records
 
 Goals:
@@ -864,6 +878,9 @@ WorkspaceEntity
 - title: String
 - createdAt: Date
 - updatedAt: Date
+- lastActiveAt: Date
+- recentWindowID: UUID?
+- recentSortOrder: Int64
 - notes: String?
 - previewText: String?
 - searchText: String?
@@ -877,11 +894,13 @@ This entity should own:
 - per-pane launch configuration snapshots
 - transcript and preview metadata
 - searchable text derived from the workspace contents
+- current durable recent-history metadata for one window while Slice 3 is still
+  in transition
 
 This entity should not own:
 
 - which window currently shows it
-- whether it is live, recent, or in the library
+- whether it is currently live or in the library
 - ordering in a sidebar or recent list
 - whether it is the current saved revision for a library entry
 
@@ -911,22 +930,23 @@ WorkspacePlacementEntity
 - workspace: WorkspaceEntity
 ```
 
-The `role` field is the thing that wants enum semantics:
+The active `role` field is the thing that wants enum semantics:
 
 ```swift
 enum WorkspacePlacementRole: String {
     case live
-    case windowRecent = "recent"
     case library
 }
 ```
+
+Older stores may still contain the legacy raw value `"recent"` for lazy
+migration into workspace-owned recency metadata, but that is no longer part of
+the active placement enum.
 
 Interpretation:
 
 - `.live`
   - this workspace is part of one specific window's current sidebar working set
-- `.windowRecent`
-  - this workspace is part of one specific window's recent-close stack
 - `.library`
   - this placement is the stable saved library entry and points at that entry's
     current saved payload revision
@@ -934,14 +954,13 @@ Interpretation:
 `windowID` rules:
 
 - required for `.live`
-- required for `.windowRecent`
 - `nil` for `.library`
 
 This separation lets one workspace payload be referenced by:
 
 - one stable library placement as the current saved payload for a library entry
 - zero or more live placements
-- zero or more window-recent placements
+- plus optional workspace-owned recent-window metadata on the payload itself
 
 without changing the payload itself.
 

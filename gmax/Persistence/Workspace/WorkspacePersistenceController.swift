@@ -626,7 +626,7 @@ extension WorkspacePersistenceController {
         switch role {
             case .library:
                 request.predicate = NSPredicate(format: "role == %@", role.rawValue)
-            case .live, .windowRecent:
+            case .live:
                 request.predicate = NSCompoundPredicate(
                     andPredicateWithSubpredicates: [
                         NSPredicate(format: "role == %@", role.rawValue),
@@ -906,7 +906,7 @@ extension WorkspacePersistenceController {
                     return false
                 }
 
-                return role == .live || role == .windowRecent || role == .library
+                return role == .live || role == .library
             }
             guard !hasLiveReference, !hasWindowRecentAssociation else {
                 continue
@@ -936,7 +936,7 @@ extension WorkspacePersistenceController {
         let request = NSFetchRequest<WorkspacePlacementEntity>(entityName: "WorkspacePlacementEntity")
         request.predicate = NSCompoundPredicate(
             andPredicateWithSubpredicates: [
-                NSPredicate(format: "role == %@", WorkspacePlacementRole.windowRecent.rawValue),
+                NSPredicate(format: "role == %@", WorkspacePersistenceLegacy.recentPlacementRoleRawValue),
                 NSPredicate(format: "windowID == %@", sceneIdentity.windowID as CVarArg),
             ],
         )

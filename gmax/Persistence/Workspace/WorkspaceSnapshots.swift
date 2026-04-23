@@ -6,8 +6,11 @@ struct WorkspaceSceneIdentity: Codable, Hashable {
 
 enum WorkspacePlacementRole: String, Codable, Hashable {
     case live
-    case windowRecent = "recent"
     case library
+}
+
+enum WorkspacePersistenceLegacy {
+    nonisolated static let recentPlacementRoleRawValue = "recent"
 }
 
 struct WorkspaceSessionSnapshot: Hashable, Codable, Identifiable {

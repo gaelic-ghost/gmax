@@ -612,7 +612,7 @@ struct WorkspacePersistenceTests {
 
             let placement = WorkspacePlacementEntity(context: context)
             placement.id = workspaceID
-            placement.role = WorkspacePlacementRole.windowRecent.rawValue
+            placement.role = WorkspacePersistenceLegacy.recentPlacementRoleRawValue
             placement.windowID = windowID
             placement.sortOrder = 0
             placement.restoreSortOrder = 4
@@ -721,7 +721,7 @@ private func fetchWindowRecentPlacements(
     let request = NSFetchRequest<WorkspacePlacementEntity>(entityName: "WorkspacePlacementEntity")
     request.predicate = NSCompoundPredicate(
         andPredicateWithSubpredicates: [
-            NSPredicate(format: "role == %@", WorkspacePlacementRole.windowRecent.rawValue),
+            NSPredicate(format: "role == %@", WorkspacePersistenceLegacy.recentPlacementRoleRawValue),
             NSPredicate(format: "windowID == %@", windowID as CVarArg),
         ],
     )
