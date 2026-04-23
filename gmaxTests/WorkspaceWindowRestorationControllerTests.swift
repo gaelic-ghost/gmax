@@ -1,12 +1,12 @@
 import Foundation
-import Testing
 @testable import gmax
+import Testing
 
 @MainActor
 struct WorkspaceWindowRestorationControllerTests {
-    @Test func `launch restore prefers the stored last session window identities`() {
+    @Test func `launch restore prefers the stored last session window identities`() throws {
         let userDefaultsSuiteName = "WorkspaceWindowRestorationControllerTests.launch-restore"
-        let userDefaults = UserDefaults(suiteName: userDefaultsSuiteName)!
+        let userDefaults = try #require(UserDefaults(suiteName: userDefaultsSuiteName))
         userDefaults.removePersistentDomain(forName: userDefaultsSuiteName)
         let persistence = WorkspacePersistenceController.inMemoryForTesting()
         let first = WorkspaceSceneIdentity()

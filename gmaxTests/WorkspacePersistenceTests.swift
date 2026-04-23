@@ -49,7 +49,7 @@ struct WorkspacePersistenceTests {
         #expect(restoredWindowState.selectedWorkspaceID == secondWorkspace.id)
     }
 
-    @Test func `persistSceneStateNow creates an open durable window record`() throws {
+    @Test func `persistSceneStateNow creates an open durable window record`() {
         let persistence = WorkspacePersistenceController.inMemoryForTesting()
         let sceneIdentity = WorkspaceSceneIdentity()
         let workspace = TestSupport.makeWorkspace(title: "Workspace 1")
@@ -66,7 +66,7 @@ struct WorkspacePersistenceTests {
         #expect(persistence.loadLiveSceneIdentities() == [sceneIdentity])
     }
 
-    @Test func `markWindowClosed moves a persisted window into recently closed history`() throws {
+    @Test func `markWindowClosed moves a persisted window into recently closed history`() {
         let persistence = WorkspacePersistenceController.inMemoryForTesting()
         let sceneIdentity = WorkspaceSceneIdentity()
         let workspace = TestSupport.makeWorkspace(title: "Workspace 1")
@@ -342,6 +342,26 @@ struct WorkspacePersistenceTests {
         #expect(model.workspaces.count == 1)
         #expect(model.listSavedWorkspaces().isEmpty)
         #expect(nodeSignature(from: reopenedRoot) == expectedSignature)
+    }
+
+    @Test func `deleting a saved workspace removes it from the library listing`() throws {
+        let workspace = TestSupport.makeWorkspace(title: "Workspace 1")
+        let persistence = WorkspacePersistenceController.inMemoryForTesting()
+        let siblingWorkspace = TestSupport.makeWorkspace(title: "Workspace 2")
+        let model = WorkspaceStore(
+            workspaces: [workspace, siblingWorkspace],
+            persistence: persistence,
+            launchContextBuilder: TestSupport.makeLaunchContextBuilder(defaultCurrentDirectory: "/tmp/gmax-tests"),
+        )
+
+        let savedWorkspace = try #require(model.saveWorkspaceToLibrary(workspace.id))
+        #expect(model.listSavedWorkspaces().isEmpty)
+        #expect(persistence.listSavedWorkspaces().map(\.id) == [savedWorkspace.id])
+
+        model.deleteSavedWorkspace(savedWorkspace.id)
+
+        #expect(model.listSavedWorkspaces().isEmpty)
+        #expect(persistence.listSavedWorkspaces().isEmpty)
     }
 
     @Test func `open saved workspace returns nil when saved workspace pane tree is corrupted`() throws {

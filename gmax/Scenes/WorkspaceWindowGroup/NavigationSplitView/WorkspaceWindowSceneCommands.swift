@@ -17,7 +17,6 @@ extension FocusedValues {
 struct WorkspaceWindowSceneCommands: Commands {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openWindow) private var openWindow
-    @ObservedObject private var windowRestoration: WorkspaceWindowRestorationController
     @FocusedObject private var workspaceStore: WorkspaceStore?
     @FocusedValue(\.activeWorkspaceFocusTarget) private var activeWorkspaceFocusTarget
     @FocusedValue(\.activeWorkspaceSceneIdentity) private var activeWorkspaceSceneIdentity
@@ -29,10 +28,7 @@ struct WorkspaceWindowSceneCommands: Commands {
     @FocusedValue(\.moveFocusedPaneFocus) private var moveFocusedPaneFocus
     @FocusedValue(\.splitFocusedPane) private var splitFocusedPane
     @FocusedValue(\.closeFocusedPane) private var closeFocusedPane
-
-    init(windowRestoration: WorkspaceWindowRestorationController) {
-        self._windowRestoration = ObservedObject(wrappedValue: windowRestoration)
-    }
+    @ObservedObject private var windowRestoration: WorkspaceWindowRestorationController
 
     var body: some Commands {
         let workspaces = workspaceStore?.workspaces ?? []
@@ -310,5 +306,9 @@ struct WorkspaceWindowSceneCommands: Commands {
                 .disabled(!canSplitFocusedPane)
             }
         }
+    }
+
+    init(windowRestoration: WorkspaceWindowRestorationController) {
+        _windowRestoration = ObservedObject(wrappedValue: windowRestoration)
     }
 }

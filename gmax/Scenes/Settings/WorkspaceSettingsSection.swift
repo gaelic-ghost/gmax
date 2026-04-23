@@ -31,7 +31,7 @@ struct WorkspaceSettingsSection: View {
                     Logger.diagnostics.notice("Updated the closed-workspace auto-save preference from Settings. Auto-save closed workspaces is now \(isEnabled ? "enabled" : "disabled", privacy: .public).")
                 }
 
-            Stepper(value: $backgroundSaveIntervalMinutes, in: 1 ... 60) {
+            Stepper(value: $backgroundSaveIntervalMinutes, in: 1...60) {
                 Text("Background save interval: \(backgroundSaveIntervalMinutes) minute\(backgroundSaveIntervalMinutes == 1 ? "" : "s")")
             }
             .onChange(of: backgroundSaveIntervalMinutes) { _, newValue in

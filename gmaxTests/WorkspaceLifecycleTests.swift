@@ -5,8 +5,8 @@
 //  Created by Gale Williams on 4/14/26.
 //
 
-import CoreGraphics
 import CoreData
+import CoreGraphics
 @testable import gmax
 import Testing
 
@@ -178,7 +178,7 @@ struct WorkspaceLifecycleTests {
         #expect(model.workspaces[0].title == "Workspace 1")
     }
 
-    @Test func `workspace store loads the durable selected workspace for its window`() throws {
+    @Test func `workspace store loads the durable selected workspace for its window`() {
         let persistence = WorkspacePersistenceController.inMemoryForTesting()
         let sceneIdentity = WorkspaceSceneIdentity()
         let firstWorkspace = TestSupport.makeWorkspace(title: "Workspace 1")

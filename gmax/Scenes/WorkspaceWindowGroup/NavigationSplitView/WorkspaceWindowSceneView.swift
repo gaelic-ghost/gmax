@@ -15,12 +15,12 @@ private enum FocusAssignment: Equatable {
 }
 
 struct WorkspaceWindowSceneView: View {
+    @AppStorage(WorkspacePersistenceDefaults.backgroundSaveIntervalMinutesKey)
+    private var backgroundSaveIntervalMinutes = WorkspacePersistenceDefaults.defaultBackgroundSaveIntervalMinutes
     @Environment(\.appearsActive) private var appearsActive
     @Environment(\.openWindow) private var openWindow
     @Environment(\.scenePhase) private var scenePhase
     @FocusState private var focusedTarget: WorkspaceFocusTarget?
-    @AppStorage(WorkspacePersistenceDefaults.backgroundSaveIntervalMinutesKey)
-    private var backgroundSaveIntervalMinutes = WorkspacePersistenceDefaults.defaultBackgroundSaveIntervalMinutes
     @SceneStorage(WorkspaceWindowSceneStorageKey.selectedWorkspaceID) private var restoredSelectedWorkspaceID: String?
     @SceneStorage(WorkspaceWindowSceneStorageKey.isInspectorVisible) private var restoredInspectorVisible = true
     @SceneStorage(WorkspaceWindowSceneStorageKey.isSidebarVisible) private var restoredSidebarVisible = true
@@ -582,7 +582,6 @@ struct WorkspaceWindowSceneView: View {
             pendingHistoryPaneID = nil
             return
         }
-
         guard case let .pane(paneID) = newValue else {
             pendingHistoryPaneID = nil
             return
@@ -717,7 +716,6 @@ struct WorkspaceWindowSceneView: View {
         guard !newValue else {
             return
         }
-
         guard focusedTarget == .inspector else {
             return
         }
@@ -789,7 +787,7 @@ struct WorkspaceWindowSceneView: View {
         paneFrames: [PaneID: CGRect],
         paneFocusHistory: [PaneID],
         pendingFocusedPaneID: PaneID?,
-        pendingHistoryPaneID: PaneID?
+        pendingHistoryPaneID: PaneID?,
     ) {
         let filteredPaneFrames = paneFrames.reduce(into: [PaneID: CGRect]()) { result, entry in
             if activePaneIDs.contains(entry.key) {
@@ -812,7 +810,7 @@ struct WorkspaceWindowSceneView: View {
             paneFrames: filteredPaneFrames,
             paneFocusHistory: filteredPaneFocusHistory,
             pendingFocusedPaneID: normalizedPendingFocusedPaneID,
-            pendingHistoryPaneID: normalizedPendingHistoryPaneID
+            pendingHistoryPaneID: normalizedPendingHistoryPaneID,
         )
     }
 }
@@ -1022,6 +1020,7 @@ private struct WorkspaceWindowPresentationModifier: ViewModifier {
     let cancelDelete: () -> Void
     let renameSheetIsPresented: Binding<Bool>
     @Binding var workspaceRenameTitleDraft: String
+
     let cancelRename: () -> Void
     let saveRename: () -> Void
 

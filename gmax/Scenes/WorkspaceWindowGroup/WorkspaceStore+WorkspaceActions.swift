@@ -1,3 +1,4 @@
+import Combine
 import Foundation
 import OSLog
 import SwiftUI
@@ -158,6 +159,7 @@ extension WorkspaceStore {
             transcriptsBySessionID: resolvedTranscripts,
         )
         if let summary {
+            objectWillChange.send()
             Logger.workspace.notice("Saved a workspace to the library. Workspace title: \(workspace.title, privacy: .public). Workspace ID: \(workspace.id.rawValue.uuidString, privacy: .public). Library entry ID: \(summary.id.rawValue.uuidString, privacy: .public)")
         }
         return summary
@@ -237,6 +239,7 @@ extension WorkspaceStore {
             return
         }
 
+        objectWillChange.send()
         Logger.workspace.notice("Deleted a saved workspace from the library. Workspace ID: \(savedWorkspaceID.rawValue.uuidString, privacy: .public)")
     }
 }
@@ -324,7 +327,7 @@ extension WorkspaceStore {
         delivery: String,
     ) {
         Logger.persistence.notice(
-            "Persisting the current window-scoped live workspace state. Delivery: \(delivery, privacy: .public). Reason: \(reason.logName, privacy: .public). Window ID: \(self.sceneIdentity.windowID.uuidString, privacy: .public). Live workspace count: \(snapshot.liveWorkspaces.count). Recently closed count: \(self.recentlyClosedWorkspaceCount).",
+            "Persisting the current window-scoped live workspace state. Delivery: \(delivery, privacy: .public). Reason: \(reason.logName, privacy: .public). Window ID: \(sceneIdentity.windowID.uuidString, privacy: .public). Live workspace count: \(snapshot.liveWorkspaces.count). Recently closed count: \(recentlyClosedWorkspaceCount).",
         )
         persistence.saveSceneState(
             for: sceneIdentity,

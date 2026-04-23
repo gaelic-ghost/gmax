@@ -71,7 +71,8 @@ final class WorkspacePersistenceController {
                 return try Self.loadRecentWorkspaceHistoryMemberships(
                     for: sceneIdentity,
                     in: context,
-                ).compactMap { membership, workspaceEntity in
+                )
+                .compactMap { membership, workspaceEntity in
                     guard let revision = Self.workspaceRevision(for: workspaceEntity) else {
                         return nil
                     }
@@ -97,7 +98,8 @@ final class WorkspacePersistenceController {
                 return try Self.loadRecentWorkspaceHistoryMemberships(
                     for: sceneIdentity,
                     in: context,
-                ).count
+                )
+                .count
             } catch {
                 Logger.persistence.error("Core Data could not count recently closed workspaces for the active window. The app will continue, but command enablement may be stale. Window ID: \(sceneIdentity.windowID.uuidString, privacy: .public). Error: \(String(describing: error), privacy: .public)")
                 context.rollback()
@@ -116,8 +118,8 @@ final class WorkspacePersistenceController {
             do {
                 try Self.migrateLegacyRecentWorkspaceHistory(for: sceneIdentity, in: context)
                 let existingWorkspaceRequest = NSFetchRequest<WorkspaceEntity>(entityName: "WorkspaceEntity")
-                var existingWorkspacesByID = Dictionary(
-                    uniqueKeysWithValues: try context.fetch(existingWorkspaceRequest).map { ($0.id, $0) },
+                var existingWorkspacesByID = try Dictionary(
+                    uniqueKeysWithValues: context.fetch(existingWorkspaceRequest).map { ($0.id, $0) },
                 )
                 let now = Date()
 
@@ -153,9 +155,9 @@ final class WorkspacePersistenceController {
 
                 try Self.deleteOrphanedWorkspaceRecords(
                     existingWorkspacesByID: Dictionary(
-                        uniqueKeysWithValues: try context.fetch(existingWorkspaceRequest).map { ($0.id, $0) },
+                        uniqueKeysWithValues: context.fetch(existingWorkspaceRequest).map { ($0.id, $0) },
                     ),
-                    retainedWorkspaceIDs: try Self.retainedWorkspaceIDs(in: context),
+                    retainedWorkspaceIDs: Self.retainedWorkspaceIDs(in: context),
                     context: context,
                 )
 
@@ -179,9 +181,11 @@ final class WorkspacePersistenceController {
                 guard let membershipAndWorkspace = try Self.loadRecentWorkspaceHistoryMemberships(
                     for: sceneIdentity,
                     in: context,
-                ).first else {
+                )
+                .first else {
                     return nil
                 }
+
                 let membership = membershipAndWorkspace.0
                 let workspaceEntity = membershipAndWorkspace.1
                 guard let revision = Self.workspaceRevision(for: workspaceEntity) else {
@@ -199,9 +203,9 @@ final class WorkspacePersistenceController {
                 context.delete(membership)
                 try Self.deleteOrphanedWorkspaceRecords(
                     existingWorkspacesByID: Dictionary(
-                        uniqueKeysWithValues: try context.fetch(NSFetchRequest<WorkspaceEntity>(entityName: "WorkspaceEntity")).map { ($0.id, $0) },
+                        uniqueKeysWithValues: context.fetch(NSFetchRequest<WorkspaceEntity>(entityName: "WorkspaceEntity")).map { ($0.id, $0) },
                     ),
-                    retainedWorkspaceIDs: try Self.retainedWorkspaceIDs(in: context),
+                    retainedWorkspaceIDs: Self.retainedWorkspaceIDs(in: context),
                     context: context,
                 )
                 if context.hasChanges {
@@ -231,9 +235,9 @@ final class WorkspacePersistenceController {
 
                 try Self.deleteOrphanedWorkspaceRecords(
                     existingWorkspacesByID: Dictionary(
-                        uniqueKeysWithValues: try context.fetch(NSFetchRequest<WorkspaceEntity>(entityName: "WorkspaceEntity")).map { ($0.id, $0) },
+                        uniqueKeysWithValues: context.fetch(NSFetchRequest<WorkspaceEntity>(entityName: "WorkspaceEntity")).map { ($0.id, $0) },
                     ),
-                    retainedWorkspaceIDs: try Self.retainedWorkspaceIDs(in: context),
+                    retainedWorkspaceIDs: Self.retainedWorkspaceIDs(in: context),
                     context: context,
                 )
                 if context.hasChanges {
@@ -262,9 +266,9 @@ final class WorkspacePersistenceController {
 
                 try Self.deleteOrphanedWorkspaceRecords(
                     existingWorkspacesByID: Dictionary(
-                        uniqueKeysWithValues: try context.fetch(NSFetchRequest<WorkspaceEntity>(entityName: "WorkspaceEntity")).map { ($0.id, $0) },
+                        uniqueKeysWithValues: context.fetch(NSFetchRequest<WorkspaceEntity>(entityName: "WorkspaceEntity")).map { ($0.id, $0) },
                     ),
-                    retainedWorkspaceIDs: try Self.retainedWorkspaceIDs(in: context),
+                    retainedWorkspaceIDs: Self.retainedWorkspaceIDs(in: context),
                     context: context,
                 )
                 if context.hasChanges {
@@ -316,7 +320,8 @@ final class WorkspacePersistenceController {
                     matching: sceneIdentities?.map(\.windowID),
                     isOpen: true,
                     in: context,
-                ).map { WorkspaceSceneIdentity(windowID: $0.id) }
+                )
+                .map { WorkspaceSceneIdentity(windowID: $0.id) }
 
                 guard let sceneIdentities, !sceneIdentities.isEmpty else {
                     return orderedPersistedSceneIdentities
@@ -455,7 +460,7 @@ final class WorkspacePersistenceController {
 
                 try Self.deleteOrphanedWorkspaceRecords(
                     existingWorkspacesByID: existingWorkspacesByID,
-                    retainedWorkspaceIDs: try Self.retainedWorkspaceIDs(in: context),
+                    retainedWorkspaceIDs: Self.retainedWorkspaceIDs(in: context),
                     context: context,
                 )
 
@@ -607,21 +612,23 @@ final class WorkspacePersistenceController {
         return context.performAndWait {
             do {
                 let request = NSFetchRequest<WorkspacePlacementEntity>(entityName: "WorkspacePlacementEntity")
-                request.fetchLimit = 1
                 request.predicate = NSPredicate(
                     format: "id == %@ AND role == %@",
                     id.rawValue as CVarArg,
                     WorkspacePlacementRole.library.rawValue,
                 )
-                guard let placement = try context.fetch(request).first else {
+                let placements = try context.fetch(request)
+                guard !placements.isEmpty else {
                     Logger.persistence.error("The saved-workspace library could not find the workspace entry requested for deletion. The library may already be up to date, or the selection may have gone stale. Workspace ID: \(id.rawValue.uuidString, privacy: .public)")
                     return false
                 }
 
-                let libraryWorkspaceID = placement.workspace?.id
-                context.delete(placement)
+                let libraryWorkspaceIDs = Set(placements.compactMap(\.workspace?.id))
+                for placement in placements {
+                    context.delete(placement)
+                }
 
-                if let libraryWorkspaceID {
+                for libraryWorkspaceID in libraryWorkspaceIDs {
                     try Self.deleteOrphanedWorkspaceRecords(
                         existingWorkspacesByID: [libraryWorkspaceID: Self.requireWorkspaceEntity(id: libraryWorkspaceID, context: context)],
                         retainedWorkspaceIDs: [],
@@ -1025,6 +1032,7 @@ extension WorkspacePersistenceController {
                 guard let workspace = try loadWorkspaceEntity(id: membership.workspaceID, in: context) else {
                     return nil
                 }
+
                 return (membership, workspace)
             }
             .sorted { lhs, rhs in
@@ -1205,6 +1213,7 @@ extension WorkspacePersistenceController {
             guard let window = try loadWindowEntity(id: sceneIdentity.windowID, in: context) else {
                 continue
             }
+
             window.isOpen = true
         }
 
@@ -1261,12 +1270,14 @@ extension WorkspacePersistenceController {
             guard !placement.isDeleted else {
                 return nil
             }
+
             return placement.workspace?.id
         }
         let membershipWorkspaceIDs: [UUID] = try context.fetch(membershipRequest).compactMap { membership in
             guard !membership.isDeleted else {
                 return nil
             }
+
             return membership.workspaceID
         }
         return Set(placementWorkspaceIDs + membershipWorkspaceIDs)

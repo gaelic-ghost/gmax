@@ -405,8 +405,7 @@ Important direction:
 
 - long term, `WorkspacePlacementEntity` should only model current appearance
 - recent-close behavior should be derived from durable timestamps and
-  workspace-owned window association instead of a dedicated recent placement
-  role
+  window membership instead of a dedicated recent placement role
 - library representation should also move off the generic placement role and
   into an explicit library-entry model, because library membership is not just
   another transient appearance of the same shape as a live sidebar row
@@ -1517,17 +1516,15 @@ continue simplifying the model rather than adding new side paths.
 
 The preferred follow-through order is:
 
-1. unify workspace identity so one workspace has one stable durable identity
-   across live, inactive, and library states
-2. replace the in-memory recent-close stack with durable recency derived from
-   disk by window identity plus `lastActiveAt`
-3. move any remaining reopenable window-registry state from `UserDefaults`
-   into Core Data so windows, workspaces, and library items all share one
-   durable model
-4. introduce a unified library listing surface that can hold both workspace and
+1. introduce a unified library listing surface that can hold both workspace and
    window items while preserving separate payload types underneath
-5. decide the exact saved-revision retention policy for later history support
-6. decide whether library history ever needs user-facing browse, restore, or
+2. decide whether library membership should keep using generic placements or
+   move into explicit library-entry entities once the unified library surface
+   lands
+3. remove the remaining legacy migration-only fields and compatibility paths
+   when the store no longer needs to ingest older databases
+4. decide the exact saved-revision retention policy for later history support
+5. decide whether library history ever needs user-facing browse, restore, or
    diff surfaces
 
 That order keeps the next work converging toward:
@@ -1554,7 +1551,7 @@ Use this checklist when validating real window and app lifecycle persistence:
 6. Settings persistence
    Change the background save interval, quit, relaunch, and confirm Settings still shows the same interval. Repeat once with another value to confirm normalization and storage are stable.
 7. Recent-close restoration
-   With `Keep recently closed workspaces` enabled, close a workspace, switch windows or quit soon after, then relaunch. Confirm the recently closed stack is still window-local and restores with the correct window.
+   With `Keep recently closed workspaces` enabled, close a workspace, switch windows or quit soon after, then relaunch. Confirm the durable recent workspace history is still window-local and restores with the correct window.
 8. Auto-save closed workspace interaction
    With `Auto-save closed workspaces` enabled, close a workspace and then immediately close the window or quit the app. Relaunch and confirm both the live-window persistence and saved-workspace-library write happened as expected.
 9. Modal edge cases during lifecycle changes
@@ -1571,9 +1568,9 @@ Current behavior:
 - each workspace window is still identified by one durable
   `WorkspaceSceneIdentity`
 - `WorkspaceWindowSceneView` marks that identity as open when the scene appears
-- when the scene disappears, it records that identity in the
-  `WorkspaceWindowRestorationController` recently closed stack before the final
-  scene-state flush
+- when the scene disappears, it records that identity in durable recently
+  closed window history through `WorkspaceWindowRestorationController` before
+  the final scene-state flush
 - `WorkspaceWindowSceneCommands` exposes a dedicated `Undo Close Window`
   command that pops the newest closed identity and calls `openWindow(value:)`
   with that same `WorkspaceSceneIdentity`

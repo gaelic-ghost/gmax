@@ -21,9 +21,11 @@ final class WorkspaceWindowRestorationController: ObservableObject {
         let shouldRestore = WorkspacePersistenceDefaults.restoreWorkspacesOnLaunch(userDefaults: userDefaults)
         let preferredSceneIdentities = Self.storedLaunchRestoreSceneIdentities(userDefaults: userDefaults)
         let persistedSceneIdentities: [WorkspaceSceneIdentity] = if shouldRestore {
-            preferredSceneIdentities.isEmpty
-                ? persistence.loadLiveSceneIdentities()
-                : persistence.loadLiveSceneIdentities(matching: preferredSceneIdentities)
+            if preferredSceneIdentities.isEmpty {
+                persistence.loadLiveSceneIdentities()
+            } else {
+                persistence.loadLiveSceneIdentities(matching: preferredSceneIdentities)
+            }
         } else {
             []
         }
@@ -39,6 +41,18 @@ final class WorkspaceWindowRestorationController: ObservableObject {
         persistence = .inMemoryForTesting()
         self.initialSceneIdentity = initialSceneIdentity
         launchRestoreSceneIdentities = [initialSceneIdentity] + pendingLaunchRestoreSceneIdentities
+    }
+
+    private static func storedLaunchRestoreSceneIdentities(
+        userDefaults: UserDefaults,
+    ) -> [WorkspaceSceneIdentity] {
+        guard let rawWindowIDs = userDefaults.array(forKey: WorkspacePersistenceDefaults.launchRestoreWindowIDsKey) as? [String] else {
+            return []
+        }
+
+        return rawWindowIDs.compactMap { rawWindowID in
+            UUID(uuidString: rawWindowID).map { WorkspaceSceneIdentity(windowID: $0) }
+        }
     }
 
     func markWindowOpen(_ sceneIdentity: WorkspaceSceneIdentity) {
@@ -70,18 +84,6 @@ final class WorkspaceWindowRestorationController: ObservableObject {
 
         recentlyClosedWindowSceneIdentities = Array(recentlyClosedWindowSceneIdentities.dropFirst())
         return sceneIdentity
-    }
-
-    private static func storedLaunchRestoreSceneIdentities(
-        userDefaults: UserDefaults,
-    ) -> [WorkspaceSceneIdentity] {
-        guard let rawWindowIDs = userDefaults.array(forKey: WorkspacePersistenceDefaults.launchRestoreWindowIDsKey) as? [String] else {
-            return []
-        }
-
-        return rawWindowIDs.compactMap { rawWindowID in
-            UUID(uuidString: rawWindowID).map { WorkspaceSceneIdentity(windowID: $0) }
-        }
     }
 
     func noteApplicationWillTerminate() {

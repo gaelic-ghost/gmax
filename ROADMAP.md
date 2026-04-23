@@ -141,12 +141,16 @@ In Progress
 
 ### Scope
 
-- [ ] Build on the shipped Core Data-backed workspace and library model with better diagnostics, clearer reopen provenance, and a deliberate decision about what future sync is actually worth carrying.
+- [ ] Build on the shipped Core Data-backed multi-window workspace model with better diagnostics, a unified library surface for workspace and window items, and a deliberate decision about what future sync is actually worth carrying.
 
 ### Tickets
 
+- [x] Unify workspace identity so live and saved-library flows use one durable `WorkspaceID`.
+- [x] Add durable Core Data-backed window records for selection, open state, and window recency.
+- [x] Move recent workspace reopen behavior onto durable window membership plus workspace recency.
 - [ ] Add configurable transcript retention limits for saved workspace history.
 - [ ] Add crash-safe and operator-friendly persistence diagnostics.
+- [ ] Introduce a unified library listing surface that can hold both saved workspaces and saved windows.
 - [ ] Add explicit saved-workspace revision history retention instead of replacing the current saved payload in place.
 - [ ] Decide which settings and metadata are sync-worthy.
 - [ ] Evaluate `NSPersistentCloudKitContainer` for future sync support.
@@ -156,7 +160,7 @@ In Progress
 
 ### Exit Criteria
 
-- [ ] Persistence failures are diagnosable, reopened workspaces communicate provenance clearly, and the roadmap has an explicit answer about whether sync belongs in the product.
+- [ ] Persistence failures are diagnosable, the unified library direction is explicit, reopened workspaces communicate provenance clearly, and the roadmap has an explicit answer about whether sync belongs in the product.
 
 ## Milestone 6: Quality and Release Readiness
 

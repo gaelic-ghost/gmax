@@ -545,7 +545,7 @@ than reopening a second command-planning surface here.
 
 Recommended semantics:
 
-- `Keep recently closed workspaces` controls whether close operations populate the undo stack
+- `Keep recently closed workspaces` controls whether close operations populate durable per-window recent workspace history
 - `Auto-save closed workspaces` controls whether closing a workspace also persists it into the saved library automatically
 - `Restore workspaces on launch` controls whether the live session reopens on app launch
 - `Background save interval` controls how often each workspace window performs a periodic persistence flush; the default is five minutes
@@ -555,9 +555,9 @@ The intended behavior matrix is:
 | Keep recently closed | Auto-save closed | Close Workspace result |
 | --- | --- | --- |
 | Off | Off | Close removes the workspace from the live session only. It is not undoable and does not enter the saved library. |
-| On | Off | Close removes the workspace from the live session and pushes it into the recently closed stack only. |
+| On | Off | Close removes the workspace from the live session and records it into durable window-local recent workspace history only. |
 | Off | On | Close removes the workspace from the live session and saves it into the library only. |
-| On | On | Close removes the workspace from the live session, pushes it into recently closed, and saves it into the library. |
+| On | On | Close removes the workspace from the live session, records it into durable recent workspace history, and saves it into the library. |
 
 This is the preferred matrix because it keeps each setting orthogonal:
 

@@ -17,17 +17,17 @@ struct WorkspacePersistenceProfileTests {
         #expect(WorkspacePersistenceDefaults.normalizedBackgroundSaveIntervalMinutes(5) == 5)
     }
 
-    @Test func `restore workspaces on launch falls back to system default when no explicit setting exists`() {
-        let userDefaults = UserDefaults(suiteName: "WorkspacePersistenceProfileTests.restore-default")!
+    @Test func `restore workspaces on launch falls back to system default when no explicit setting exists`() throws {
+        let userDefaults = try #require(UserDefaults(suiteName: "WorkspacePersistenceProfileTests.restore-default"))
         userDefaults.removePersistentDomain(forName: "WorkspacePersistenceProfileTests.restore-default")
-        let globalDefaults = UserDefaults(suiteName: "WorkspacePersistenceProfileTests.restore-global")!
+        let globalDefaults = try #require(UserDefaults(suiteName: "WorkspacePersistenceProfileTests.restore-global"))
         globalDefaults.removePersistentDomain(forName: "WorkspacePersistenceProfileTests.restore-global")
 
         #expect(
             WorkspacePersistenceDefaults.restoreWorkspacesOnLaunch(
                 userDefaults: userDefaults,
                 globalDefaults: globalDefaults,
-            ) == true
+            ) == true,
         )
     }
 
