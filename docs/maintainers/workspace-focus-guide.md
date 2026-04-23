@@ -50,7 +50,7 @@ The structural focus cleanup is complete.
 
 What remains is not another architecture reset. The remaining work is product
 verification, accessibility follow-through, naming cleanup, and stronger
-multi-window command coverage.
+multi-window regression coverage for behavior that is already intentional.
 
 The current shipped shape is:
 
@@ -59,6 +59,9 @@ The current shipped shape is:
 - pane split, close, and navigation commands are derived at the scene root
 - pane close restores the latest surviving focused pane from scene-local
   history
+- the app intentionally supports multiple workspace windows, each with its own
+  `WorkspaceSceneIdentity`, scene-local UI restoration, and independent
+  persisted live and recently closed workspace state
 
 ## Research Workflow
 
@@ -562,6 +565,10 @@ The bridge-free focus surface still needs a real behavior pass across:
 - inspector focus behavior
 - `Command-W` in every focus region
 - frontmost-window routing when multiple workspace windows exist
+
+That work is regression coverage for an intentional multi-window product model.
+It is not a question of whether the app should support multiple independent
+workspace windows in the first place.
 
 ### 2. Better command-surface coverage
 

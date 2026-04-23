@@ -1,7 +1,8 @@
 /*
 
 This note records the current workspace persistence foundation for the
-per-window scene model in gmax, plus the remaining follow-through work.
+intentionally multi-window, per-window scene model in gmax, plus the remaining
+follow-through work.
 
 It is the pass-two data-model companion to the workspace-focus redesign notes.
 The main structural change already landed: the app no longer keeps one
@@ -137,10 +138,11 @@ Examples:
   workspace contents themselves
 
 If we put `.live`, `.recent`, `.library`, and `windowID` directly on the
-workspace entity, the model starts assuming one payload can only occupy one role
-and one window at a time.
+workspace entity, the model starts assuming one payload can only occupy one
+role and one restored window placement at a time.
 
-That is the wrong ownership boundary.
+That is the wrong ownership boundary for a product that intentionally supports
+multiple independent workspace windows with their own persisted state.
 
 ## Durable Model
 
@@ -342,7 +344,8 @@ Current recommendation remains:
 That gives us a durable, documented per-window identity without needing a plain
 SwiftUI "window identifier" API that does not seem to exist in the current
 surface, and without building a second persistence layer around that identity
-ourselves.
+ourselves. This is the intended foundation for multiple concurrently restored
+workspace windows, not a stopgap for a single-window app.
 
 ### What `SceneStorage` should hold
 
@@ -708,6 +711,8 @@ The current persistence model does the following:
 4. restores saved library entries from `.library` placements
 5. keeps scene-local UI restoration in `@SceneStorage` instead of mixing that
    state into the persistence store
+6. intentionally allows different workspace windows to persist and restore
+   independent live and recently closed state keyed by `WorkspaceSceneIdentity`
 
 ## Recommended Next Follow-Through
 
