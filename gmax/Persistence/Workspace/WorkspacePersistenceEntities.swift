@@ -1,7 +1,8 @@
 /*
  WorkspacePersistenceEntities defines the active Core Data managed object
  surface for workspace persistence. These entities model the current payload
- plus placement store used by live, recent, and library workspace state.
+ plus placement store used by live and library workspace state, along with
+ workspace-owned metadata for window-local recency.
  */
 
 import CoreData
@@ -19,6 +20,8 @@ final class WorkspaceEntity: NSManagedObject {
     @NSManaged var createdAt: Date
     @NSManaged var updatedAt: Date
     @NSManaged var lastActiveAt: Date
+    @NSManaged var recentWindowID: UUID?
+    @NSManaged var recentSortOrder: Int64
     @NSManaged var notes: String?
     @NSManaged var previewText: String?
     @NSManaged var searchText: String?

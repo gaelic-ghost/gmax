@@ -333,7 +333,7 @@ struct WorkspacePersistenceTests {
         let summary = try #require(model.saveWorkspaceToLibrary(workspace.id))
         let context = persistence.container.viewContext
 
-        let savedWorkspacePlacement = try #require(try fetchSavedWorkspacePlacement(id: summary.id, in: context))
+        let savedWorkspacePlacement = try #require(try fetchSavedWorkspacePlacement(id: summary.id.rawValue, in: context))
         let rootNode = try #require(savedWorkspacePlacement.workspace?.rootNode)
         rootNode.firstChild = nil
         try context.save()
@@ -391,7 +391,7 @@ struct WorkspacePersistenceTests {
         )
         let context = persistence.container.viewContext
 
-        let missingSessionEntity = try #require(try fetchPaneSessionPayloadEntity(id: rightPane.sessionID, in: context))
+        let missingSessionEntity = try #require(try fetchPaneSessionPayloadEntity(id: rightPane.sessionID.rawValue, in: context))
         context.delete(missingSessionEntity)
         try context.save()
 
@@ -467,7 +467,7 @@ struct WorkspacePersistenceTests {
         )
         let context = persistence.container.viewContext
 
-        let workspaceEntity = try #require(try fetchWorkspaceEntity(id: workspace.id, in: context))
+        let workspaceEntity = try #require(try fetchWorkspaceEntity(id: workspace.id.rawValue, in: context))
         let rootNode = try #require(workspaceEntity.rootNode)
         rootNode.axis = nil
         try context.save()
@@ -519,8 +519,6 @@ struct WorkspacePersistenceTests {
         let firstRecentWorkspace = TestSupport.makeWorkspace(title: "Closed in Window A")
         let secondRecentWorkspace = TestSupport.makeWorkspace(title: "Closed in Window B")
         let persistence = WorkspacePersistenceController.inMemoryForTesting()
-        let launchConfiguration = TestSupport.makeLaunchContextBuilder(defaultCurrentDirectory: "/tmp/gmax-tests").makeLaunchConfiguration()
-
         persistence.recordWindowRecentWorkspace(
             WindowRecentWorkspaceInput(
                 workspace: firstRecentWorkspace,
@@ -552,6 +550,96 @@ struct WorkspacePersistenceTests {
         #expect(restoredFirstSceneRecentWorkspaces.first?.formerIndex == 2)
         #expect(restoredSecondSceneRecentWorkspaces.first?.formerIndex == 5)
     }
+
+    @MainActor
+    @Test func `recording window recent workspace stores recency on the workspace entity instead of creating a recent placement`() throws {
+        let sceneIdentity = WorkspaceSceneIdentity()
+        let recentWorkspace = TestSupport.makeWorkspace(title: "Closed Workspace")
+        let persistence = WorkspacePersistenceController.inMemoryForTesting()
+
+        persistence.recordWindowRecentWorkspace(
+            WindowRecentWorkspaceInput(
+                workspace: recentWorkspace,
+                formerIndex: 3,
+                launchConfigurationsBySessionID: [:],
+                titlesBySessionID: [:],
+                transcriptsBySessionID: [:],
+            ),
+            for: sceneIdentity,
+            limit: WorkspacePersistenceDefaults.maxRecentlyClosedWorkspaceCount,
+        )
+
+        let context = persistence.container.viewContext
+        let workspaceID = recentWorkspace.id.rawValue
+        let windowID = sceneIdentity.windowID
+        let fetchedWorkspaceEntity = try fetchWorkspaceEntity(id: workspaceID, in: context)
+        let workspaceEntity = try #require(fetchedWorkspaceEntity)
+        let recentPlacements = try fetchWindowRecentPlacements(windowID: windowID, in: context)
+
+        #expect(workspaceEntity.recentWindowID == windowID)
+        #expect(workspaceEntity.recentSortOrder == 3)
+        #expect(recentPlacements.isEmpty)
+    }
+
+    @MainActor
+    @Test func `loading window recent workspaces migrates legacy recent placements onto the workspace entity`() throws {
+        let sceneIdentity = WorkspaceSceneIdentity()
+        let recentWorkspace = TestSupport.makeWorkspace(title: "Legacy Closed Workspace")
+        let persistence = WorkspacePersistenceController.inMemoryForTesting()
+        let sessions = TerminalSessionRegistry(
+            workspaces: [recentWorkspace],
+            defaultLaunchConfiguration: .loginShell,
+        )
+        let context = persistence.container.viewContext
+        let workspaceID = recentWorkspace.id.rawValue
+        let workspaceTitle = recentWorkspace.title
+        let workspacePaneCount = Int64(recentWorkspace.root?.leaves().count ?? 0)
+        let windowID = sceneIdentity.windowID
+
+        persistence.saveSceneState(
+            for: sceneIdentity,
+            liveWorkspaces: [recentWorkspace],
+            selectedWorkspaceID: recentWorkspace.id,
+            sessions: sessions,
+        )
+
+        try context.performAndWait {
+            let fetchedWorkspaceEntity = try fetchWorkspaceEntity(id: workspaceID, in: context)
+            let workspaceEntity = try #require(fetchedWorkspaceEntity)
+            let fetchedLivePlacement = try fetchLiveWorkspacePlacement(id: workspaceID, windowID: windowID, in: context)
+            let livePlacement = try #require(fetchedLivePlacement)
+            context.delete(livePlacement)
+
+            let placement = WorkspacePlacementEntity(context: context)
+            placement.id = workspaceID
+            placement.role = WorkspacePlacementRole.windowRecent.rawValue
+            placement.windowID = windowID
+            placement.sortOrder = 0
+            placement.restoreSortOrder = 4
+            placement.createdAt = Date()
+            placement.updatedAt = Date()
+            placement.lastOpenedAt = nil
+            placement.isPinned = false
+            placement.title = workspaceTitle
+            placement.previewText = nil
+            placement.searchText = nil
+            placement.paneCount = workspacePaneCount
+            placement.workspace = workspaceEntity
+
+            try context.save()
+        }
+
+        let restoredRecentWorkspaces = persistence.loadWindowRecentWorkspaces(for: sceneIdentity)
+        let fetchedMigratedWorkspaceEntity = try fetchWorkspaceEntity(id: workspaceID, in: context)
+        let migratedWorkspaceEntity = try #require(fetchedMigratedWorkspaceEntity)
+        let remainingRecentPlacements = try fetchWindowRecentPlacements(windowID: windowID, in: context)
+
+        #expect(restoredRecentWorkspaces.map(\.revision.title) == ["Legacy Closed Workspace"])
+        #expect(restoredRecentWorkspaces.first?.formerIndex == 4)
+        #expect(migratedWorkspaceEntity.recentWindowID == windowID)
+        #expect(migratedWorkspaceEntity.recentSortOrder == 4)
+        #expect(remainingRecentPlacements.isEmpty)
+    }
 }
 
 private indirect enum PaneNodeSignature: Equatable {
@@ -574,40 +662,68 @@ private func nodeSignature(from node: PaneNode) -> PaneNodeSignature {
     }
 }
 
-@MainActor
 private func fetchSavedWorkspacePlacement(
-    id: WorkspaceID,
+    id: UUID,
     in context: NSManagedObjectContext,
 ) throws -> WorkspacePlacementEntity? {
     let request = NSFetchRequest<WorkspacePlacementEntity>(entityName: "WorkspacePlacementEntity")
     request.fetchLimit = 1
     request.predicate = NSCompoundPredicate(
         andPredicateWithSubpredicates: [
-            NSPredicate(format: "id == %@", id.rawValue as CVarArg),
+            NSPredicate(format: "id == %@", id as CVarArg),
             NSPredicate(format: "role == %@", WorkspacePlacementRole.library.rawValue),
         ],
     )
     return try context.fetch(request).first
 }
 
-@MainActor
 private func fetchPaneSessionPayloadEntity(
-    id: TerminalSessionID,
+    id: UUID,
     in context: NSManagedObjectContext,
 ) throws -> PaneSessionSnapshotEntity? {
     let request = NSFetchRequest<PaneSessionSnapshotEntity>(entityName: "PaneSessionSnapshotEntity")
     request.fetchLimit = 1
-    request.predicate = NSPredicate(format: "id == %@", id.rawValue as CVarArg)
+    request.predicate = NSPredicate(format: "id == %@", id as CVarArg)
     return try context.fetch(request).first
 }
 
-@MainActor
+private func fetchLiveWorkspacePlacement(
+    id: UUID,
+    windowID: UUID,
+    in context: NSManagedObjectContext,
+) throws -> WorkspacePlacementEntity? {
+    let request = NSFetchRequest<WorkspacePlacementEntity>(entityName: "WorkspacePlacementEntity")
+    request.fetchLimit = 1
+    request.predicate = NSCompoundPredicate(
+        andPredicateWithSubpredicates: [
+            NSPredicate(format: "id == %@", id as CVarArg),
+            NSPredicate(format: "role == %@", WorkspacePlacementRole.live.rawValue),
+            NSPredicate(format: "windowID == %@", windowID as CVarArg),
+        ],
+    )
+    return try context.fetch(request).first
+}
+
 private func fetchWorkspaceEntity(
-    id: WorkspaceID,
+    id: UUID,
     in context: NSManagedObjectContext,
 ) throws -> WorkspaceEntity? {
     let request = NSFetchRequest<WorkspaceEntity>(entityName: "WorkspaceEntity")
     request.fetchLimit = 1
-    request.predicate = NSPredicate(format: "id == %@", id.rawValue as CVarArg)
+    request.predicate = NSPredicate(format: "id == %@", id as CVarArg)
     return try context.fetch(request).first
+}
+
+private func fetchWindowRecentPlacements(
+    windowID: UUID,
+    in context: NSManagedObjectContext,
+) throws -> [WorkspacePlacementEntity] {
+    let request = NSFetchRequest<WorkspacePlacementEntity>(entityName: "WorkspacePlacementEntity")
+    request.predicate = NSCompoundPredicate(
+        andPredicateWithSubpredicates: [
+            NSPredicate(format: "role == %@", WorkspacePlacementRole.windowRecent.rawValue),
+            NSPredicate(format: "windowID == %@", windowID as CVarArg),
+        ],
+    )
+    return try context.fetch(request)
 }

@@ -101,13 +101,14 @@ placement entity:
 
 ### 2. Recently closed workspaces
 
-- recently closed workspaces are now driven by durable `.windowRecent`
-  `WorkspacePlacementEntity` rows for the active scene identity
-- the persisted raw value remains `"recent"` so older on-disk rows still decode
-  cleanly, but the in-code role name now makes its scope explicit
+- recently closed workspaces are now driven by durable workspace-owned recency
+  metadata on `WorkspaceEntity`, keyed by the owning window identity
+- legacy `.windowRecent` placement rows are still lazily migrated forward from
+  older stores, but new recent-close writes no longer create that placement
+  role
 - `WorkspaceStore` no longer keeps a parallel in-memory workspace undo stack
-- `Undo Close Workspace` now restores the most recent durable `.windowRecent`
-  workspace for the current window
+- `Undo Close Workspace` now restores the most recent durable workspace
+  associated with the current window
 - recency is driven by durable timestamps such as `lastActiveAt`
 - this is the preferred direction for workspace recency inside Slice 1, even
   though the later model still wants cleaner explicit library-item entities
@@ -299,7 +300,7 @@ That is simpler than maintaining:
 
 - a live array
 - an in-memory recent-close stack
-- a mirrored `.windowRecent` placement list
+- a mirrored recent-close placement list
 - separate stack bookkeeping rules
 
 The app may still want a small in-memory cache for performance, but the product
@@ -396,8 +397,9 @@ enum WorkspacePlacementRole: String, Codable, Hashable {
 Important direction:
 
 - long term, `WorkspacePlacementEntity` should only model current appearance
-- once recent-close behavior is derived from durable timestamps, `.windowRecent`
-  should no longer be needed as a first-class placement role
+- recent-close behavior should be derived from durable timestamps and
+  workspace-owned window association instead of a dedicated recent placement
+  role
 - library representation should also move off the generic placement role and
   into an explicit library-entry model, because library membership is not just
   another transient appearance of the same shape as a live sidebar row
@@ -1068,9 +1070,9 @@ On scene restore:
 1. read the restored scene identity from the data-driven `WindowGroup`
 2. read lightweight UI state from `SceneStorage`
 3. fetch `.live` placements for that scene identity
-4. fetch `.windowRecent` placements for that scene identity
-5. restore the scene-local live workspace list and recent-close stack from
-   those placement records
+4. query workspace-owned recent-close metadata for that scene identity
+5. restore the scene-local live workspace list and recent-close state from the
+   live placements plus the recent metadata query
 6. lazily fetch `.library` placements when the user opens the library, or
    prewarm them later on a lower-priority path if desired
 
@@ -1259,8 +1261,8 @@ Why this is worth doing:
   pane trees immediately
 - the library can load quickly from `.library` placements without hydrating the
   full saved payload for every row
-- the recent-close stack can render from `.windowRecent` placements using the same
-  listing shape
+- the recent-close stack can render from durable window-associated workspace
+  metadata using the same payload revision shape
 - the library view can stay responsive even when full payload fetches are
   deferred until the user opens a workspace
 
@@ -1306,8 +1308,8 @@ Current recommendation:
 Current implementation:
 
 1. remove the `.live` placement for the active scene identity
-2. optionally create or update a `.windowRecent` placement for that same scene
-   identity
+2. optionally update the workspace's durable recent-window metadata for that
+   same scene identity
 3. optionally create or update a `.library` placement if auto-save-on-close is
    enabled
 
@@ -1324,8 +1326,8 @@ Preferred follow-through:
 
 Current implementation:
 
-1. fetch the newest `.windowRecent` placement for the active scene identity
-2. remove or demote that recent placement
+1. fetch the newest durable recent workspace associated with the active window
+2. clear that recent-window association after restore
 3. create a `.live` placement at the restored sidebar index
 
 Preferred follow-through:
@@ -1457,9 +1459,10 @@ The current persistence model does the following:
 
 1. uses `WorkspaceEntity` as the canonical payload entity
 2. uses `WorkspacePlacementEntity` to describe whether that payload is
-   `.live`, `.windowRecent`, or `.library`
-3. restores live and recently closed workspaces from scene-identity-scoped
-   placements
+   `.live` or `.library`, while recent-close state lives on the workspace
+   entity itself
+3. restores live workspaces from scene-identity-scoped placements and recently
+   closed workspaces from durable workspace-owned window metadata
 4. restores saved library entries from `.library` placements
 5. keeps scene-local UI restoration in `@SceneStorage` instead of mixing that
    state into the persistence store

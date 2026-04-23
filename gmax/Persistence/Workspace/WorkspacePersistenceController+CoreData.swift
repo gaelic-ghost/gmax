@@ -173,6 +173,16 @@ extension WorkspacePersistenceController {
             type: .dateAttributeType,
             defaultValue: migrationDefaultDate,
         )
+        let workspaceRecentWindowID = attribute(
+            name: "recentWindowID",
+            type: .UUIDAttributeType,
+            isOptional: true,
+        )
+        let workspaceRecentSortOrder = attribute(
+            name: "recentSortOrder",
+            type: .integer64AttributeType,
+            defaultValue: 0,
+        )
         let workspaceNotes = attribute(name: "notes", type: .stringAttributeType, isOptional: true)
         let workspacePreviewText = attribute(name: "previewText", type: .stringAttributeType, isOptional: true)
         let workspaceSearchText = attribute(name: "searchText", type: .stringAttributeType, isOptional: true)
@@ -325,6 +335,8 @@ extension WorkspacePersistenceController {
             workspaceCreatedAt,
             workspaceUpdatedAt,
             workspaceLastActiveAt,
+            workspaceRecentWindowID,
+            workspaceRecentSortOrder,
             workspaceNotes,
             workspacePreviewText,
             workspaceSearchText,

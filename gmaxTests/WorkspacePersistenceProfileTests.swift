@@ -87,12 +87,16 @@ struct WorkspacePersistenceProfileTests {
         let workspaceCreatedAt = workspaceEntity.attributesByName["createdAt"]
         let workspaceUpdatedAt = workspaceEntity.attributesByName["updatedAt"]
         let workspaceLastActiveAt = workspaceEntity.attributesByName["lastActiveAt"]
+        let workspaceRecentWindowID = workspaceEntity.attributesByName["recentWindowID"]
+        let workspaceRecentSortOrder = workspaceEntity.attributesByName["recentSortOrder"]
         let placementCreatedAt = placementEntity.attributesByName["createdAt"]
         let placementUpdatedAt = placementEntity.attributesByName["updatedAt"]
 
         #expect(workspaceCreatedAt?.defaultValue is Date)
         #expect(workspaceUpdatedAt?.defaultValue is Date)
         #expect(workspaceLastActiveAt?.defaultValue is Date)
+        #expect(workspaceRecentWindowID?.isOptional == true)
+        #expect(workspaceRecentSortOrder?.defaultValue as? Int64 == 0)
         #expect(placementCreatedAt?.defaultValue is Date)
         #expect(placementUpdatedAt?.defaultValue is Date)
         #expect(workspaceEntity.attributesByName["savedWorkspaceID"] == nil)
