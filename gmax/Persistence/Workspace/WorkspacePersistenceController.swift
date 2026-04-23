@@ -59,7 +59,7 @@ final class WorkspacePersistenceController {
         }
     }
 
-    func loadRecentlyClosedWorkspaces(for sceneIdentity: WorkspaceSceneIdentity) -> [PersistedRecentlyClosedWorkspace] {
+    func loadWindowRecentWorkspaces(for sceneIdentity: WorkspaceSceneIdentity) -> [WindowRecentWorkspaceRecord] {
         let context = container.viewContext
         return context.performAndWait {
             Self.loadPlacements(role: .recent, sceneIdentity: sceneIdentity, in: context)
@@ -68,7 +68,7 @@ final class WorkspacePersistenceController {
                         return nil
                     }
 
-                    return PersistedRecentlyClosedWorkspace(
+                    return WindowRecentWorkspaceRecord(
                         revision: revision,
                         formerIndex: Int(placement.restoreSortOrder),
                     )
@@ -76,7 +76,7 @@ final class WorkspacePersistenceController {
         }
     }
 
-    func countRecentlyClosedWorkspaces(for sceneIdentity: WorkspaceSceneIdentity) -> Int {
+    func countWindowRecentWorkspaces(for sceneIdentity: WorkspaceSceneIdentity) -> Int {
         let context = container.viewContext
         return context.performAndWait {
             let request = NSFetchRequest<NSFetchRequestResult>(entityName: "WorkspacePlacementEntity")
@@ -98,8 +98,8 @@ final class WorkspacePersistenceController {
         }
     }
 
-    func recordRecentlyClosedWorkspace(
-        _ recentlyClosedWorkspace: RecentlyClosedWorkspaceStateInput,
+    func recordWindowRecentWorkspace(
+        _ recentWorkspace: WindowRecentWorkspaceInput,
         for sceneIdentity: WorkspaceSceneIdentity,
         limit: Int,
     ) {
@@ -124,14 +124,14 @@ final class WorkspacePersistenceController {
                 let now = Date()
 
                 let workspaceEntity = try Self.upsertWorkspaceEntity(
-                    for: recentlyClosedWorkspace.workspace,
+                    for: recentWorkspace.workspace,
                     context: context,
                     existingWorkspacesByID: &existingWorkspacesByID,
                     sessionSnapshots: Self.makeSessionSnapshots(
-                        for: recentlyClosedWorkspace.workspace,
-                        launchConfigurationsBySessionID: recentlyClosedWorkspace.launchConfigurationsBySessionID,
-                        titlesBySessionID: recentlyClosedWorkspace.titlesBySessionID,
-                        transcriptsBySessionID: recentlyClosedWorkspace.transcriptsBySessionID,
+                        for: recentWorkspace.workspace,
+                        launchConfigurationsBySessionID: recentWorkspace.launchConfigurationsBySessionID,
+                        titlesBySessionID: recentWorkspace.titlesBySessionID,
+                        transcriptsBySessionID: recentWorkspace.transcriptsBySessionID,
                     ),
                     now: now,
                 )
@@ -144,7 +144,7 @@ final class WorkspacePersistenceController {
                 placement.role = WorkspacePlacementRole.recent.rawValue
                 placement.windowID = sceneIdentity.windowID
                 placement.sortOrder = Int64(existingRecentPlacements.count)
-                placement.restoreSortOrder = Int64(recentlyClosedWorkspace.formerIndex)
+                placement.restoreSortOrder = Int64(recentWorkspace.formerIndex)
                 placement.updatedAt = now
                 placement.lastOpenedAt = nil
                 placement.isPinned = false
@@ -175,15 +175,15 @@ final class WorkspacePersistenceController {
                     try context.save()
                 }
             } catch {
-                Logger.persistence.error("Core Data could not record a recently closed workspace for the active window. The live session remains available, but undo-close history was not persisted correctly. Window ID: \(sceneIdentity.windowID.uuidString, privacy: .public). Workspace ID: \(recentlyClosedWorkspace.workspace.id.rawValue.uuidString, privacy: .public). Error: \(String(describing: error), privacy: .public)")
+                Logger.persistence.error("Core Data could not record window-local recent workspace history for the active window. The live session remains available, but undo-close history was not persisted correctly. Window ID: \(sceneIdentity.windowID.uuidString, privacy: .public). Workspace ID: \(recentWorkspace.workspace.id.rawValue.uuidString, privacy: .public). Error: \(String(describing: error), privacy: .public)")
                 context.rollback()
             }
         }
     }
 
-    func consumeMostRecentRecentlyClosedWorkspace(
+    func consumeMostRecentWindowRecentWorkspace(
         for sceneIdentity: WorkspaceSceneIdentity,
-    ) -> PersistedRecentlyClosedWorkspace? {
+    ) -> WindowRecentWorkspaceRecord? {
         let context = container.viewContext
         return context.performAndWait {
             do {
@@ -211,7 +211,7 @@ final class WorkspacePersistenceController {
                     return nil
                 }
 
-                let restoredWorkspace = PersistedRecentlyClosedWorkspace(
+                let restoredWorkspace = WindowRecentWorkspaceRecord(
                     revision: revision,
                     formerIndex: Int(placement.restoreSortOrder),
                 )
@@ -235,7 +235,7 @@ final class WorkspacePersistenceController {
         }
     }
 
-    func clearRecentlyClosedWorkspaces(for sceneIdentity: WorkspaceSceneIdentity) {
+    func clearWindowRecentWorkspaces(for sceneIdentity: WorkspaceSceneIdentity) {
         let context = container.viewContext
         context.performAndWait {
             do {

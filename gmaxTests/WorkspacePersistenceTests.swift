@@ -521,8 +521,8 @@ struct WorkspacePersistenceTests {
         let persistence = WorkspacePersistenceController.inMemoryForTesting()
         let launchConfiguration = TestSupport.makeLaunchContextBuilder(defaultCurrentDirectory: "/tmp/gmax-tests").makeLaunchConfiguration()
 
-        persistence.recordRecentlyClosedWorkspace(
-            RecentlyClosedWorkspaceStateInput(
+        persistence.recordWindowRecentWorkspace(
+            WindowRecentWorkspaceInput(
                 workspace: firstRecentWorkspace,
                 formerIndex: 2,
                 launchConfigurationsBySessionID: [:],
@@ -532,8 +532,8 @@ struct WorkspacePersistenceTests {
             for: firstSceneIdentity,
             limit: WorkspacePersistenceDefaults.maxRecentlyClosedWorkspaceCount,
         )
-        persistence.recordRecentlyClosedWorkspace(
-            RecentlyClosedWorkspaceStateInput(
+        persistence.recordWindowRecentWorkspace(
+            WindowRecentWorkspaceInput(
                 workspace: secondRecentWorkspace,
                 formerIndex: 5,
                 launchConfigurationsBySessionID: [:],
@@ -544,8 +544,8 @@ struct WorkspacePersistenceTests {
             limit: WorkspacePersistenceDefaults.maxRecentlyClosedWorkspaceCount,
         )
 
-        let restoredFirstSceneRecentWorkspaces = persistence.loadRecentlyClosedWorkspaces(for: firstSceneIdentity)
-        let restoredSecondSceneRecentWorkspaces = persistence.loadRecentlyClosedWorkspaces(for: secondSceneIdentity)
+        let restoredFirstSceneRecentWorkspaces = persistence.loadWindowRecentWorkspaces(for: firstSceneIdentity)
+        let restoredSecondSceneRecentWorkspaces = persistence.loadWindowRecentWorkspaces(for: secondSceneIdentity)
 
         #expect(restoredFirstSceneRecentWorkspaces.map(\.revision.title) == ["Closed in Window A"])
         #expect(restoredSecondSceneRecentWorkspaces.map(\.revision.title) == ["Closed in Window B"])

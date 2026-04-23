@@ -54,7 +54,7 @@ struct WorkspaceRevision: Identifiable, Hashable, Codable {
     var paneSnapshotsBySessionID: [TerminalSessionID: WorkspaceSessionSnapshot]
 }
 
-struct PersistedRecentlyClosedWorkspace: Hashable, Codable {
+struct WindowRecentWorkspaceRecord: Hashable, Codable {
     var revision: WorkspaceRevision
     var formerIndex: Int
 }
@@ -63,7 +63,7 @@ struct WorkspaceWindowStateSnapshot: Hashable, Codable {
     var selectedWorkspaceID: WorkspaceID?
 }
 
-struct RecentlyClosedWorkspaceStateInput {
+struct WindowRecentWorkspaceInput {
     var workspace: Workspace
     var formerIndex: Int
     var launchConfigurationsBySessionID: [TerminalSessionID: TerminalLaunchConfiguration]
