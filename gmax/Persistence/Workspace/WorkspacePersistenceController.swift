@@ -1,6 +1,6 @@
 /*
  WorkspacePersistenceController owns the durable workspace repository surface.
- It restores per-window live and recent workspace state, manages saved library
+ It restores per-window live and window-recent workspace state, manages saved library
  entries plus their current revisions, and gives the rest of the app one
  main-actor entrypoint into Core Data-backed workspace persistence.
  */
@@ -62,7 +62,7 @@ final class WorkspacePersistenceController {
     func loadWindowRecentWorkspaces(for sceneIdentity: WorkspaceSceneIdentity) -> [WindowRecentWorkspaceRecord] {
         let context = container.viewContext
         return context.performAndWait {
-            Self.loadPlacements(role: .recent, sceneIdentity: sceneIdentity, in: context)
+            Self.loadPlacements(role: .windowRecent, sceneIdentity: sceneIdentity, in: context)
                 .compactMap { placement in
                     guard let revision = Self.workspaceRevision(for: placement.workspace, placement: placement) else {
                         return nil
@@ -83,7 +83,7 @@ final class WorkspacePersistenceController {
             request.resultType = .countResultType
             request.predicate = NSCompoundPredicate(
                 andPredicateWithSubpredicates: [
-                    NSPredicate(format: "role == %@", WorkspacePlacementRole.recent.rawValue),
+                    NSPredicate(format: "role == %@", WorkspacePlacementRole.windowRecent.rawValue),
                     NSPredicate(format: "windowID == %@", sceneIdentity.windowID as CVarArg),
                 ],
             )
@@ -109,7 +109,7 @@ final class WorkspacePersistenceController {
                 let request = NSFetchRequest<WorkspacePlacementEntity>(entityName: "WorkspacePlacementEntity")
                 request.predicate = NSCompoundPredicate(
                     andPredicateWithSubpredicates: [
-                        NSPredicate(format: "role == %@", WorkspacePlacementRole.recent.rawValue),
+                        NSPredicate(format: "role == %@", WorkspacePlacementRole.windowRecent.rawValue),
                         NSPredicate(format: "windowID == %@", sceneIdentity.windowID as CVarArg),
                     ],
                 )
@@ -141,7 +141,7 @@ final class WorkspacePersistenceController {
                     placement.id = workspaceEntity.id
                     placement.createdAt = now
                 }
-                placement.role = WorkspacePlacementRole.recent.rawValue
+                placement.role = WorkspacePlacementRole.windowRecent.rawValue
                 placement.windowID = sceneIdentity.windowID
                 placement.sortOrder = Int64(existingRecentPlacements.count)
                 placement.restoreSortOrder = Int64(recentWorkspace.formerIndex)
@@ -191,7 +191,7 @@ final class WorkspacePersistenceController {
                 request.fetchLimit = 1
                 request.predicate = NSCompoundPredicate(
                     andPredicateWithSubpredicates: [
-                        NSPredicate(format: "role == %@", WorkspacePlacementRole.recent.rawValue),
+                        NSPredicate(format: "role == %@", WorkspacePlacementRole.windowRecent.rawValue),
                         NSPredicate(format: "windowID == %@", sceneIdentity.windowID as CVarArg),
                     ],
                 )
@@ -239,7 +239,7 @@ final class WorkspacePersistenceController {
         let context = container.viewContext
         context.performAndWait {
             do {
-                let recentPlacements = Self.loadPlacements(role: .recent, sceneIdentity: sceneIdentity, in: context)
+                let recentPlacements = Self.loadPlacements(role: .windowRecent, sceneIdentity: sceneIdentity, in: context)
                 for placement in recentPlacements {
                     context.delete(placement)
                 }
@@ -640,7 +640,7 @@ extension WorkspacePersistenceController {
         switch role {
             case .library:
                 request.predicate = NSPredicate(format: "role == %@", role.rawValue)
-            case .live, .recent:
+            case .live, .windowRecent:
                 request.predicate = NSCompoundPredicate(
                     andPredicateWithSubpredicates: [
                         NSPredicate(format: "role == %@", role.rawValue),
@@ -916,7 +916,7 @@ extension WorkspacePersistenceController {
                     return false
                 }
 
-                return role == .live || role == .recent || role == .library
+                return role == .live || role == .windowRecent || role == .library
             }
             guard !hasLiveReference else {
                 continue

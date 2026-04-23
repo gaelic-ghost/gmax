@@ -6,7 +6,7 @@ struct WorkspaceSceneIdentity: Codable, Hashable {
 
 enum WorkspacePlacementRole: String, Codable, Hashable {
     case live
-    case recent
+    case windowRecent = "recent"
     case library
 }
 

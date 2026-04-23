@@ -431,10 +431,12 @@ Why this separation matters:
 The current implementation is:
 
 - `WorkspaceEntity` is the canonical workspace payload row
-- `WorkspacePlacementEntity` tracks whether that payload is `.live`, `.recent`,
-  or `.library`, and which scene identity owns the live or recent placement
-- `WorkspaceStore` now treats `.recent` placements as the source of truth for
-  workspace undo and recency instead of keeping a parallel in-memory stack
+- `WorkspacePlacementEntity` tracks whether that payload is `.live`,
+  `.windowRecent`, or `.library`, and which scene identity owns the live or
+  window-recent placement
+- `WorkspaceStore` now treats `.windowRecent` placements as the source of
+  truth for workspace undo and recency instead of keeping a parallel in-memory
+  stack
 - the saved library is browsed through lightweight listing metadata denormalized
   onto `.library` placements
 
@@ -581,7 +583,7 @@ Preferred follow-through:
 The command model should map to these layers clearly:
 
 - `Close Workspace`: remove from live session, then apply the settings matrix above
-- `Undo Close Workspace`: restore the most recent durable `.recent` workspace
+- `Undo Close Workspace`: restore the most recent durable `.windowRecent` workspace
   for the active window
 - `Save Workspace`: explicitly persist the current live workspace into the saved library without closing it
 - `Open Workspace...`: browse and reopen saved workspaces from the saved library
@@ -639,7 +641,7 @@ superseded.
 The structural persistence work that actually landed is:
 
 - one canonical `WorkspaceEntity` payload model
-- one `WorkspacePlacementEntity` model for `.live`, `.recent`, and `.library`
+- one `WorkspacePlacementEntity` model for `.live`, `.windowRecent`, and `.library`
 - one data-driven `WindowGroup` scene identity for per-window restore
 
 Use
