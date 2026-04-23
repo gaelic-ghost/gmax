@@ -502,8 +502,9 @@ Dedicated window close and reopen:
   `Command-W` slot
 - `WorkspaceWindowSceneView` publishes the active
   `WorkspaceSceneIdentity` as scene command context
-- when a window disappears, the scene records that identity in
-  `WorkspaceWindowRestorationController`
+- when a window disappears, the scene routes that identity through
+  `WorkspaceWindowRestorationController`, which updates the durable
+  `WorkspaceWindowEntity` record in Core Data
 - `Undo Close Window` pops the newest closed identity and reopens it with
   `openWindow(value:)`
 - because reopen uses the same `WorkspaceSceneIdentity`, the window restores

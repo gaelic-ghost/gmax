@@ -49,6 +49,42 @@ struct WorkspacePersistenceTests {
         #expect(restoredWindowState.selectedWorkspaceID == secondWorkspace.id)
     }
 
+    @Test func `persistSceneStateNow creates an open durable window record`() throws {
+        let persistence = WorkspacePersistenceController.inMemoryForTesting()
+        let sceneIdentity = WorkspaceSceneIdentity()
+        let workspace = TestSupport.makeWorkspace(title: "Workspace 1")
+        let model = WorkspaceStore(
+            sceneIdentity: sceneIdentity,
+            workspaces: [workspace],
+            persistence: persistence,
+            launchContextBuilder: TestSupport.makeLaunchContextBuilder(defaultCurrentDirectory: "/tmp/gmax-tests"),
+        )
+
+        model.persistedSelectedWorkspaceID = workspace.id
+        model.persistSceneStateNow(reason: .unitTestImmediateFlush)
+
+        #expect(persistence.loadLiveSceneIdentities() == [sceneIdentity])
+    }
+
+    @Test func `markWindowClosed moves a persisted window into recently closed history`() throws {
+        let persistence = WorkspacePersistenceController.inMemoryForTesting()
+        let sceneIdentity = WorkspaceSceneIdentity()
+        let workspace = TestSupport.makeWorkspace(title: "Workspace 1")
+        let model = WorkspaceStore(
+            sceneIdentity: sceneIdentity,
+            workspaces: [workspace],
+            persistence: persistence,
+            launchContextBuilder: TestSupport.makeLaunchContextBuilder(defaultCurrentDirectory: "/tmp/gmax-tests"),
+        )
+
+        model.persistedSelectedWorkspaceID = workspace.id
+        model.persistSceneStateNow(reason: .unitTestImmediateFlush)
+        persistence.markWindowClosed(sceneIdentity)
+
+        #expect(persistence.loadLiveSceneIdentities().isEmpty)
+        #expect(persistence.loadRecentlyClosedWindowSceneIdentities() == [sceneIdentity])
+    }
+
     @Test func `save and open saved workspace restore large nested layout across five panes`() throws {
         let leftTopPane = PaneLeaf()
         let leftBottomPane = PaneLeaf()

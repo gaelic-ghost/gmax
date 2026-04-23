@@ -246,16 +246,13 @@ final class WorkspacePersistenceController {
     func loadWindowState(for sceneIdentity: WorkspaceSceneIdentity) -> WorkspaceWindowStateSnapshot? {
         let context = container.viewContext
         return context.performAndWait {
-            let request = NSFetchRequest<WorkspaceWindowStateEntity>(entityName: "WorkspaceWindowStateEntity")
-            request.predicate = NSPredicate(format: "windowID == %@", sceneIdentity.windowID as CVarArg)
-            request.fetchLimit = 1
-
             do {
-                guard let windowState = try context.fetch(request).first else {
+                try Self.migrateLegacyWindowState(for: sceneIdentity, in: context)
+                guard let window = try Self.loadWindowEntity(id: sceneIdentity.windowID, in: context) else {
                     return nil
                 }
 
-                let selectedWorkspaceID = windowState.selectedWorkspaceID.map(WorkspaceID.init(rawValue:))
+                let selectedWorkspaceID = window.selectedWorkspaceID.map(WorkspaceID.init(rawValue:))
                 return WorkspaceWindowStateSnapshot(selectedWorkspaceID: selectedWorkspaceID)
             } catch {
                 Logger.persistence.error(
@@ -272,26 +269,20 @@ final class WorkspacePersistenceController {
     ) -> [WorkspaceSceneIdentity] {
         let context = container.viewContext
         return context.performAndWait {
-            let request = NSFetchRequest<WorkspacePlacementEntity>(entityName: "WorkspacePlacementEntity")
-            if let sceneIdentities, !sceneIdentities.isEmpty {
-                request.predicate = NSPredicate(
-                    format: "role == %@ AND windowID IN %@",
-                    WorkspacePlacementRole.live.rawValue,
-                    sceneIdentities.map(\.windowID),
-                )
-            } else {
-                request.predicate = NSPredicate(
-                    format: "role == %@ AND windowID != nil",
-                    WorkspacePlacementRole.live.rawValue,
-                )
-            }
-            request.sortDescriptors = [
-                NSSortDescriptor(key: #keyPath(WorkspacePlacementEntity.updatedAt), ascending: false),
-            ]
-
             do {
-                let placements = try context.fetch(request)
-                let orderedPersistedSceneIdentities = Self.uniqueSceneIdentities(from: placements)
+                if let sceneIdentities {
+                    try Self.migrateLegacyWindowStateIfNeeded(
+                        preferredSceneIdentities: sceneIdentities,
+                        in: context,
+                    )
+                } else {
+                    try Self.migrateAllLegacyWindowState(in: context)
+                }
+                let orderedPersistedSceneIdentities = try Self.loadWindowEntities(
+                    matching: sceneIdentities?.map(\.windowID),
+                    isOpen: true,
+                    in: context,
+                ).map { WorkspaceSceneIdentity(windowID: $0.id) }
 
                 guard let sceneIdentities, !sceneIdentities.isEmpty else {
                     return orderedPersistedSceneIdentities
@@ -311,19 +302,39 @@ final class WorkspacePersistenceController {
         }
     }
 
-    nonisolated private static func uniqueSceneIdentities(from placements: [WorkspacePlacementEntity]) -> [WorkspaceSceneIdentity] {
-        var seenWindowIDs: Set<UUID> = []
-
-        return placements.compactMap { placement in
-            guard let windowID = placement.windowID else {
-                return nil
+    func loadRecentlyClosedWindowSceneIdentities() -> [WorkspaceSceneIdentity] {
+        let context = container.viewContext
+        return context.performAndWait {
+            do {
+                try Self.migrateAllLegacyWindowState(in: context)
+                return try Self.loadWindowEntities(matching: nil, isOpen: false, in: context)
+                    .map { WorkspaceSceneIdentity(windowID: $0.id) }
+            } catch {
+                Logger.persistence.error(
+                    "Core Data could not load recently closed windows for restoration commands. The app will continue, but Undo Close Window may be unavailable until window persistence loads correctly. Error: \(String(describing: error), privacy: .public)",
+                )
+                context.rollback()
+                return []
             }
-            guard seenWindowIDs.insert(windowID).inserted else {
-                return nil
-            }
-
-            return WorkspaceSceneIdentity(windowID: windowID)
         }
+    }
+
+    func markWindowOpen(_ sceneIdentity: WorkspaceSceneIdentity, title: String? = nil, selectedWorkspaceID: WorkspaceID? = nil) {
+        updateWindowRecord(
+            for: sceneIdentity,
+            title: title,
+            selectedWorkspaceID: selectedWorkspaceID,
+            isOpen: true,
+        )
+    }
+
+    func markWindowClosed(_ sceneIdentity: WorkspaceSceneIdentity) {
+        updateWindowRecord(
+            for: sceneIdentity,
+            title: nil,
+            selectedWorkspaceID: nil,
+            isOpen: false,
+        )
     }
 
     func saveSceneState(
@@ -385,18 +396,20 @@ final class WorkspacePersistenceController {
                     context.delete(stalePlacement)
                 }
 
-                let windowStateRequest = NSFetchRequest<WorkspaceWindowStateEntity>(entityName: "WorkspaceWindowStateEntity")
-                windowStateRequest.predicate = NSPredicate(format: "windowID == %@", sceneIdentity.windowID as CVarArg)
-                windowStateRequest.fetchLimit = 1
                 let now = Date()
-                let windowState = try context.fetch(windowStateRequest).first
-                    ?? WorkspaceWindowStateEntity(context: context)
-                if windowState.objectID.isTemporaryID {
-                    windowState.windowID = sceneIdentity.windowID
-                    windowState.createdAt = now
+                try Self.migrateLegacyWindowState(for: sceneIdentity, in: context)
+                let window = try Self.requireOrCreateWindowEntity(id: sceneIdentity.windowID, context: context)
+                if window.objectID.isTemporaryID {
+                    window.id = sceneIdentity.windowID
+                    window.createdAt = now
                 }
-                windowState.selectedWorkspaceID = selectedWorkspaceID?.rawValue
-                windowState.updatedAt = now
+                window.updatedAt = now
+                window.lastActiveAt = now
+                window.selectedWorkspaceID = selectedWorkspaceID?.rawValue
+                window.title = selectedWorkspaceID
+                    .flatMap { workspaceID in liveWorkspaces.first { $0.id == workspaceID }?.title }
+                    ?? liveWorkspaces.first?.title
+                window.isOpen = true
 
                 try Self.deleteOrphanedWorkspaceRecords(
                     existingWorkspacesByID: existingWorkspacesByID,
@@ -616,6 +629,43 @@ final class WorkspacePersistenceController {
 }
 
 extension WorkspacePersistenceController {
+    private func updateWindowRecord(
+        for sceneIdentity: WorkspaceSceneIdentity,
+        title: String?,
+        selectedWorkspaceID: WorkspaceID?,
+        isOpen: Bool,
+    ) {
+        let context = container.viewContext
+        context.performAndWait {
+            do {
+                try Self.migrateLegacyWindowState(for: sceneIdentity, in: context)
+                let now = Date()
+                let window = try Self.requireOrCreateWindowEntity(id: sceneIdentity.windowID, context: context)
+                if window.objectID.isTemporaryID {
+                    window.id = sceneIdentity.windowID
+                    window.createdAt = now
+                }
+                window.updatedAt = now
+                window.lastActiveAt = now
+                if let selectedWorkspaceID {
+                    window.selectedWorkspaceID = selectedWorkspaceID.rawValue
+                }
+                if let title {
+                    window.title = title
+                }
+                window.isOpen = isOpen
+                if context.hasChanges {
+                    try context.save()
+                }
+            } catch {
+                Logger.persistence.error(
+                    "Core Data could not update the durable window record for the active workspace scene. Window restore behavior may be stale until the next successful save. Window ID: \(sceneIdentity.windowID.uuidString, privacy: .public). Open state: \(isOpen, privacy: .public). Error: \(String(describing: error), privacy: .public)",
+                )
+                context.rollback()
+            }
+        }
+    }
+
     private nonisolated static func loadPlacements(
         role: WorkspacePlacementRole,
         sceneIdentity: WorkspaceSceneIdentity,
@@ -954,6 +1004,120 @@ extension WorkspacePersistenceController {
             workspaceEntity.recentWindowID = sceneIdentity.windowID
             workspaceEntity.recentSortOrder = placement.restoreSortOrder
             context.delete(placement)
+        }
+    }
+
+    private nonisolated static func loadWindowEntities(
+        matching windowIDs: [UUID]?,
+        isOpen: Bool,
+        in context: NSManagedObjectContext,
+    ) throws -> [WorkspaceWindowEntity] {
+        let request = NSFetchRequest<WorkspaceWindowEntity>(entityName: "WorkspaceWindowEntity")
+        var predicates = [NSPredicate(format: "isOpen == %@", NSNumber(value: isOpen))]
+        if let windowIDs, !windowIDs.isEmpty {
+            predicates.append(NSPredicate(format: "id IN %@", windowIDs))
+        }
+        request.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: predicates)
+        request.sortDescriptors = [
+            NSSortDescriptor(key: #keyPath(WorkspaceWindowEntity.lastActiveAt), ascending: false),
+            NSSortDescriptor(key: #keyPath(WorkspaceWindowEntity.updatedAt), ascending: false),
+        ]
+        return try context.fetch(request)
+    }
+
+    private nonisolated static func loadWindowEntity(
+        id: UUID,
+        in context: NSManagedObjectContext,
+    ) throws -> WorkspaceWindowEntity? {
+        let request = NSFetchRequest<WorkspaceWindowEntity>(entityName: "WorkspaceWindowEntity")
+        request.fetchLimit = 1
+        request.predicate = NSPredicate(format: "id == %@", id as CVarArg)
+        return try context.fetch(request).first
+    }
+
+    private nonisolated static func requireOrCreateWindowEntity(
+        id: UUID,
+        context: NSManagedObjectContext,
+    ) throws -> WorkspaceWindowEntity {
+        if let entity = try loadWindowEntity(id: id, in: context) {
+            return entity
+        }
+
+        let entity = WorkspaceWindowEntity(context: context)
+        entity.id = id
+        return entity
+    }
+
+    private nonisolated static func migrateAllLegacyWindowState(in context: NSManagedObjectContext) throws {
+        let request = NSFetchRequest<WorkspaceWindowStateEntity>(entityName: "WorkspaceWindowStateEntity")
+        let legacyWindows = try context.fetch(request)
+        guard !legacyWindows.isEmpty else {
+            return
+        }
+
+        for legacyWindow in legacyWindows {
+            try migrateLegacyWindowState(
+                for: WorkspaceSceneIdentity(windowID: legacyWindow.windowID),
+                in: context,
+            )
+        }
+    }
+
+    private nonisolated static func migrateLegacyWindowStateIfNeeded(
+        preferredSceneIdentities: [WorkspaceSceneIdentity],
+        in context: NSManagedObjectContext,
+    ) throws {
+        for sceneIdentity in preferredSceneIdentities {
+            try migrateLegacyWindowState(for: sceneIdentity, in: context)
+            guard let window = try loadWindowEntity(id: sceneIdentity.windowID, in: context) else {
+                continue
+            }
+            window.isOpen = true
+        }
+
+        if context.hasChanges {
+            try context.save()
+        }
+    }
+
+    private nonisolated static func migrateLegacyWindowState(
+        for sceneIdentity: WorkspaceSceneIdentity,
+        in context: NSManagedObjectContext,
+    ) throws {
+        let legacyRequest = NSFetchRequest<WorkspaceWindowStateEntity>(entityName: "WorkspaceWindowStateEntity")
+        legacyRequest.fetchLimit = 1
+        legacyRequest.predicate = NSPredicate(format: "windowID == %@", sceneIdentity.windowID as CVarArg)
+
+        let livePlacements = loadPlacements(role: .live, sceneIdentity: sceneIdentity, in: context)
+        let legacyWindowState = try context.fetch(legacyRequest).first
+
+        guard legacyWindowState != nil || !livePlacements.isEmpty else {
+            return
+        }
+
+        let now = Date()
+        let window = try requireOrCreateWindowEntity(id: sceneIdentity.windowID, context: context)
+        if window.objectID.isTemporaryID {
+            window.id = sceneIdentity.windowID
+            window.createdAt = legacyWindowState?.createdAt ?? livePlacements.first?.createdAt ?? now
+        }
+        window.updatedAt = legacyWindowState?.updatedAt ?? livePlacements.first?.updatedAt ?? now
+        window.lastActiveAt = livePlacements.first?.updatedAt ?? legacyWindowState?.updatedAt ?? now
+        if let selectedWorkspaceID = legacyWindowState?.selectedWorkspaceID {
+            window.selectedWorkspaceID = selectedWorkspaceID
+        }
+        if window.title == nil {
+            window.title = livePlacements.first?.title
+        }
+        if !livePlacements.isEmpty {
+            window.isOpen = true
+        }
+
+        if let legacyWindowState {
+            context.delete(legacyWindowState)
+        }
+        if context.hasChanges {
+            try context.save()
         }
     }
 

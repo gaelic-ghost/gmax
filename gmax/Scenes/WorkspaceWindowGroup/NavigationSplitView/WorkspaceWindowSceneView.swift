@@ -409,6 +409,7 @@ struct WorkspaceWindowSceneView: View {
                 )
             },
             onWillTerminate: {
+                windowRestoration.noteApplicationWillTerminate()
                 workspaceStore.persistSceneStateNow(
                     reason: WorkspacePersistenceSaveReason.appWillTerminate,
                 )

@@ -741,6 +741,14 @@ Likely work:
 - migrate `WorkspaceWindowStateEntity` into it
 - migrate launch-restore window bookkeeping into Core Data queries
 
+Status:
+
+- complete
+- `WorkspaceWindowEntity` is now the durable source for window selection,
+  open-versus-closed state, and window recency
+- legacy `WorkspaceWindowStateEntity` rows and launch-restore window IDs from
+  `UserDefaults` are only migration inputs now, not the ongoing source of truth
+
 ### Slice 3. Introduce window membership plus durable recency
 
 Goals:
@@ -1480,18 +1488,21 @@ The current persistence model does the following:
 2. uses `WorkspacePlacementEntity` to describe whether that payload is
    `.live` or `.library`, while recent-close state lives on the workspace
    entity itself
-3. restores live workspaces from scene-identity-scoped placements and recently
-   closed workspaces from durable workspace-owned window metadata
-4. restores saved library entries from `.library` placements
-5. keeps scene-local UI restoration in `@SceneStorage` instead of mixing that
+3. uses `WorkspaceWindowEntity` as the durable per-window record for selected
+   workspace, open-versus-closed state, and window recency
+4. restores live workspaces from scene-identity-scoped placements, recently
+   closed workspaces from durable workspace-owned window metadata, and
+   restorable windows from durable window records
+5. restores saved library entries from `.library` placements
+6. keeps scene-local UI restoration in `@SceneStorage` instead of mixing that
    state into the persistence store
-6. intentionally allows different workspace windows to persist and restore
+7. intentionally allows different workspace windows to persist and restore
    independent live and recently closed state keyed by `WorkspaceSceneIdentity`
-7. debounces mutation-triggered scene saves by 200 ms
-8. also flushes scene persistence immediately when a window becomes active or
+8. debounces mutation-triggered scene saves by 200 ms
+9. also flushes scene persistence immediately when a window becomes active or
    inactive, when a scene becomes inactive or backgrounds, when the scene view
    disappears, and when the app is about to terminate
-9. runs a per-window periodic background save task on a user-configurable
+10. runs a per-window periodic background save task on a user-configurable
    interval that defaults to five minutes
 
 ## Recommended Next Follow-Through

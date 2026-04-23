@@ -95,4 +95,18 @@ struct WorkspaceWindowRestorationControllerTests {
 
         #expect(controller.consumePendingLaunchRestoreSceneIdentities().isEmpty)
     }
+
+    @Test func `application termination does not treat disappearing windows as recently closed`() {
+        let sceneIdentity = WorkspaceSceneIdentity()
+        let controller = WorkspaceWindowRestorationController(
+            initialSceneIdentity: sceneIdentity,
+            pendingLaunchRestoreSceneIdentities: [],
+        )
+
+        controller.markWindowOpen(sceneIdentity)
+        controller.noteApplicationWillTerminate()
+        controller.recordWindowClosed(sceneIdentity)
+
+        #expect(controller.recentlyClosedWindowSceneIdentities.isEmpty)
+    }
 }

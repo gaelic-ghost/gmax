@@ -82,6 +82,7 @@ struct WorkspacePersistenceProfileTests {
     @Test func `managed object model provides migration defaults for required timestamp fields`() throws {
         let model = WorkspacePersistenceController.makeManagedObjectModel()
         let workspaceEntity = try #require(model.entitiesByName["WorkspaceEntity"])
+        let windowEntity = try #require(model.entitiesByName["WorkspaceWindowEntity"])
         let placementEntity = try #require(model.entitiesByName["WorkspacePlacementEntity"])
 
         let workspaceCreatedAt = workspaceEntity.attributesByName["createdAt"]
@@ -89,6 +90,11 @@ struct WorkspacePersistenceProfileTests {
         let workspaceLastActiveAt = workspaceEntity.attributesByName["lastActiveAt"]
         let workspaceRecentWindowID = workspaceEntity.attributesByName["recentWindowID"]
         let workspaceRecentSortOrder = workspaceEntity.attributesByName["recentSortOrder"]
+        let windowCreatedAt = windowEntity.attributesByName["createdAt"]
+        let windowUpdatedAt = windowEntity.attributesByName["updatedAt"]
+        let windowLastActiveAt = windowEntity.attributesByName["lastActiveAt"]
+        let windowSelectedWorkspaceID = windowEntity.attributesByName["selectedWorkspaceID"]
+        let windowIsOpen = windowEntity.attributesByName["isOpen"]
         let placementCreatedAt = placementEntity.attributesByName["createdAt"]
         let placementUpdatedAt = placementEntity.attributesByName["updatedAt"]
 
@@ -97,6 +103,11 @@ struct WorkspacePersistenceProfileTests {
         #expect(workspaceLastActiveAt?.defaultValue is Date)
         #expect(workspaceRecentWindowID?.isOptional == true)
         #expect(workspaceRecentSortOrder?.defaultValue as? Int64 == 0)
+        #expect(windowCreatedAt?.defaultValue is Date)
+        #expect(windowUpdatedAt?.defaultValue is Date)
+        #expect(windowLastActiveAt?.defaultValue is Date)
+        #expect(windowSelectedWorkspaceID?.isOptional == true)
+        #expect(windowIsOpen?.defaultValue as? Bool == false)
         #expect(placementCreatedAt?.defaultValue is Date)
         #expect(placementUpdatedAt?.defaultValue is Date)
         #expect(workspaceEntity.attributesByName["savedWorkspaceID"] == nil)

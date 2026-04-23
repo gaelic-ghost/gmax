@@ -63,6 +63,17 @@ final class WorkspacePlacementEntity: NSManagedObject {
     @NSManaged var workspace: WorkspaceEntity?
 }
 
+@objc(WorkspaceWindowEntity)
+final class WorkspaceWindowEntity: NSManagedObject {
+    @NSManaged var id: UUID
+    @NSManaged var createdAt: Date
+    @NSManaged var updatedAt: Date
+    @NSManaged var lastActiveAt: Date
+    @NSManaged var selectedWorkspaceID: UUID?
+    @NSManaged var title: String?
+    @NSManaged var isOpen: Bool
+}
+
 @objc(WorkspaceWindowStateEntity)
 final class WorkspaceWindowStateEntity: NSManagedObject {
     @NSManaged var windowID: UUID

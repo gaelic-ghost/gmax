@@ -7,27 +7,27 @@ final class WorkspaceWindowRestorationController: ObservableObject {
 
     let initialSceneIdentity: WorkspaceSceneIdentity
 
-    private let userDefaults: UserDefaults
+    private let persistence: WorkspacePersistenceController
     private var openSceneIdentities: Set<WorkspaceSceneIdentity> = []
     private var launchRestoreSceneIdentities: [WorkspaceSceneIdentity]
     private var hasConsumedPendingLaunchRestoreSceneIdentities = false
+    private var isApplicationTerminating = false
 
     init(
         persistence: WorkspacePersistenceController = .shared,
         userDefaults: UserDefaults = .standard,
     ) {
-        self.userDefaults = userDefaults
+        self.persistence = persistence
         let shouldRestore = WorkspacePersistenceDefaults.restoreWorkspacesOnLaunch(userDefaults: userDefaults)
         let preferredSceneIdentities = Self.storedLaunchRestoreSceneIdentities(userDefaults: userDefaults)
         let persistedSceneIdentities: [WorkspaceSceneIdentity] = if shouldRestore {
-            if preferredSceneIdentities.isEmpty {
-                persistence.loadLiveSceneIdentities()
-            } else {
-                persistence.loadLiveSceneIdentities(matching: preferredSceneIdentities)
-            }
+            preferredSceneIdentities.isEmpty
+                ? persistence.loadLiveSceneIdentities()
+                : persistence.loadLiveSceneIdentities(matching: preferredSceneIdentities)
         } else {
             []
         }
+        recentlyClosedWindowSceneIdentities = persistence.loadRecentlyClosedWindowSceneIdentities()
         launchRestoreSceneIdentities = persistedSceneIdentities
         initialSceneIdentity = persistedSceneIdentities.first ?? WorkspaceSceneIdentity()
     }
@@ -36,46 +36,40 @@ final class WorkspaceWindowRestorationController: ObservableObject {
         initialSceneIdentity: WorkspaceSceneIdentity,
         pendingLaunchRestoreSceneIdentities: [WorkspaceSceneIdentity],
     ) {
-        userDefaults = UserDefaults(suiteName: "WorkspaceWindowRestorationController.\(UUID().uuidString)") ?? .standard
+        persistence = .inMemoryForTesting()
         self.initialSceneIdentity = initialSceneIdentity
         launchRestoreSceneIdentities = [initialSceneIdentity] + pendingLaunchRestoreSceneIdentities
     }
 
     func markWindowOpen(_ sceneIdentity: WorkspaceSceneIdentity) {
+        isApplicationTerminating = false
         openSceneIdentities.insert(sceneIdentity)
         if !launchRestoreSceneIdentities.contains(sceneIdentity) {
             launchRestoreSceneIdentities.append(sceneIdentity)
         }
-        recentlyClosedWindowSceneIdentities.removeAll { $0 == sceneIdentity }
-        persistLaunchRestoreSceneIdentities()
+        persistence.markWindowOpen(sceneIdentity)
+        recentlyClosedWindowSceneIdentities = persistence.loadRecentlyClosedWindowSceneIdentities()
     }
 
     func recordWindowClosed(_ sceneIdentity: WorkspaceSceneIdentity) {
+        guard !isApplicationTerminating else {
+            openSceneIdentities.remove(sceneIdentity)
+            return
+        }
+
         openSceneIdentities.remove(sceneIdentity)
         launchRestoreSceneIdentities.removeAll { $0 == sceneIdentity }
-        recentlyClosedWindowSceneIdentities.removeAll { $0 == sceneIdentity }
-        recentlyClosedWindowSceneIdentities.append(sceneIdentity)
-        persistLaunchRestoreSceneIdentities()
+        persistence.markWindowClosed(sceneIdentity)
+        recentlyClosedWindowSceneIdentities = persistence.loadRecentlyClosedWindowSceneIdentities()
     }
 
     func popMostRecentlyClosedWindow() -> WorkspaceSceneIdentity? {
-        recentlyClosedWindowSceneIdentities.popLast()
-    }
-
-    func consumePendingLaunchRestoreSceneIdentities() -> [WorkspaceSceneIdentity] {
-        guard !hasConsumedPendingLaunchRestoreSceneIdentities else {
-            return []
+        guard let sceneIdentity = recentlyClosedWindowSceneIdentities.first else {
+            return nil
         }
 
-        hasConsumedPendingLaunchRestoreSceneIdentities = true
-        return Array(launchRestoreSceneIdentities.dropFirst()).filter { !openSceneIdentities.contains($0) }
-    }
-
-    private func persistLaunchRestoreSceneIdentities() {
-        userDefaults.set(
-            launchRestoreSceneIdentities.map(\.windowID.uuidString),
-            forKey: WorkspacePersistenceDefaults.launchRestoreWindowIDsKey,
-        )
+        recentlyClosedWindowSceneIdentities = Array(recentlyClosedWindowSceneIdentities.dropFirst())
+        return sceneIdentity
     }
 
     private static func storedLaunchRestoreSceneIdentities(
@@ -88,5 +82,18 @@ final class WorkspaceWindowRestorationController: ObservableObject {
         return rawWindowIDs.compactMap { rawWindowID in
             UUID(uuidString: rawWindowID).map { WorkspaceSceneIdentity(windowID: $0) }
         }
+    }
+
+    func noteApplicationWillTerminate() {
+        isApplicationTerminating = true
+    }
+
+    func consumePendingLaunchRestoreSceneIdentities() -> [WorkspaceSceneIdentity] {
+        guard !hasConsumedPendingLaunchRestoreSceneIdentities else {
+            return []
+        }
+
+        hasConsumedPendingLaunchRestoreSceneIdentities = true
+        return Array(launchRestoreSceneIdentities.dropFirst()).filter { !openSceneIdentities.contains($0) }
     }
 }

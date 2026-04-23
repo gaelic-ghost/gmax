@@ -146,6 +146,10 @@ extension WorkspacePersistenceController {
         workspacePlacementEntity.name = "WorkspacePlacementEntity"
         workspacePlacementEntity.managedObjectClassName = NSStringFromClass(WorkspacePlacementEntity.self)
 
+        let workspaceWindowEntity = NSEntityDescription()
+        workspaceWindowEntity.name = "WorkspaceWindowEntity"
+        workspaceWindowEntity.managedObjectClassName = NSStringFromClass(WorkspaceWindowEntity.self)
+
         let workspaceWindowStateEntity = NSEntityDescription()
         workspaceWindowStateEntity.name = "WorkspaceWindowStateEntity"
         workspaceWindowStateEntity.managedObjectClassName = NSStringFromClass(WorkspaceWindowStateEntity.self)
@@ -215,6 +219,26 @@ extension WorkspacePersistenceController {
         let placementPreviewText = attribute(name: "previewText", type: .stringAttributeType, isOptional: true)
         let placementSearchText = attribute(name: "searchText", type: .stringAttributeType, isOptional: true)
         let placementPaneCount = attribute(name: "paneCount", type: .integer64AttributeType, defaultValue: 0)
+
+        let windowID = attribute(name: "id", type: .UUIDAttributeType)
+        let windowCreatedAt = attribute(
+            name: "createdAt",
+            type: .dateAttributeType,
+            defaultValue: migrationDefaultDate,
+        )
+        let windowUpdatedAt = attribute(
+            name: "updatedAt",
+            type: .dateAttributeType,
+            defaultValue: migrationDefaultDate,
+        )
+        let windowLastActiveAt = attribute(
+            name: "lastActiveAt",
+            type: .dateAttributeType,
+            defaultValue: migrationDefaultDate,
+        )
+        let windowSelectedWorkspaceID = attribute(name: "selectedWorkspaceID", type: .UUIDAttributeType, isOptional: true)
+        let windowTitle = attribute(name: "title", type: .stringAttributeType, isOptional: true)
+        let windowIsOpen = attribute(name: "isOpen", type: .booleanAttributeType, defaultValue: false)
 
         let windowStateWindowID = attribute(name: "windowID", type: .UUIDAttributeType)
         let windowStateSelectedWorkspaceID = attribute(name: "selectedWorkspaceID", type: .UUIDAttributeType, isOptional: true)
@@ -374,6 +398,16 @@ extension WorkspacePersistenceController {
             placementWorkspace,
         ]
 
+        workspaceWindowEntity.properties = [
+            windowID,
+            windowCreatedAt,
+            windowUpdatedAt,
+            windowLastActiveAt,
+            windowSelectedWorkspaceID,
+            windowTitle,
+            windowIsOpen,
+        ]
+
         workspaceWindowStateEntity.properties = [
             windowStateWindowID,
             windowStateSelectedWorkspaceID,
@@ -399,6 +433,7 @@ extension WorkspacePersistenceController {
             workspaceEntity,
             paneNodeEntity,
             workspacePlacementEntity,
+            workspaceWindowEntity,
             workspaceWindowStateEntity,
             paneSessionSnapshotEntity,
         ]
