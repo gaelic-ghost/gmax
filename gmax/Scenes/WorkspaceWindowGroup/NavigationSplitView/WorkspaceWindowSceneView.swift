@@ -216,24 +216,21 @@ struct WorkspaceWindowSceneView: View {
             requestPaneFocus(insertedPaneID)
         }
         let closePaneInWorkspace: (WorkspaceID, PaneID) -> Void = { workspaceID, paneID in
-            let wasFocusedPane = focusedTarget == .pane(paneID)
             workspaceStore.closePane(paneID, in: workspaceID)
             prunePaneNavigationState()
-            let historyFallbackPaneID = paneFocusHistory.last
-            let applyCloseFallbackFocus = {
-                if let historyFallbackPaneID {
-                    requestPaneFocus(historyFallbackPaneID)
-                } else if isInspectorVisible {
+            switch paneFocusTargetAfterClosingPane(
+                closedPaneID: paneID,
+                focusedTarget: focusedTarget,
+                survivingPaneIDs: paneIDsInWorkspace(workspaceID),
+                paneFocusHistory: paneFocusHistory,
+                isInspectorVisible: isInspectorVisible,
+            ) {
+                case .pane(let paneID):
+                    requestPaneFocus(paneID)
+                case .inspector:
                     applyFocusAssignment(.inspector)
-                } else {
+                case .sidebar, nil:
                     applyFocusAssignment(.none)
-                }
-            }
-
-            if wasFocusedPane {
-                applyCloseFallbackFocus()
-            } else if case let .pane(currentPaneID) = focusedTarget, !paneIDsInWorkspace(workspaceID).contains(currentPaneID) {
-                applyCloseFallbackFocus()
             }
         }
         let moveFocusedPaneFocus: (PaneFocusDirection) -> Void = { direction in
@@ -440,7 +437,7 @@ struct WorkspaceWindowSceneView: View {
                 .disabled(!canSplitFocusedPane)
                 .accessibilityIdentifier("workspaceWindow.splitRightButton")
 
-                Button("Split Down", systemImage: "uiwindow.split.2x1.rotate.90") {
+                Button("Split Down", systemImage: "uiwindow.split.2x1") {
                     splitFocusedPane(.down)
                 }
                 .labelStyle(.iconOnly)
@@ -691,4 +688,34 @@ private func overlapLength(
     candidateMax: CGFloat,
 ) -> CGFloat {
     max(0, min(currentMax, candidateMax) - max(currentMin, candidateMin))
+}
+
+func paneFocusTargetAfterClosingPane(
+    closedPaneID: PaneID,
+    focusedTarget: WorkspaceFocusTarget?,
+    survivingPaneIDs: Set<PaneID>,
+    paneFocusHistory: [PaneID],
+    isInspectorVisible: Bool,
+) -> WorkspaceFocusTarget? {
+    let shouldRepairFocus = focusedTarget == .pane(closedPaneID) || {
+        guard case let .pane(currentPaneID) = focusedTarget else {
+            return false
+        }
+
+        return !survivingPaneIDs.contains(currentPaneID)
+    }()
+
+    guard shouldRepairFocus else {
+        return focusedTarget
+    }
+
+    if let historyFallbackPaneID = paneFocusHistory.last(where: survivingPaneIDs.contains) {
+        return .pane(historyFallbackPaneID)
+    }
+
+    if isInspectorVisible {
+        return .inspector
+    }
+
+    return nil
 }

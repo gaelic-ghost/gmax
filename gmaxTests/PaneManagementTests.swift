@@ -72,7 +72,7 @@ struct PaneManagementTests {
         #expect(insertedSession.currentDirectory == "/tmp/inherited-pane")
     }
 
-    @Test func `close pane falls back to the next surviving pane and removes the session`() throws {
+    @Test func `close pane removes the session and collapses to surviving leaves`() throws {
         let leftPane = PaneLeaf()
         let topRightPane = PaneLeaf()
         let bottomRightPane = PaneLeaf()
@@ -104,10 +104,9 @@ struct PaneManagementTests {
         _ = model.sessions.ensureSession(id: topRightPane.sessionID)
         _ = model.sessions.ensureSession(id: bottomRightPane.sessionID)
 
-        let nextFocusedPaneID = model.closePane(topRightPane.id, in: workspace.id)
+        model.closePane(topRightPane.id, in: workspace.id)
 
         let updatedWorkspace = try #require(model.workspaces.first(where: { $0.id == workspace.id }))
-        #expect(nextFocusedPaneID == bottomRightPane.id)
         #expect(updatedWorkspace.paneLeaves.map(\.id) == [leftPane.id, bottomRightPane.id])
         #expect(model.sessions.session(for: topRightPane.sessionID) == nil)
     }
@@ -122,16 +121,15 @@ struct PaneManagementTests {
 
         let pane = try #require(workspace.root?.firstLeaf())
         _ = model.sessions.ensureSession(id: pane.sessionID)
-        let nextFocusedPaneID = model.closePane(pane.id, in: workspace.id)
+        model.closePane(pane.id, in: workspace.id)
         let updatedWorkspace = try #require(model.workspaces.first(where: { $0.id == workspace.id }))
 
-        #expect(nextFocusedPaneID == nil)
         #expect(updatedWorkspace.root == nil)
         #expect(updatedWorkspace.paneCount == 0)
         #expect(model.sessions.session(for: pane.sessionID) == nil)
     }
 
-    @Test func `closing the focused pane after multiple splits falls back to the adjacent surviving pane`() throws {
+    @Test func `closing the focused pane after multiple splits preserves the surviving layout`() throws {
         let workspace = TestSupport.makeWorkspace(title: "Workspace 1")
         let model = WorkspaceStore(
             workspaces: [workspace],
@@ -146,14 +144,89 @@ struct PaneManagementTests {
             model.workspaces.first(where: { $0.id == workspace.id })?.paneLeaves.first(where: { $0.id == bottomRightPaneID })?.sessionID,
         )
 
-        let nextFocusedPaneID = model.closePane(bottomRightPaneID, in: workspace.id)
+        model.closePane(bottomRightPaneID, in: workspace.id)
 
         let updatedWorkspace = try #require(model.workspaces.first(where: { $0.id == workspace.id }))
         let survivingLeaves = updatedWorkspace.paneLeaves
 
-        #expect(nextFocusedPaneID == rightPaneID)
         #expect(survivingLeaves.map(\.id) == [originalPane.id, rightPaneID])
         #expect(model.sessions.session(for: bottomRightSessionID) == nil)
+    }
+
+    @Test func `closing a focused pane restores the newest surviving pane from history`() {
+        let leftPaneID = PaneID()
+        let middlePaneID = PaneID()
+        let rightPaneID = PaneID()
+
+        let target = paneFocusTargetAfterClosingPane(
+            closedPaneID: rightPaneID,
+            focusedTarget: .pane(rightPaneID),
+            survivingPaneIDs: [leftPaneID, middlePaneID],
+            paneFocusHistory: [leftPaneID, middlePaneID, rightPaneID],
+            isInspectorVisible: true,
+        )
+
+        #expect(target == .pane(middlePaneID))
+    }
+
+    @Test func `closing a nonfocused pane keeps the current focused pane when it survives`() {
+        let leftPaneID = PaneID()
+        let middlePaneID = PaneID()
+        let rightPaneID = PaneID()
+
+        let target = paneFocusTargetAfterClosingPane(
+            closedPaneID: rightPaneID,
+            focusedTarget: .pane(leftPaneID),
+            survivingPaneIDs: [leftPaneID, middlePaneID],
+            paneFocusHistory: [middlePaneID, leftPaneID, rightPaneID],
+            isInspectorVisible: true,
+        )
+
+        #expect(target == .pane(leftPaneID))
+    }
+
+    @Test func `closing a focused pane skips closed history entries and uses the newest surviving pane`() {
+        let leftPaneID = PaneID()
+        let middlePaneID = PaneID()
+        let rightPaneID = PaneID()
+
+        let target = paneFocusTargetAfterClosingPane(
+            closedPaneID: rightPaneID,
+            focusedTarget: .pane(rightPaneID),
+            survivingPaneIDs: [leftPaneID],
+            paneFocusHistory: [leftPaneID, middlePaneID, rightPaneID],
+            isInspectorVisible: true,
+        )
+
+        #expect(target == .pane(leftPaneID))
+    }
+
+    @Test func `closing the last focused pane falls back to inspector when visible`() {
+        let paneID = PaneID()
+
+        let target = paneFocusTargetAfterClosingPane(
+            closedPaneID: paneID,
+            focusedTarget: .pane(paneID),
+            survivingPaneIDs: [],
+            paneFocusHistory: [paneID],
+            isInspectorVisible: true,
+        )
+
+        #expect(target == .inspector)
+    }
+
+    @Test func `closing the last focused pane clears focus when inspector is hidden`() {
+        let paneID = PaneID()
+
+        let target = paneFocusTargetAfterClosingPane(
+            closedPaneID: paneID,
+            focusedTarget: .pane(paneID),
+            survivingPaneIDs: [],
+            paneFocusHistory: [paneID],
+            isInspectorVisible: false,
+        )
+
+        #expect(target == nil)
     }
 
     @Test func `set split fraction updates the workspace tree`() throws {

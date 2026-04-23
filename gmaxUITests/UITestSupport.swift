@@ -7,10 +7,11 @@
 
 import XCTest
 
-final class GmaxUITestCase: XCTestCase {
+class GmaxUITestCase: XCTestCase {
     private enum UIProbe {
         static let initialWorkspaceTitle = "Workspace 1"
         static let sidebarWorkspaceListIdentifier = "sidebar.workspaceList"
+        static let workspaceWindowIdentifierPrefix = "main-window-"
     }
 
     override func setUpWithError() throws {
@@ -30,8 +31,14 @@ final class GmaxUITestCase: XCTestCase {
         return app
     }
 
+    func mainWorkspaceWindow(in app: XCUIApplication) -> XCUIElement {
+        app.windows.matching(
+            NSPredicate(format: "identifier BEGINSWITH %@", UIProbe.workspaceWindowIdentifierPrefix),
+        ).firstMatch
+    }
+
     func assertWorkspaceWindowIsVisible(in app: XCUIApplication) {
-        let workspaceList = app.descendants(matching: .any)[UIProbe.sidebarWorkspaceListIdentifier]
+        let workspaceList = workspaceSidebar(in: app)
         if workspaceList.waitForExistence(timeout: 2) {
             return
         }
@@ -47,6 +54,10 @@ final class GmaxUITestCase: XCTestCase {
             )
             return
         }
+    }
+
+    func workspaceSidebar(in app: XCUIApplication) -> XCUIElement {
+        mainWorkspaceWindow(in: app).descendants(matching: .any)[UIProbe.sidebarWorkspaceListIdentifier]
     }
 
     func attemptToPresentWorkspaceWindow(in app: XCUIApplication) {
@@ -163,12 +174,12 @@ final class GmaxUITestCase: XCTestCase {
 
     func sidebarWorkspaceRow(titled title: String, in scope: XCUIElement) -> XCUIElement {
         let workspaceList = scope.descendants(matching: .any)[UIProbe.sidebarWorkspaceListIdentifier]
-        return workspaceList.descendants(matching: .any)["sidebar.workspaceRow.\(title)"]
+        return workspaceList.descendants(matching: .any)["sidebar.workspaceRow.\(title)"].firstMatch
     }
 
     func sidebarWorkspacePaneCount(titled title: String, in scope: XCUIElement) -> XCUIElement {
         let workspaceList = scope.descendants(matching: .any)[UIProbe.sidebarWorkspaceListIdentifier]
-        return workspaceList.staticTexts["sidebar.workspacePaneCount.\(title)"]
+        return workspaceList.staticTexts["sidebar.workspacePaneCount.\(title)"].firstMatch
     }
 
     func sidebarWorkspaceRowLabel(titled title: String, in scope: XCUIElement) -> String {
@@ -196,19 +207,19 @@ final class GmaxUITestCase: XCTestCase {
     }
 
     func toggleInspectorButton(in app: XCUIApplication) -> XCUIElement {
-        app.buttons["workspaceWindow.toggleInspectorButton"]
+        mainWorkspaceWindow(in: app).buttons["workspaceWindow.toggleInspectorButton"]
     }
 
     func openSavedWorkspacesButton(in app: XCUIApplication) -> XCUIElement {
-        app.buttons["workspaceWindow.openSavedWorkspacesButton"]
+        mainWorkspaceWindow(in: app).buttons["workspaceWindow.openSavedWorkspacesButton"]
     }
 
     func newWorkspaceButton(in app: XCUIApplication) -> XCUIElement {
-        app.buttons["workspaceWindow.newWorkspaceButton"]
+        mainWorkspaceWindow(in: app).buttons["workspaceWindow.newWorkspaceButton"]
     }
 
     func focusFirstVisiblePane(in app: XCUIApplication) {
-        let pane = app.descendants(matching: .any)
+        let pane = mainWorkspaceWindow(in: app).descendants(matching: .any)
             .matching(NSPredicate(format: "identifier BEGINSWITH %@", "contentPane.leaf."))
             .firstMatch
         XCTAssertTrue(
