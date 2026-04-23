@@ -388,6 +388,9 @@ extension WorkspaceStore {
 
         if recordRecentlyClosed {
             recordRecentlyClosedWorkspace(workspace, formerIndex: workspaceIndex)
+        } else {
+            persistence.removeWorkspaceFromWindowHistory(workspaceID, for: sceneIdentity)
+            refreshRecentlyClosedWorkspaceCount()
         }
 
         workspaces.remove(at: workspaceIndex)

@@ -433,11 +433,11 @@ The current implementation is:
 - `WorkspaceEntity` is the canonical workspace payload row
 - `WorkspacePlacementEntity` tracks whether that payload is `.live` or
   `.library`, and which scene identity owns the live placement
-- `WorkspaceEntity` now carries the durable recent-window association used for
-  workspace undo and recency
-- `WorkspaceStore` now treats that workspace-owned recent metadata as the
-  source of truth for workspace undo instead of keeping a parallel in-memory
-  stack
+- `WindowWorkspaceMembershipEntity` now carries the durable window-to-workspace
+  association used for workspace undo and recency, while `WorkspaceEntity`
+  contributes the `lastActiveAt` timestamp used to rank inactive candidates
+- `WorkspaceStore` now treats membership-plus-recency as the source of truth
+  for workspace undo instead of keeping a parallel in-memory stack
 - the saved library is browsed through lightweight listing metadata denormalized
   onto `.library` placements
 

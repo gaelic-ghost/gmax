@@ -6,6 +6,7 @@
 //
 
 import CoreGraphics
+import CoreData
 @testable import gmax
 import Testing
 
@@ -114,6 +115,58 @@ struct WorkspaceLifecycleTests {
         #expect(model.workspaces.isEmpty)
     }
 
+    @Test func `close workspace with recently closed disabled clears durable window history for that workspace`() throws {
+        let defaults = UserDefaults.standard
+        let defaultsKey = WorkspacePersistenceDefaults.keepRecentlyClosedWorkspacesKey
+        let previousKeepRecentlyClosedValue = defaults.object(forKey: defaultsKey)
+        defer {
+            if let previousKeepRecentlyClosedValue {
+                defaults.set(previousKeepRecentlyClosedValue, forKey: defaultsKey)
+            } else {
+                defaults.removeObject(forKey: defaultsKey)
+            }
+        }
+
+        defaults.set(false, forKey: defaultsKey)
+
+        let sceneIdentity = WorkspaceSceneIdentity()
+        let closedWorkspace = TestSupport.makeWorkspace(title: "Workspace 1")
+        let survivingWorkspace = TestSupport.makeWorkspace(title: "Workspace 2")
+        let persistence = WorkspacePersistenceController.inMemoryForTesting()
+        let launchContextBuilder = TestSupport.makeLaunchContextBuilder(defaultCurrentDirectory: "/tmp/gmax-tests")
+
+        persistence.recordWorkspaceInRecentHistory(
+            WindowWorkspaceHistoryInput(
+                workspace: closedWorkspace,
+                formerIndex: 0,
+                launchConfigurationsBySessionID: [:],
+                titlesBySessionID: [:],
+                transcriptsBySessionID: [:],
+            ),
+            for: sceneIdentity,
+            limit: WorkspacePersistenceDefaults.maxRecentlyClosedWorkspaceCount,
+        )
+
+        let model = WorkspaceStore(
+            sceneIdentity: sceneIdentity,
+            workspaces: [closedWorkspace, survivingWorkspace],
+            persistence: persistence,
+            launchContextBuilder: launchContextBuilder,
+        )
+
+        let nextSelectedWorkspaceID = model.closeWorkspace(closedWorkspace.id)
+        let remainingHistory = persistence.loadRecentWorkspaceHistory(for: sceneIdentity)
+        let remainingMemberships = try fetchWindowWorkspaceMemberships(
+            windowID: sceneIdentity.windowID,
+            in: persistence.container.viewContext,
+        )
+
+        #expect(nextSelectedWorkspaceID == survivingWorkspace.id)
+        #expect(model.recentlyClosedWorkspaceCount == 0)
+        #expect(remainingHistory.isEmpty)
+        #expect(remainingMemberships.isEmpty)
+    }
+
     @Test func `default workspace store bootstrap does not require launching A shell process`() {
         let persistence = WorkspacePersistenceController.inMemoryForTesting()
 
@@ -148,4 +201,14 @@ struct WorkspaceLifecycleTests {
 
         #expect(restoredStore.persistedSelectedWorkspaceID == secondWorkspace.id)
     }
+}
+
+private func fetchWindowWorkspaceMemberships(
+    windowID: UUID,
+    in context: NSManagedObjectContext,
+) throws -> [WindowWorkspaceMembershipEntity] {
+    let request = NSFetchRequest<WindowWorkspaceMembershipEntity>(entityName: "WindowWorkspaceMembershipEntity")
+    request.predicate = NSPredicate(format: "windowID == %@", windowID as CVarArg)
+    request.sortDescriptors = [NSSortDescriptor(key: #keyPath(WindowWorkspaceMembershipEntity.sortOrder), ascending: true)]
+    return try context.fetch(request)
 }

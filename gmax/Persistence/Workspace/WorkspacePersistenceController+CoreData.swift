@@ -150,6 +150,10 @@ extension WorkspacePersistenceController {
         workspaceWindowEntity.name = "WorkspaceWindowEntity"
         workspaceWindowEntity.managedObjectClassName = NSStringFromClass(WorkspaceWindowEntity.self)
 
+        let windowWorkspaceMembershipEntity = NSEntityDescription()
+        windowWorkspaceMembershipEntity.name = "WindowWorkspaceMembershipEntity"
+        windowWorkspaceMembershipEntity.managedObjectClassName = NSStringFromClass(WindowWorkspaceMembershipEntity.self)
+
         let workspaceWindowStateEntity = NSEntityDescription()
         workspaceWindowStateEntity.name = "WorkspaceWindowStateEntity"
         workspaceWindowStateEntity.managedObjectClassName = NSStringFromClass(WorkspaceWindowStateEntity.self)
@@ -239,6 +243,21 @@ extension WorkspacePersistenceController {
         let windowSelectedWorkspaceID = attribute(name: "selectedWorkspaceID", type: .UUIDAttributeType, isOptional: true)
         let windowTitle = attribute(name: "title", type: .stringAttributeType, isOptional: true)
         let windowIsOpen = attribute(name: "isOpen", type: .booleanAttributeType, defaultValue: false)
+
+        let membershipID = attribute(name: "id", type: .UUIDAttributeType)
+        let membershipWindowID = attribute(name: "windowID", type: .UUIDAttributeType)
+        let membershipWorkspaceID = attribute(name: "workspaceID", type: .UUIDAttributeType)
+        let membershipSortOrder = attribute(name: "sortOrder", type: .integer64AttributeType, defaultValue: 0)
+        let membershipCreatedAt = attribute(
+            name: "createdAt",
+            type: .dateAttributeType,
+            defaultValue: migrationDefaultDate,
+        )
+        let membershipUpdatedAt = attribute(
+            name: "updatedAt",
+            type: .dateAttributeType,
+            defaultValue: migrationDefaultDate,
+        )
 
         let windowStateWindowID = attribute(name: "windowID", type: .UUIDAttributeType)
         let windowStateSelectedWorkspaceID = attribute(name: "selectedWorkspaceID", type: .UUIDAttributeType, isOptional: true)
@@ -408,6 +427,15 @@ extension WorkspacePersistenceController {
             windowIsOpen,
         ]
 
+        windowWorkspaceMembershipEntity.properties = [
+            membershipID,
+            membershipWindowID,
+            membershipWorkspaceID,
+            membershipSortOrder,
+            membershipCreatedAt,
+            membershipUpdatedAt,
+        ]
+
         workspaceWindowStateEntity.properties = [
             windowStateWindowID,
             windowStateSelectedWorkspaceID,
@@ -434,6 +462,7 @@ extension WorkspacePersistenceController {
             paneNodeEntity,
             workspacePlacementEntity,
             workspaceWindowEntity,
+            windowWorkspaceMembershipEntity,
             workspaceWindowStateEntity,
             paneSessionSnapshotEntity,
         ]

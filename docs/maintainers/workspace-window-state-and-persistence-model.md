@@ -101,17 +101,17 @@ placement entity:
 
 ### 2. Recently closed workspaces
 
-- recently closed workspaces are now driven by durable workspace-owned recency
-  metadata on `WorkspaceEntity`, keyed by the owning window identity
-- legacy `.windowRecent` placement rows are still lazily migrated forward from
-  older stores, but new recent-close writes no longer create that placement
-  role
+- recently closed workspaces are now driven by durable
+  `WindowWorkspaceMembershipEntity` rows plus workspace `lastActiveAt`
+- membership records keep the workspace associated with a specific window even
+  after it leaves the live working set
+- legacy `.windowRecent` placement rows and older workspace `recentWindowID`
+  fields are still lazily migrated forward from older stores, but new
+  recent-close writes no longer use either compatibility path
 - `WorkspaceStore` no longer keeps a parallel in-memory workspace undo stack
 - `Undo Close Workspace` now restores the most recent durable workspace
   associated with the current window
 - recency is driven by durable timestamps such as `lastActiveAt`
-- this is the preferred direction for workspace recency inside Slice 1, even
-  though the later model still wants cleaner explicit library-item entities
 
 ### 3. Library workspaces
 
@@ -763,6 +763,14 @@ Likely work:
 - add `lastActiveAt` to durable workspace records
 - replace `.windowRecent`-driven reopen logic with membership plus recency queries
 
+Status:
+
+- complete
+- window-scoped recent workspace history now comes from durable membership rows
+  plus workspace recency timestamps
+- legacy `.windowRecent` placement rows and workspace `recentWindowID` fields
+  are migration-only compatibility data now
+
 ### Slice 4. Split library entries out cleanly
 
 Goals:
@@ -887,8 +895,6 @@ WorkspaceEntity
 - createdAt: Date
 - updatedAt: Date
 - lastActiveAt: Date
-- recentWindowID: UUID?
-- recentSortOrder: Int64
 - notes: String?
 - previewText: String?
 - searchText: String?
@@ -902,13 +908,12 @@ This entity should own:
 - per-pane launch configuration snapshots
 - transcript and preview metadata
 - searchable text derived from the workspace contents
-- current durable recent-history metadata for one window while Slice 3 is still
-  in transition
 
 This entity should not own:
 
 - which window currently shows it
 - whether it is currently live or in the library
+- which window currently carries it as recent history
 - ordering in a sidebar or recent list
 - whether it is the current saved revision for a library entry
 
@@ -948,8 +953,8 @@ enum WorkspacePlacementRole: String {
 ```
 
 Older stores may still contain the legacy raw value `"recent"` for lazy
-migration into workspace-owned recency metadata, but that is no longer part of
-the active placement enum.
+migration into membership-based workspace recency history, but that is no
+longer part of the active placement enum.
 
 Interpretation:
 

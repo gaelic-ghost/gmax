@@ -588,7 +588,7 @@ struct WorkspacePersistenceTests {
     }
 
     @MainActor
-    @Test func `recording window recent workspace stores recency on the workspace entity instead of creating a recent placement`() throws {
+    @Test func `recording window recent workspace stores membership history instead of creating a recent placement`() throws {
         let sceneIdentity = WorkspaceSceneIdentity()
         let recentWorkspace = TestSupport.makeWorkspace(title: "Closed Workspace")
         let persistence = WorkspacePersistenceController.inMemoryForTesting()
@@ -610,15 +610,18 @@ struct WorkspacePersistenceTests {
         let windowID = sceneIdentity.windowID
         let fetchedWorkspaceEntity = try fetchWorkspaceEntity(id: workspaceID, in: context)
         let workspaceEntity = try #require(fetchedWorkspaceEntity)
+        let recentMemberships = try fetchWindowWorkspaceMemberships(windowID: windowID, in: context)
         let recentPlacements = try fetchWindowRecentPlacements(windowID: windowID, in: context)
 
-        #expect(workspaceEntity.recentWindowID == windowID)
-        #expect(workspaceEntity.recentSortOrder == 3)
+        #expect(workspaceEntity.recentWindowID == nil)
+        #expect(workspaceEntity.recentSortOrder == 0)
+        #expect(recentMemberships.map(\.workspaceID) == [workspaceID])
+        #expect(recentMemberships.first?.sortOrder == 3)
         #expect(recentPlacements.isEmpty)
     }
 
     @MainActor
-    @Test func `loading window recent workspaces migrates legacy recent placements onto the workspace entity`() throws {
+    @Test func `loading window recent workspaces migrates legacy recent placements onto workspace memberships`() throws {
         let sceneIdentity = WorkspaceSceneIdentity()
         let recentWorkspace = TestSupport.makeWorkspace(title: "Legacy Closed Workspace")
         let persistence = WorkspacePersistenceController.inMemoryForTesting()
@@ -668,12 +671,15 @@ struct WorkspacePersistenceTests {
         let restoredRecentWorkspaces = persistence.loadRecentWorkspaceHistory(for: sceneIdentity)
         let fetchedMigratedWorkspaceEntity = try fetchWorkspaceEntity(id: workspaceID, in: context)
         let migratedWorkspaceEntity = try #require(fetchedMigratedWorkspaceEntity)
+        let recentMemberships = try fetchWindowWorkspaceMemberships(windowID: windowID, in: context)
         let remainingRecentPlacements = try fetchWindowRecentPlacements(windowID: windowID, in: context)
 
         #expect(restoredRecentWorkspaces.map(\.revision.title) == ["Legacy Closed Workspace"])
         #expect(restoredRecentWorkspaces.first?.formerIndex == 4)
-        #expect(migratedWorkspaceEntity.recentWindowID == windowID)
-        #expect(migratedWorkspaceEntity.recentSortOrder == 4)
+        #expect(migratedWorkspaceEntity.recentWindowID == nil)
+        #expect(migratedWorkspaceEntity.recentSortOrder == 0)
+        #expect(recentMemberships.map(\.workspaceID) == [workspaceID])
+        #expect(recentMemberships.first?.sortOrder == 4)
         #expect(remainingRecentPlacements.isEmpty)
     }
 }
@@ -761,5 +767,15 @@ private func fetchWindowRecentPlacements(
             NSPredicate(format: "windowID == %@", windowID as CVarArg),
         ],
     )
+    return try context.fetch(request)
+}
+
+private func fetchWindowWorkspaceMemberships(
+    windowID: UUID,
+    in context: NSManagedObjectContext,
+) throws -> [WindowWorkspaceMembershipEntity] {
+    let request = NSFetchRequest<WindowWorkspaceMembershipEntity>(entityName: "WindowWorkspaceMembershipEntity")
+    request.predicate = NSPredicate(format: "windowID == %@", windowID as CVarArg)
+    request.sortDescriptors = [NSSortDescriptor(key: #keyPath(WindowWorkspaceMembershipEntity.sortOrder), ascending: true)]
     return try context.fetch(request)
 }

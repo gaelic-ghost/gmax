@@ -74,6 +74,16 @@ final class WorkspaceWindowEntity: NSManagedObject {
     @NSManaged var isOpen: Bool
 }
 
+@objc(WindowWorkspaceMembershipEntity)
+final class WindowWorkspaceMembershipEntity: NSManagedObject {
+    @NSManaged var id: UUID
+    @NSManaged var windowID: UUID
+    @NSManaged var workspaceID: UUID
+    @NSManaged var sortOrder: Int64
+    @NSManaged var createdAt: Date
+    @NSManaged var updatedAt: Date
+}
+
 @objc(WorkspaceWindowStateEntity)
 final class WorkspaceWindowStateEntity: NSManagedObject {
     @NSManaged var windowID: UUID

@@ -83,6 +83,7 @@ struct WorkspacePersistenceProfileTests {
         let model = WorkspacePersistenceController.makeManagedObjectModel()
         let workspaceEntity = try #require(model.entitiesByName["WorkspaceEntity"])
         let windowEntity = try #require(model.entitiesByName["WorkspaceWindowEntity"])
+        let membershipEntity = try #require(model.entitiesByName["WindowWorkspaceMembershipEntity"])
         let placementEntity = try #require(model.entitiesByName["WorkspacePlacementEntity"])
 
         let workspaceCreatedAt = workspaceEntity.attributesByName["createdAt"]
@@ -95,6 +96,9 @@ struct WorkspacePersistenceProfileTests {
         let windowLastActiveAt = windowEntity.attributesByName["lastActiveAt"]
         let windowSelectedWorkspaceID = windowEntity.attributesByName["selectedWorkspaceID"]
         let windowIsOpen = windowEntity.attributesByName["isOpen"]
+        let membershipCreatedAt = membershipEntity.attributesByName["createdAt"]
+        let membershipUpdatedAt = membershipEntity.attributesByName["updatedAt"]
+        let membershipSortOrder = membershipEntity.attributesByName["sortOrder"]
         let placementCreatedAt = placementEntity.attributesByName["createdAt"]
         let placementUpdatedAt = placementEntity.attributesByName["updatedAt"]
 
@@ -108,6 +112,9 @@ struct WorkspacePersistenceProfileTests {
         #expect(windowLastActiveAt?.defaultValue is Date)
         #expect(windowSelectedWorkspaceID?.isOptional == true)
         #expect(windowIsOpen?.defaultValue as? Bool == false)
+        #expect(membershipCreatedAt?.defaultValue is Date)
+        #expect(membershipUpdatedAt?.defaultValue is Date)
+        #expect(membershipSortOrder?.defaultValue as? Int64 == 0)
         #expect(placementCreatedAt?.defaultValue is Date)
         #expect(placementUpdatedAt?.defaultValue is Date)
         #expect(workspaceEntity.attributesByName["savedWorkspaceID"] == nil)
