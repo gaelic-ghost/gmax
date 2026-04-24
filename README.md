@@ -50,17 +50,19 @@ From the current app surface you can:
 
 The command surface is intentionally keyboard-forward. The current menu and shortcut model includes:
 
-- `cmd-n` for `New gmax Window`
-- `cmd-shift-n` for a new workspace
+- `cmd-n` for a new workspace
+- `cmd-shift-n` for `New gmax Window`
 - `cmd-o` to open the saved-workspace library
-- `cmd-s` to save the selected workspace
-- `cmd-shift-o` to reopen the most recently closed workspace for the active window
+- `cmd-option-o` to open the most recently closed workspace for the active window
+- `cmd-shift-o` to open the most recently closed window
+- `cmd-option-s` to close the selected workspace into the library
+- `cmd-shift-s` to close the active window into the library
 - `cmd-b` and `cmd-shift-b` to toggle the sidebar and inspector
 - `cmd-t`, `cmd-d`, and `cmd-shift-d` for pane creation and splits
 - `cmd-option-left/right/up/down` plus `cmd-option-[` and `cmd-option-]` for pane focus movement
 - `cmd-w` for the context-sensitive close behavior documented in [docs/maintainers/workspace-focus-guide.md](docs/maintainers/workspace-focus-guide.md)
-- `cmd-option-w` for `Close Window`
-- `shift-cmd-option-w` for `Undo Close Window`
+- `cmd-option-w` for `Close Workspace`
+- `cmd-shift-w` for `Close Window`
 
 ## Development
 
@@ -139,7 +141,7 @@ Key repo surfaces:
 
 ## Release Notes
 
-The repository already has release tags through `v0.0.5`. The current release-prep checkpoint is [docs/releases/v0.0.6-release-notes.md](docs/releases/v0.0.6-release-notes.md), and the broader internal-release quality bar is tracked in [docs/releases/v0.1.0-release-checklist.md](docs/releases/v0.1.0-release-checklist.md). Both release docs assume `README.md`, `ROADMAP.md`, and the maintainer notes stay aligned with the shipped persistence, library, and window-restoration model.
+The repository already has release tags through `v0.0.6`. The current release-prep checkpoint is [docs/releases/v0.0.7-release-notes.md](docs/releases/v0.0.7-release-notes.md), and the broader internal-release quality bar is tracked in [docs/releases/v0.1.0-release-checklist.md](docs/releases/v0.1.0-release-checklist.md). Both release docs assume `README.md`, `ROADMAP.md`, and the maintainer notes stay aligned with the shipped persistence, library, command, and window-restoration model.
 
 ## License
 

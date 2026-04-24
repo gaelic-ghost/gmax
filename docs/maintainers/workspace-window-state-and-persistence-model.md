@@ -109,7 +109,7 @@ placement entity:
   fields are still lazily migrated forward from older stores, but new
   recent-close writes no longer use either compatibility path
 - `WorkspaceStore` no longer keeps a parallel in-memory workspace undo stack
-- `Undo Close Workspace` now restores the most recent durable workspace
+- `Open Recent Workspace` now restores the most recent durable workspace
   associated with the current window
 - recency is driven by durable timestamps such as `lastActiveAt`
 
@@ -292,7 +292,7 @@ Under that model, "recently closed in this window" means:
 - not currently `.live`
 - sorted by most recent `lastActiveAt`
 
-That means `Undo Close Workspace` or `Open Recent Workspace` can be implemented
+That means `Open Recent Workspace` can be implemented
 as:
 
 1. query durable workspaces associated with the active window identity
@@ -446,7 +446,7 @@ Important notes:
   `WorkspaceWindowStateEntity` plus `UserDefaults` launch-restore bookkeeping
 - `id` should align with `WorkspaceSceneIdentity.windowID`
 - `isOpen` is the durable source for launch restore and closed-window reopening
-- `lastActiveAt` supports "Undo Close Window" or "reopen last closed window"
+- `lastActiveAt` supports "Open Recent Window" or "reopen last closed window"
   without needing a separate in-memory stack as the source of truth
 
 ### 4. Window membership record
@@ -588,8 +588,7 @@ Fetch:
 
 Result:
 
-- the single best durable reopen candidate for `Undo Close Workspace` or
-  `Open Recent Workspace`
+- the single best durable reopen candidate for `Open Recent Workspace`
 
 ### Query: list library items
 
@@ -886,23 +885,14 @@ Current progress:
 The data-model simplification changes some behavior details even if the visible
 commands stay familiar.
 
-### Undo Close Workspace
+### Open Recent Workspace
 
-The label can stay the same, but the implementation should become:
+The implementation should become:
 
 - "reopen the most recently active inactive workspace associated with this
   window"
 
 That is a clearer durable rule than "pop the top of an in-memory stack."
-
-### Open Recent Workspace
-
-If the app later wants an explicit recent-open command, it should use the same
-query as undo:
-
-- filter by window membership
-- exclude currently live workspaces
-- sort by `lastActiveAt`
 
 ### Open Library
 
@@ -1659,7 +1649,7 @@ Current behavior:
 - when the scene disappears, it records that identity in durable recently
   closed window history through `WorkspaceWindowRestorationController` before
   the final scene-state flush
-- `WorkspaceWindowSceneCommands` exposes a dedicated `Undo Close Window`
+- `WorkspaceWindowSceneCommands` exposes a dedicated `Open Recent Window`
   command that pops the newest closed identity and calls `openWindow(value:)`
   with that same `WorkspaceSceneIdentity`
 
@@ -1675,5 +1665,5 @@ restoration and our Core Data persistence model line up cleanly:
 This is intentionally different from creating a fresh new window:
 
 - `New gmax Window` creates a new `WorkspaceSceneIdentity`
-- `Undo Close Window` reopens the last closed identity so the same window can
+- `Open Recent Window` reopens the last closed identity so the same window can
   restore

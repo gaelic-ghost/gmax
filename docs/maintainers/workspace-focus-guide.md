@@ -415,8 +415,10 @@ into a separate command router.
 
 The command scene currently includes:
 
-- `SidebarCommands()`
-- `InspectorCommands()`
+- a scene-owned sidebar visibility toggle that mirrors the real sidebar state
+  and flips between `Show Sidebar` and `Hide Sidebar`
+- a scene-owned inspector visibility toggle that mirrors the real inspector
+  state and flips between `Show Inspector` and `Hide Inspector`
 - `TextEditingCommands()`
 - `TextFormattingCommands()`
 - `ToolbarCommands()`
@@ -424,21 +426,27 @@ The command scene currently includes:
 It also adds:
 
 - `New gmax Window` through the `WindowGroup` scene title
-- `New Workspace` with `Shift-Command-N`
+- `New Workspace` with `Command-N`
 - `Open Library…` with `Command-O`
-- `Save Workspace` with `Command-S`
+- `Open Recent Workspace` with `Option-Command-O`
+- `Close Workspace to Library` with `Option-Command-S`
+- `Close Workspace` with `Option-Command-W`
+- `Show Sidebar` / `Hide Sidebar` with `Command-B`
+- `Show Inspector` / `Hide Inspector` with `Shift-Command-B`
 - a context-sensitive `Command-W` slot
-- `Close Window` with `Option-Command-W`
-- `Undo Close Window` with `Shift-Option-Command-W`
+- `Close Window` with `Shift-Command-W`
+- `Close Window to Library` with `Shift-Command-S`
+- `Open Recent Window` with `Shift-Command-O`
 - a custom `Workspace` menu
 - a custom `Pane` menu
 
 The `Workspace` menu currently exposes:
 
 - `Close Window`
-- `Undo Close Window`
-- `Undo Close Workspace`
-- `Rename Workspace`
+- `Close Window to Library`
+- `Open Recent Window`
+- `Open Recent Workspace`
+- `Rename Workspace` with `Option-Command-R`
 - `Duplicate Workspace Layout`
 - `Close Workspace to Library`
 - `Close Workspace`
@@ -505,7 +513,7 @@ Dedicated window close and reopen:
 - when a window disappears, the scene routes that identity through
   `WorkspaceWindowRestorationController`, which updates the durable
   `WorkspaceWindowEntity` record in Core Data
-- `Undo Close Window` pops the newest closed identity and reopens it with
+- `Open Recent Window` pops the newest closed identity and reopens it with
   `openWindow(value:)`
 - because reopen uses the same `WorkspaceSceneIdentity`, the window restores
   the same per-window live workspaces, durable recently closed workspace
@@ -546,7 +554,7 @@ rather than trying to route commands upward.
 - terminal appearance settings
 - workspace restore-on-launch behavior
 - recently closed workspace retention
-- auto-save closed workspaces
+- auto-save closed workspaces and windows
 
 Settings are not currently routed through `WorkspaceStore`, focused values, or
 scene command infrastructure.

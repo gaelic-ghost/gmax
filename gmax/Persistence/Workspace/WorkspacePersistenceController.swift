@@ -350,7 +350,7 @@ final class WorkspacePersistenceController {
                     .map { WorkspaceSceneIdentity(windowID: $0.id) }
             } catch {
                 Logger.persistence.error(
-                    "Core Data could not load recently closed windows for restoration commands. The app will continue, but Undo Close Window may be unavailable until window persistence loads correctly. Error: \(String(describing: error), privacy: .public)",
+                    "Core Data could not load recently closed windows for restoration commands. The app will continue, but Open Recent Window may be unavailable until window persistence loads correctly. Error: \(String(describing: error), privacy: .public)",
                 )
                 context.rollback()
                 return []
@@ -367,12 +367,13 @@ final class WorkspacePersistenceController {
         )
     }
 
-    func markWindowClosed(_ sceneIdentity: WorkspaceSceneIdentity) {
+    func markWindowClosed(_ sceneIdentity: WorkspaceSceneIdentity, saveToLibrary: Bool) {
         updateWindowRecord(
             for: sceneIdentity,
             title: nil,
             selectedWorkspaceID: nil,
             isOpen: false,
+            saveToLibrary: saveToLibrary,
         )
     }
 
@@ -682,6 +683,7 @@ extension WorkspacePersistenceController {
         title: String?,
         selectedWorkspaceID: WorkspaceID?,
         isOpen: Bool,
+        saveToLibrary: Bool = false,
     ) {
         let context = container.viewContext
         context.performAndWait {
@@ -702,7 +704,7 @@ extension WorkspacePersistenceController {
                     window.title = title
                 }
                 window.isOpen = isOpen
-                if !isOpen {
+                if !isOpen, saveToLibrary {
                     _ = try Self.upsertWindowLibraryItem(for: sceneIdentity, in: context, now: now)
                 }
                 if context.hasChanges {

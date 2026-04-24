@@ -79,7 +79,7 @@ struct WorkspacePersistenceTests {
 
         model.persistedSelectedWorkspaceID = workspace.id
         model.persistSceneStateNow(reason: .unitTestImmediateFlush)
-        persistence.markWindowClosed(sceneIdentity)
+        persistence.markWindowClosed(sceneIdentity, saveToLibrary: true)
 
         #expect(persistence.loadLiveSceneIdentities().isEmpty)
         #expect(persistence.loadRecentlyClosedWindowSceneIdentities() == [sceneIdentity])
@@ -388,7 +388,7 @@ struct WorkspacePersistenceTests {
 
         model.persistedSelectedWorkspaceID = secondWorkspace.id
         model.persistSceneStateNow(reason: .unitTestImmediateFlush)
-        persistence.markWindowClosed(sceneIdentity)
+        persistence.markWindowClosed(sceneIdentity, saveToLibrary: true)
 
         let windowItems = persistence.listLibraryItems().filter { $0.kind == .window }
 
@@ -413,7 +413,7 @@ struct WorkspacePersistenceTests {
 
         model.persistedSelectedWorkspaceID = workspace.id
         model.persistSceneStateNow(reason: .unitTestImmediateFlush)
-        persistence.markWindowClosed(sceneIdentity)
+        persistence.markWindowClosed(sceneIdentity, saveToLibrary: true)
 
         let libraryItemID = try #require(
             persistence.listLibraryItems().first(where: { $0.kind == .window })?.id,
@@ -422,6 +422,25 @@ struct WorkspacePersistenceTests {
         let openResult = model.openLibraryItem(libraryItemID)
 
         #expect(openResult == .window(sceneIdentity))
+    }
+
+    @Test func `closing a window without library auto-save does not add a saved window item`() {
+        let workspace = TestSupport.makeWorkspace(title: "Workspace 1")
+        let persistence = WorkspacePersistenceController.inMemoryForTesting()
+        let sceneIdentity = WorkspaceSceneIdentity()
+        let model = WorkspaceStore(
+            sceneIdentity: sceneIdentity,
+            workspaces: [workspace],
+            persistence: persistence,
+            launchContextBuilder: TestSupport.makeLaunchContextBuilder(defaultCurrentDirectory: "/tmp/gmax-tests"),
+        )
+
+        model.persistedSelectedWorkspaceID = workspace.id
+        model.persistSceneStateNow(reason: .unitTestImmediateFlush)
+        persistence.markWindowClosed(sceneIdentity, saveToLibrary: false)
+
+        #expect(persistence.loadRecentlyClosedWindowSceneIdentities() == [sceneIdentity])
+        #expect(persistence.listLibraryItems().contains(where: { $0.kind == .window }) == false)
     }
 
     @Test func `open saved workspace returns nil when saved workspace pane tree is corrupted`() throws {

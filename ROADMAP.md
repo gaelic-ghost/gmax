@@ -312,3 +312,4 @@ Planned
 
 - 2026-04-22: Migrated `ROADMAP.md` to the canonical checklist structure used by the roadmap-maintenance workflow.
 - 2026-04-22: Folded the former standalone accessibility-upstream and observability follow-through sections into Milestone 3 and Milestone 6 so the roadmap tracks one milestone status per product area.
+- 2026-04-23: Shipped the `v0.0.7` command-and-sizing follow-through checkpoint with intentional keyboard shortcut alignment, configurable closed-item auto-save behavior, and less constrained default window sizing.

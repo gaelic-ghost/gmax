@@ -49,8 +49,8 @@ struct WorkspaceWindowRestorationControllerTests {
             pendingLaunchRestoreSceneIdentities: [],
         )
 
-        controller.recordWindowClosed(first)
-        controller.recordWindowClosed(second)
+        controller.recordWindowClosed(first, saveToLibrary: false)
+        controller.recordWindowClosed(second, saveToLibrary: false)
         controller.markWindowOpen(first)
 
         #expect(controller.recentlyClosedWindowSceneIdentities == [second])
@@ -64,8 +64,8 @@ struct WorkspaceWindowRestorationControllerTests {
             pendingLaunchRestoreSceneIdentities: [],
         )
 
-        controller.recordWindowClosed(first)
-        controller.recordWindowClosed(second)
+        controller.recordWindowClosed(first, saveToLibrary: false)
+        controller.recordWindowClosed(second, saveToLibrary: false)
 
         #expect(controller.popMostRecentlyClosedWindow() == second)
         #expect(controller.recentlyClosedWindowSceneIdentities == [first])
@@ -122,7 +122,7 @@ struct WorkspaceWindowRestorationControllerTests {
 
         controller.markWindowOpen(sceneIdentity)
         controller.noteApplicationWillTerminate()
-        controller.recordWindowClosed(sceneIdentity)
+        controller.recordWindowClosed(sceneIdentity, saveToLibrary: false)
 
         #expect(controller.recentlyClosedWindowSceneIdentities.isEmpty)
     }

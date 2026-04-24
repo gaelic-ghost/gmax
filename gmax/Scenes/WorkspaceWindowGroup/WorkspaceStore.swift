@@ -27,7 +27,7 @@ final class WorkspaceStore: ObservableObject {
                 WorkspacePersistenceDefaults.restoreWorkspacesOnLaunchKey:
                     WorkspacePersistenceDefaults.systemRestoresWindowsByDefault(),
                 WorkspacePersistenceDefaults.keepRecentlyClosedWorkspacesKey: true,
-                WorkspacePersistenceDefaults.autoSaveClosedWorkspacesKey: false,
+                WorkspacePersistenceDefaults.autoSaveClosedItemsKey: false,
                 WorkspacePersistenceDefaults.backgroundSaveIntervalMinutesKey:
                     WorkspacePersistenceDefaults.defaultBackgroundSaveIntervalMinutes,
             ],

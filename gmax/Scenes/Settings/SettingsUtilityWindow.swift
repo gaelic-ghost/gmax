@@ -23,8 +23,8 @@ struct SettingsUtilityWindow: View {
     @AppStorage(WorkspacePersistenceDefaults.keepRecentlyClosedWorkspacesKey)
     private var keepRecentlyClosedWorkspaces = true
 
-    @AppStorage(WorkspacePersistenceDefaults.autoSaveClosedWorkspacesKey)
-    private var autoSaveClosedWorkspaces = false
+    @AppStorage(WorkspacePersistenceDefaults.autoSaveClosedItemsKey)
+    private var autoSaveClosedItems = false
 
     @AppStorage(WorkspacePersistenceDefaults.backgroundSaveIntervalMinutesKey)
     private var backgroundSaveIntervalMinutes = WorkspacePersistenceDefaults.defaultBackgroundSaveIntervalMinutes
@@ -46,7 +46,7 @@ struct SettingsUtilityWindow: View {
             WorkspaceSettingsSection(
                 restoreWorkspacesOnLaunch: $restoreWorkspacesOnLaunch,
                 keepRecentlyClosedWorkspaces: $keepRecentlyClosedWorkspaces,
-                autoSaveClosedWorkspaces: $autoSaveClosedWorkspaces,
+                autoSaveClosedItems: $autoSaveClosedItems,
                 backgroundSaveIntervalMinutes: $backgroundSaveIntervalMinutes,
             )
         }

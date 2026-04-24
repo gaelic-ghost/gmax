@@ -71,11 +71,11 @@ class GmaxUITestCase: XCTestCase {
     }
 
     func attemptToPresentAnotherWorkspaceWindow(in app: XCUIApplication) {
-        app.typeKey("n", modifierFlags: .command)
+        app.typeKey("n", modifierFlags: [.command, .shift])
     }
 
     func createWorkspace(titled title: String, in app: XCUIApplication) {
-        app.typeKey("n", modifierFlags: [.command, .shift])
+        app.typeKey("n", modifierFlags: .command)
         assertWorkspaceExists(title, in: app)
     }
 

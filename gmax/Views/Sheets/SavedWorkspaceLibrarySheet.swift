@@ -166,7 +166,7 @@ struct LibrarySheet: View {
             }
             .padding(16)
         }
-        .frame(minWidth: 620, minHeight: 420)
+        .frame(idealWidth: 620, idealHeight: 420)
         .searchable(text: $searchText, prompt: "Search saved workspaces")
         .onAppear {
             normalizeSelection()

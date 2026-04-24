@@ -15,6 +15,8 @@ private enum FocusAssignment: Equatable {
 }
 
 struct WorkspaceWindowSceneView: View {
+    @AppStorage(WorkspacePersistenceDefaults.autoSaveClosedItemsKey)
+    private var autoSaveClosedItems = false
     @AppStorage(WorkspacePersistenceDefaults.backgroundSaveIntervalMinutesKey)
     private var backgroundSaveIntervalMinutes = WorkspacePersistenceDefaults.defaultBackgroundSaveIntervalMinutes
     @Environment(\.appearsActive) private var appearsActive
@@ -37,6 +39,7 @@ struct WorkspaceWindowSceneView: View {
     @State private var paneFocusHistory: [PaneID] = []
     @State private var pendingFocusedPaneID: PaneID?
     @State private var pendingHistoryPaneID: PaneID?
+    @State private var shouldSaveWindowToLibraryOnClose = false
     @StateObject private var workspaceStore: WorkspaceStore
 
     private let sceneIdentity: WorkspaceSceneIdentity
@@ -57,7 +60,26 @@ struct WorkspaceWindowSceneView: View {
         let openLibrary = {
             isLibraryPresented = true
         }
+        let isSidebarVisible = columnVisibility == .all
+        let toggleSidebar = {
+            let sidebarWillBeVisible = columnVisibility != .all
+            columnVisibility = sidebarWillBeVisible ? .all : .detailOnly
+            Logger.diagnostics.notice(
+                "Toggled sidebar visibility in the active shell window. Sidebar is now \(sidebarWillBeVisible ? "visible" : "hidden", privacy: .public).",
+            )
+        }
+        let toggleInspector = {
+            isInspectorVisible.toggle()
+            Logger.diagnostics.notice(
+                "Toggled inspector visibility in the active shell window. Inspector is now \(isInspectorVisible ? "visible" : "hidden", privacy: .public).",
+            )
+        }
         let closeWindow = {
+            shouldSaveWindowToLibraryOnClose = false
+            dismissWindow()
+        }
+        let closeWindowToLibrary = {
+            shouldSaveWindowToLibraryOnClose = true
             dismissWindow()
         }
         let normalizeSelection = {
@@ -324,7 +346,7 @@ struct WorkspaceWindowSceneView: View {
                 requestRenameWorkspace: presentWorkspaceRename,
                 requestDeleteWorkspace: presentWorkspaceDeletion,
             )
-            .navigationSplitViewColumnWidth(220)
+            .navigationSplitViewColumnWidth(ideal: 220)
         } detail: {
             ContentPane(
                 model: workspaceStore,
@@ -339,7 +361,7 @@ struct WorkspaceWindowSceneView: View {
                 },
                 onMovePaneFocus: moveFocusedPaneFocus,
             )
-            .navigationSplitViewColumnWidth(min: 640, ideal: 920)
+            .navigationSplitViewColumnWidth(ideal: 760)
         }
         .inspector(isPresented: $isInspectorVisible) {
             DetailPane(
@@ -348,7 +370,7 @@ struct WorkspaceWindowSceneView: View {
                 inspectedPaneID: inspectedPaneID,
                 focusedTarget: $focusedTarget,
             )
-            .inspectorColumnWidth(min: 220, ideal: 260, max: 340)
+            .inspectorColumnWidth(ideal: 260)
         }
         .modifier(WorkspaceWindowPresentationModifier(
             workspaceStore: workspaceStore,
@@ -384,7 +406,12 @@ struct WorkspaceWindowSceneView: View {
         .focusedSceneValue(\.activeWorkspaceSceneIdentity, sceneIdentity)
         .focusedSceneValue(\.selectedWorkspaceSelection, $selectedWorkspaceID)
         .focusedSceneValue(\.dismissPresentedWorkspaceModal, dismissPresentedWorkspaceModal)
+        .focusedSceneValue(\.isWorkspaceSidebarVisible, isSidebarVisible)
+        .focusedSceneValue(\.toggleWorkspaceSidebar, toggleSidebar)
+        .focusedSceneValue(\.isWorkspaceInspectorVisible, isInspectorVisible)
+        .focusedSceneValue(\.toggleWorkspaceInspector, toggleInspector)
         .focusedSceneValue(\.closeWorkspaceWindow, closeWindow)
+        .focusedSceneValue(\.closeWorkspaceWindowToLibrary, closeWindowToLibrary)
         .focusedSceneValue(\.openLibrary, openLibrary)
         .focusedSceneValue(\.presentWorkspaceRename, presentWorkspaceRename)
         .focusedSceneValue(\.presentWorkspaceDeletion, presentWorkspaceDeletion)
@@ -474,7 +501,11 @@ struct WorkspaceWindowSceneView: View {
                 workspaceStore.persistSceneStateNow(
                     reason: WorkspacePersistenceSaveReason.windowDisappeared,
                 )
-                windowRestoration.recordWindowClosed(sceneIdentity)
+                windowRestoration.recordWindowClosed(
+                    sceneIdentity,
+                    saveToLibrary: shouldSaveWindowToLibraryOnClose || autoSaveClosedItems,
+                )
+                shouldSaveWindowToLibraryOnClose = false
             },
         ))
         .toolbar {
@@ -517,10 +548,7 @@ struct WorkspaceWindowSceneView: View {
                     isInspectorVisible ? "Hide Inspector" : "Show Inspector",
                     systemImage: "sidebar.right",
                 ) {
-                    isInspectorVisible.toggle()
-                    Logger.diagnostics.notice(
-                        "Toggled inspector visibility in the active shell window. Inspector is now \(isInspectorVisible ? "visible" : "hidden", privacy: .public).",
-                    )
+                    toggleInspector()
                 }
                 .labelStyle(.iconOnly)
                 .help(isInspectorVisible ? "Hide the inspector (\u{21E7}\u{2318}B)" : "Show the inspector (\u{21E7}\u{2318}B)")
@@ -563,7 +591,7 @@ struct WorkspaceWindowSceneView: View {
         }
 
         normalizeSelection()
-        columnVisibility = restoredSidebarVisible ? .all : .doubleColumn
+        columnVisibility = restoredSidebarVisible ? .all : .detailOnly
         isInspectorVisible = restoredInspectorVisible
 
         Logger.diagnostics.notice(

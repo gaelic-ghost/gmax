@@ -132,7 +132,7 @@ Current behavior:
 - if the active focus target is a pane, `Command-W` becomes `Close Pane`
 - else the scene resolves close behavior from the active focus target plus the selected workspace state
 - window close remains the final scene-owned fallback when no narrower close target applies
-- a separate explicit `Close Window` command and `Undo Close Window` command now exist alongside that adaptive slot
+- a separate explicit `Close Window` command and `Open Recent Window` command now exist alongside that adaptive slot
 
 Why this was called out:
 
@@ -155,7 +155,7 @@ Recorded decision:
 - if focus is on the only workspace in a window and that workspace has no panes, `Command-W` closes the window
 - if focus is in the inspector, `Command-W` does nothing
 - `Close Window` remains available as a dedicated explicit action with its own shortcut
-- `Undo Close Window` reopens the most recently closed `WorkspaceSceneIdentity` with `openWindow(value:)`
+- `Open Recent Window` reopens the most recently closed `WorkspaceSceneIdentity` with `openWindow(value:)`
 
 Implementation follow-through:
 
