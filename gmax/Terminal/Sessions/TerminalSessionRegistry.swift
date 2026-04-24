@@ -21,15 +21,18 @@ final class TerminalSessionRegistry {
         sessionsByID = [:]
         for workspace in workspaces {
             for leaf in workspace.root?.leaves() ?? [] {
-                let paneSnapshot = restoredPaneSnapshotsBySessionID[leaf.sessionID]
+                guard let sessionID = leaf.terminalSessionID else {
+                    continue
+                }
+                let paneSnapshot = restoredPaneSnapshotsBySessionID[sessionID]
                 let launchConfiguration = paneSnapshot?.launchConfiguration ?? defaultLaunchConfiguration
-                sessionsByID[leaf.sessionID] = TerminalSession(
-                    id: leaf.sessionID,
+                sessionsByID[sessionID] = TerminalSession(
+                    id: sessionID,
                     launchConfiguration: launchConfiguration,
                     title: paneSnapshot?.title ?? "Shell",
                     currentDirectory: launchConfiguration.currentDirectory,
                 )
-                sessionsByID[leaf.sessionID]?.setRestoredHistory(paneSnapshot?.history)
+                sessionsByID[sessionID]?.setRestoredHistory(paneSnapshot?.history)
             }
         }
     }

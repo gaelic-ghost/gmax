@@ -18,10 +18,12 @@ extension WorkspaceStore {
         if workspace.root == nil {
             let pane = PaneLeaf()
             workspaces[workspaceIndex].root = .leaf(pane)
-            _ = sessions.ensureSession(
-                id: pane.sessionID,
-                launchConfiguration: launchContextBuilder.makeLaunchConfiguration(),
-            )
+            if let sessionID = pane.terminalSessionID {
+                _ = sessions.ensureSession(
+                    id: sessionID,
+                    launchConfiguration: launchContextBuilder.makeLaunchConfiguration(),
+                )
+            }
             schedulePersistenceSave(reason: .paneCreated)
             return pane.id
         }
@@ -44,7 +46,12 @@ extension WorkspaceStore {
             return
         }
 
-        let session = sessions.ensureSession(id: pane.sessionID)
+        guard let sessionID = pane.terminalSessionID else {
+            Logger.pane.error("The app was asked to relaunch a pane, but that pane does not currently host a terminal session. The relaunch request was dropped before any session state changed. Workspace ID: \(workspaceID.rawValue.uuidString, privacy: .public). Pane ID: \(paneID.rawValue.uuidString, privacy: .public)")
+            return
+        }
+
+        let session = sessions.ensureSession(id: sessionID)
         session.prepareForRelaunch()
         Logger.pane.notice("Requested a shell relaunch for the focused pane in a live workspace. Workspace title: \(workspace.title, privacy: .public). Workspace ID: \(workspaceID.rawValue.uuidString, privacy: .public). Pane ID: \(paneID.rawValue.uuidString, privacy: .public). Session ID: \(session.id.rawValue.uuidString, privacy: .public)")
     }
@@ -61,7 +68,12 @@ extension WorkspaceStore {
             return nil
         }
 
-        let sourceSession = sessions.ensureSession(id: sourcePane.sessionID)
+        guard let sourceSessionID = sourcePane.terminalSessionID else {
+            Logger.pane.error("The app was asked to split a pane and inherit terminal launch state, but the source pane does not currently host a terminal session. The split request was dropped before any pane-tree state changed. Workspace ID: \(workspaceID.rawValue.uuidString, privacy: .public). Pane ID: \(paneID.rawValue.uuidString, privacy: .public)")
+            return nil
+        }
+
+        let sourceSession = sessions.ensureSession(id: sourceSessionID)
         let inheritedCurrentDirectory = sourceSession.currentDirectory
             ?? sourceSession.launchConfiguration.currentDirectory
 
@@ -75,12 +87,14 @@ extension WorkspaceStore {
         }
 
         workspaces[workspaceIndex].root = root
-        _ = sessions.ensureSession(
-            id: newPane.sessionID,
-            launchConfiguration: launchContextBuilder.makeLaunchConfiguration(
-                currentDirectory: inheritedCurrentDirectory,
-            ),
-        )
+        if let sessionID = newPane.terminalSessionID {
+            _ = sessions.ensureSession(
+                id: sessionID,
+                launchConfiguration: launchContextBuilder.makeLaunchConfiguration(
+                    currentDirectory: inheritedCurrentDirectory,
+                ),
+            )
+        }
         schedulePersistenceSave(reason: .paneSplit)
         return newPane.id
     }
@@ -124,7 +138,7 @@ extension WorkspaceStore {
         let activeLeaves = workspaces.flatMap { workspace in
             (workspace.root?.leaves() ?? []).map { (workspace.id, $0) }
         }
-        let activeSessionIDs = Set(activeLeaves.map(\.1.sessionID))
+        let activeSessionIDs = Set(activeLeaves.compactMap(\.1.terminalSessionID))
         sessions.removeSessions(notIn: activeSessionIDs)
         paneControllers.removeControllers(notIn: Set(activeLeaves.map(\.1.id)))
     }

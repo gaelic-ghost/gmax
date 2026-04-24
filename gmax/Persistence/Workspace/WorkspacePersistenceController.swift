@@ -824,21 +824,27 @@ extension WorkspacePersistenceController {
         makeSessionSnapshots(
             for: workspace,
             launchConfigurationsBySessionID: Dictionary(
-                uniqueKeysWithValues: (workspace.root?.leaves() ?? []).map { leaf in
-                    let session = sessions.ensureSession(id: leaf.sessionID)
+                uniqueKeysWithValues: (workspace.root?.leaves() ?? []).compactMap { leaf in
+                    guard let sessionID = leaf.terminalSessionID else {
+                        return nil
+                    }
+                    let session = sessions.ensureSession(id: sessionID)
                     let launchConfiguration = TerminalLaunchConfiguration(
                         executable: session.launchConfiguration.executable,
                         arguments: session.launchConfiguration.arguments,
                         environment: session.launchConfiguration.environment,
                         currentDirectory: session.currentDirectory ?? session.launchConfiguration.currentDirectory,
                     )
-                    return (leaf.sessionID, launchConfiguration)
+                    return (sessionID, launchConfiguration)
                 },
             ),
             titlesBySessionID: Dictionary(
-                uniqueKeysWithValues: (workspace.root?.leaves() ?? []).map { leaf in
-                    let session = sessions.ensureSession(id: leaf.sessionID)
-                    return (leaf.sessionID, session.title)
+                uniqueKeysWithValues: (workspace.root?.leaves() ?? []).compactMap { leaf in
+                    guard let sessionID = leaf.terminalSessionID else {
+                        return nil
+                    }
+                    let session = sessions.ensureSession(id: sessionID)
+                    return (sessionID, session.title)
                 },
             ),
             historyBySessionID: historyBySessionID,
@@ -852,11 +858,13 @@ extension WorkspacePersistenceController {
         historyBySessionID: [TerminalSessionID: WorkspaceSessionHistorySnapshot],
     ) -> [WorkspaceSessionSnapshot] {
         (workspace.root?.leaves() ?? []).compactMap { leaf in
-            guard let launchConfiguration = launchConfigurationsBySessionID[leaf.sessionID] else {
+            guard let sessionID = leaf.terminalSessionID,
+                  let launchConfiguration = launchConfigurationsBySessionID[sessionID]
+            else {
                 return nil
             }
 
-            let history = historyBySessionID[leaf.sessionID]
+            let history = historyBySessionID[sessionID]
                 ?? WorkspaceSessionHistorySnapshot(
                     transcript: nil,
                     normalScrollPosition: nil,
@@ -872,8 +880,8 @@ extension WorkspacePersistenceController {
             } ?? 0
             let previewText = transcript.flatMap(Self.makePreviewText(from:))
             return WorkspaceSessionSnapshot(
-                id: leaf.sessionID,
-                title: titlesBySessionID[leaf.sessionID] ?? "Shell",
+                id: sessionID,
+                title: titlesBySessionID[sessionID] ?? "Shell",
                 launchConfiguration: launchConfiguration,
                 history: history,
                 transcriptByteCount: transcript?.utf8.count ?? 0,

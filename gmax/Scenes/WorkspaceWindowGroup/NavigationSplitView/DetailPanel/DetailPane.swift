@@ -30,13 +30,20 @@ struct DetailPane: View {
     private func detailContent(workspace: Workspace?) -> some View {
         if let workspace,
            let inspectedPaneID,
-           let pane = workspace.root?.findPane(id: inspectedPaneID),
-           let session = model.sessions.session(for: pane.sessionID) {
-            ActivePaneDetails(
-                workspaceTitle: workspace.title,
-                pane: pane,
-                session: session,
-            )
+           let pane = workspace.root?.findPane(id: inspectedPaneID) {
+            if let sessionID = pane.terminalSessionID,
+               let session = model.sessions.session(for: sessionID) {
+                ActivePaneDetails(
+                    workspaceTitle: workspace.title,
+                    pane: pane,
+                    session: session,
+                )
+            } else {
+                UnsupportedPaneDetails(
+                    workspaceTitle: workspace.title,
+                    pane: pane,
+                )
+            }
         } else if let workspace {
             WorkspaceDetails(
                 workspaceTitle: workspace.title,
@@ -74,13 +81,40 @@ private struct ActivePaneDetails: View {
                 DetailValue(label: "State", value: state)
                 DetailValue(label: "Current Directory", value: session.currentDirectory ?? "Unavailable")
                 DetailValue(label: "Pane ID", value: pane.id.rawValue.uuidString)
-                DetailValue(label: "Session ID", value: pane.sessionID.rawValue.uuidString)
+                DetailValue(label: "Session ID", value: session.id.rawValue.uuidString)
             }
 
             Spacer()
         }
         .padding()
         .accessibilityIdentifier("detailPane.activePane")
+    }
+}
+
+private struct UnsupportedPaneDetails: View {
+    let workspaceTitle: String
+    let pane: PaneLeaf
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Active Pane")
+                .font(.title2.weight(.semibold))
+
+            Group {
+                DetailValue(label: "Workspace", value: workspaceTitle)
+                    .accessibilityIdentifier("detailPane.workspaceTitleValue")
+                DetailValue(label: "Pane Type", value: "Browser")
+                DetailValue(label: "Status", value: "This pane uses a non-terminal content type that the current inspector does not render yet.")
+                DetailValue(label: "Pane ID", value: pane.id.rawValue.uuidString)
+                if let sessionID = pane.browserSessionID {
+                    DetailValue(label: "Browser Session ID", value: sessionID.rawValue.uuidString)
+                }
+            }
+
+            Spacer()
+        }
+        .padding()
+        .accessibilityIdentifier("detailPane.unsupportedPane")
     }
 }
 

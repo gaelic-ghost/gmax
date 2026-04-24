@@ -202,7 +202,9 @@ extension WorkspacePersistenceController {
 
         let nodeID = attribute(name: "id", type: .UUIDAttributeType)
         let nodeKind = attribute(name: "kind", type: .stringAttributeType)
+        let nodeContentKind = attribute(name: "contentKind", type: .stringAttributeType, isOptional: true)
         let nodeSessionID = attribute(name: "sessionID", type: .UUIDAttributeType, isOptional: true)
+        let nodeBrowserSessionID = attribute(name: "browserSessionID", type: .UUIDAttributeType, isOptional: true)
         let nodeAxis = attribute(name: "axis", type: .stringAttributeType, isOptional: true)
         let nodeFraction = attribute(name: "fraction", type: .doubleAttributeType)
 
@@ -420,7 +422,9 @@ extension WorkspacePersistenceController {
         paneNodeEntity.properties = [
             nodeID,
             nodeKind,
+            nodeContentKind,
             nodeSessionID,
+            nodeBrowserSessionID,
             nodeAxis,
             nodeFraction,
             nodeWorkspaceRoot,

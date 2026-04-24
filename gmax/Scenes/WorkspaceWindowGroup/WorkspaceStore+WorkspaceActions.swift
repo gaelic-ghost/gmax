@@ -46,10 +46,12 @@ extension WorkspaceStore {
         )
 
         workspaces.append(workspace)
-        _ = sessions.ensureSession(
-            id: pane.sessionID,
-            launchConfiguration: launchContextBuilder.makeLaunchConfiguration(),
-        )
+        if let sessionID = pane.terminalSessionID {
+            _ = sessions.ensureSession(
+                id: sessionID,
+                launchConfiguration: launchContextBuilder.makeLaunchConfiguration(),
+            )
+        }
         Logger.workspace.notice("Created a new workspace and seeded it with an initial pane. Workspace title: \(workspace.title, privacy: .public). Workspace ID: \(workspace.id.rawValue.uuidString, privacy: .public)")
         schedulePersistenceSave(reason: .workspaceCreated)
         return workspace.id
@@ -122,10 +124,13 @@ extension WorkspaceStore {
         workspaces.insert(closedWorkspace.revision.workspace, at: insertionIndex)
 
         for leaf in closedWorkspace.revision.workspace.root?.leaves() ?? [] {
-            let paneSnapshot = closedWorkspace.revision.paneSnapshotsBySessionID[leaf.sessionID]
+            guard let sessionID = leaf.terminalSessionID else {
+                continue
+            }
+            let paneSnapshot = closedWorkspace.revision.paneSnapshotsBySessionID[sessionID]
             let launchConfiguration = paneSnapshot?.launchConfiguration
                 ?? launchContextBuilder.makeLaunchConfiguration()
-            let session = sessions.ensureSession(id: leaf.sessionID, launchConfiguration: launchConfiguration)
+            let session = sessions.ensureSession(id: sessionID, launchConfiguration: launchConfiguration)
             session.title = paneSnapshot?.title ?? session.title
             session.currentDirectory = launchConfiguration.currentDirectory
             session.setRestoredHistory(paneSnapshot?.history)
@@ -302,16 +307,21 @@ extension WorkspaceStore {
     private func duplicateNode(_ node: PaneNode) -> PaneNode {
         switch node {
             case let .leaf(leaf):
-                let sourceSession = sessions.ensureSession(id: leaf.sessionID)
+                guard let sourceSessionID = leaf.terminalSessionID else {
+                    return .leaf(PaneLeaf(content: leaf.content))
+                }
+                let sourceSession = sessions.ensureSession(id: sourceSessionID)
                 let inheritedCurrentDirectory = sourceSession.currentDirectory
                     ?? sourceSession.launchConfiguration.currentDirectory
                 let clonedLeaf = PaneLeaf()
-                _ = sessions.ensureSession(
-                    id: clonedLeaf.sessionID,
-                    launchConfiguration: launchContextBuilder.makeLaunchConfiguration(
-                        currentDirectory: inheritedCurrentDirectory,
-                    ),
-                )
+                if let sessionID = clonedLeaf.terminalSessionID {
+                    _ = sessions.ensureSession(
+                        id: sessionID,
+                        launchConfiguration: launchContextBuilder.makeLaunchConfiguration(
+                            currentDirectory: inheritedCurrentDirectory,
+                        ),
+                    )
+                }
                 return .leaf(clonedLeaf)
 
             case let .split(split):
@@ -442,17 +452,23 @@ extension WorkspaceStore {
             return
         }
 
-        let launchConfigurationsBySessionID = Dictionary(uniqueKeysWithValues: (workspace.root?.leaves() ?? []).map { leaf in
-            let session = sessions.ensureSession(id: leaf.sessionID)
+        let launchConfigurationsBySessionID: [TerminalSessionID: TerminalLaunchConfiguration] = Dictionary(uniqueKeysWithValues: (workspace.root?.leaves() ?? []).compactMap { leaf in
+            guard let sessionID = leaf.terminalSessionID else {
+                return nil
+            }
+            let session = sessions.ensureSession(id: sessionID)
             let currentDirectory = session.currentDirectory ?? session.launchConfiguration.currentDirectory
             let launchConfiguration = launchContextBuilder.makeLaunchConfiguration(
                 currentDirectory: currentDirectory,
             )
-            return (leaf.sessionID, launchConfiguration)
+            return (sessionID, launchConfiguration)
         })
-        let titlesBySessionID = Dictionary(uniqueKeysWithValues: (workspace.root?.leaves() ?? []).map { leaf in
-            let session = sessions.ensureSession(id: leaf.sessionID)
-            return (leaf.sessionID, session.title)
+        let titlesBySessionID: [TerminalSessionID: String] = Dictionary(uniqueKeysWithValues: (workspace.root?.leaves() ?? []).compactMap { leaf in
+            guard let sessionID = leaf.terminalSessionID else {
+                return nil
+            }
+            let session = sessions.ensureSession(id: sessionID)
+            return (sessionID, session.title)
         })
         let historyBySessionID = captureWorkspaceHistory(
             for: workspace,
@@ -494,12 +510,15 @@ extension WorkspaceStore {
             },
         )
 
-        for leaf in workspace.root?.leaves() ?? [] where resolvedHistory[leaf.sessionID] == nil {
+        for leaf in workspace.root?.leaves() ?? [] {
+            guard let sessionID = leaf.terminalSessionID, resolvedHistory[sessionID] == nil else {
+                continue
+            }
             guard let history = paneControllers.existingController(for: leaf.id)?.captureHistory() else {
                 continue
             }
 
-            resolvedHistory[leaf.sessionID] = history
+            resolvedHistory[sessionID] = history
         }
 
         return resolvedHistory
@@ -514,16 +533,26 @@ extension WorkspaceStore {
     ) -> PaneNode {
         switch node {
             case let .leaf(leaf):
-                let restoredLeaf = PaneLeaf()
-                let paneSnapshot = paneSnapshotsBySessionID[leaf.sessionID]
+                let restoredLeaf = switch leaf.content {
+                    case .terminal:
+                        PaneLeaf()
+                    case let .browser(sessionID):
+                        PaneLeaf(content: .browser(sessionID))
+                }
+                guard let sourceSessionID = leaf.terminalSessionID,
+                      let restoredSessionID = restoredLeaf.terminalSessionID
+                else {
+                    return .leaf(restoredLeaf)
+                }
+                let paneSnapshot = paneSnapshotsBySessionID[sourceSessionID]
                 let launchConfiguration = paneSnapshot?.launchConfiguration
                     ?? launchContextBuilder.makeLaunchConfiguration()
-                launchConfigurationsBySessionID[restoredLeaf.sessionID] = launchConfiguration
+                launchConfigurationsBySessionID[restoredSessionID] = launchConfiguration
                 if let history = paneSnapshot?.history {
-                    historyBySessionID[restoredLeaf.sessionID] = history
+                    historyBySessionID[restoredSessionID] = history
                 }
                 if let title = paneSnapshot?.title {
-                    titlesBySessionID[restoredLeaf.sessionID] = title
+                    titlesBySessionID[restoredSessionID] = title
                 }
                 return .leaf(restoredLeaf)
 

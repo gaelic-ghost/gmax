@@ -50,11 +50,11 @@ struct WorkspaceLifecycleTests {
         let originalLeaves = Set(workspace.paneLeaves.map(\.id))
         let duplicatedWorkspace = model.workspaces[1]
         let duplicatedLeaves = Set(duplicatedWorkspace.paneLeaves.map(\.id))
-        let duplicatedSessions = Set(duplicatedWorkspace.paneLeaves.map(\.sessionID))
+        let duplicatedSessions = Set(duplicatedWorkspace.paneLeaves.compactMap(\.terminalSessionID))
 
         #expect(duplicatedWorkspace.paneCount == workspace.paneCount)
         #expect(originalLeaves.isDisjoint(with: duplicatedLeaves))
-        #expect(Set(workspace.paneLeaves.map(\.sessionID)).isDisjoint(with: duplicatedSessions))
+        #expect(Set(workspace.paneLeaves.compactMap(\.terminalSessionID)).isDisjoint(with: duplicatedSessions))
     }
 
     @Test func `delete workspace removes it and selects the neighbor`() {
@@ -90,7 +90,8 @@ struct WorkspaceLifecycleTests {
         )
 
         let firstPane = try #require(firstWorkspace.root?.firstLeaf())
-        let firstSession = model.sessions.ensureSession(id: firstPane.sessionID)
+        let firstSessionID = try #require(firstPane.terminalSessionID)
+        let firstSession = model.sessions.ensureSession(id: firstSessionID)
         firstSession.currentDirectory = "/tmp/restored-workspace"
 
         _ = model.closeWorkspace(firstWorkspace.id)
@@ -101,7 +102,8 @@ struct WorkspaceLifecycleTests {
 
         let reopenedWorkspace = try #require(model.workspaces.first(where: { $0.id == firstWorkspace.id }))
         let reopenedPane = try #require(reopenedWorkspace.root?.firstLeaf())
-        let reopenedSession = try #require(model.sessions.session(for: reopenedPane.sessionID))
+        let reopenedSessionID = try #require(reopenedPane.terminalSessionID)
+        let reopenedSession = try #require(model.sessions.session(for: reopenedSessionID))
         #expect(reopenedSession.currentDirectory == "/tmp/restored-workspace")
     }
 

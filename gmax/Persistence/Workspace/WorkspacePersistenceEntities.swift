@@ -13,6 +13,11 @@ enum PaneNodeKind: String {
     case split
 }
 
+enum PersistedPaneContentKind: String {
+    case terminal
+    case browser
+}
+
 @objc(WorkspaceEntity)
 final class WorkspaceEntity: NSManagedObject {
     @NSManaged var id: UUID
@@ -35,7 +40,9 @@ final class WorkspaceEntity: NSManagedObject {
 final class PaneNodeEntity: NSManagedObject {
     @NSManaged var id: UUID
     @NSManaged var kind: String
+    @NSManaged var contentKind: String?
     @NSManaged var sessionID: UUID?
+    @NSManaged var browserSessionID: UUID?
     @NSManaged var axis: String?
     @NSManaged var fraction: Double
     @NSManaged var workspaceRoot: WorkspaceEntity?

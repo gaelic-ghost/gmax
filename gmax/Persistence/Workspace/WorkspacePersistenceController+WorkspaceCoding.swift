@@ -21,7 +21,16 @@ extension WorkspacePersistenceController {
                 let nodeEntity = PaneNodeEntity(context: context)
                 nodeEntity.id = leaf.id.rawValue
                 nodeEntity.kind = PaneNodeKind.leaf.rawValue
-                nodeEntity.sessionID = leaf.sessionID.rawValue
+                switch leaf.content {
+                    case let .terminal(sessionID):
+                        nodeEntity.contentKind = PersistedPaneContentKind.terminal.rawValue
+                        nodeEntity.sessionID = sessionID.rawValue
+                        nodeEntity.browserSessionID = nil
+                    case let .browser(sessionID):
+                        nodeEntity.contentKind = PersistedPaneContentKind.browser.rawValue
+                        nodeEntity.sessionID = nil
+                        nodeEntity.browserSessionID = sessionID.rawValue
+                }
                 nodeEntity.axis = nil
                 nodeEntity.fraction = 0
                 nodeEntity.firstChild = nil
@@ -32,7 +41,9 @@ extension WorkspacePersistenceController {
                 let nodeEntity = PaneNodeEntity(context: context)
                 nodeEntity.id = split.id.rawValue
                 nodeEntity.kind = PaneNodeKind.split.rawValue
+                nodeEntity.contentKind = nil
                 nodeEntity.sessionID = nil
+                nodeEntity.browserSessionID = nil
                 nodeEntity.axis = split.axis.rawValue
                 nodeEntity.fraction = split.fraction
                 nodeEntity.firstChild = makeNodeEntity(from: split.first, context: context)
@@ -57,7 +68,16 @@ extension WorkspacePersistenceController {
                     ?? PaneNodeEntity(context: context)
                 nodeEntity.id = leaf.id.rawValue
                 nodeEntity.kind = PaneNodeKind.leaf.rawValue
-                nodeEntity.sessionID = leaf.sessionID.rawValue
+                switch leaf.content {
+                    case let .terminal(sessionID):
+                        nodeEntity.contentKind = PersistedPaneContentKind.terminal.rawValue
+                        nodeEntity.sessionID = sessionID.rawValue
+                        nodeEntity.browserSessionID = nil
+                    case let .browser(sessionID):
+                        nodeEntity.contentKind = PersistedPaneContentKind.browser.rawValue
+                        nodeEntity.sessionID = nil
+                        nodeEntity.browserSessionID = sessionID.rawValue
+                }
                 nodeEntity.axis = nil
                 nodeEntity.fraction = 0
                 nodeEntity.firstChild = nil
@@ -70,7 +90,9 @@ extension WorkspacePersistenceController {
                     ?? PaneNodeEntity(context: context)
                 nodeEntity.id = split.id.rawValue
                 nodeEntity.kind = PaneNodeKind.split.rawValue
+                nodeEntity.contentKind = nil
                 nodeEntity.sessionID = nil
+                nodeEntity.browserSessionID = nil
                 nodeEntity.axis = split.axis.rawValue
                 nodeEntity.fraction = split.fraction
                 nodeEntity.firstChild = syncNode(
@@ -97,15 +119,33 @@ extension WorkspacePersistenceController {
 
         switch PaneNodeKind(rawValue: nodeEntity.kind) {
             case .leaf:
-                guard let sessionID = nodeEntity.sessionID else {
-                    Logger.persistence.error("A persisted leaf node is missing its session identifier. That node will be skipped during restore. Node ID: \(nodeEntity.id.uuidString, privacy: .public)")
-                    return nil
+                let content: PaneContent
+                switch nodeEntity.contentKind.flatMap(PersistedPaneContentKind.init(rawValue:)) {
+                    case .terminal:
+                        guard let sessionID = nodeEntity.sessionID else {
+                            Logger.persistence.error("A persisted terminal leaf node is missing its terminal session identifier. That node will be skipped during restore. Node ID: \(nodeEntity.id.uuidString, privacy: .public)")
+                            return nil
+                        }
+                        content = .terminal(TerminalSessionID(rawValue: sessionID))
+                    case .browser:
+                        guard let sessionID = nodeEntity.browserSessionID else {
+                            Logger.persistence.error("A persisted browser leaf node is missing its browser session identifier. That node will be skipped during restore. Node ID: \(nodeEntity.id.uuidString, privacy: .public)")
+                            return nil
+                        }
+                        content = .browser(BrowserSessionID(rawValue: sessionID))
+                    case .none:
+                        // Compatibility path for older terminal-only stores.
+                        guard let sessionID = nodeEntity.sessionID else {
+                            Logger.persistence.error("A persisted leaf node is missing both its content kind and its compatibility terminal session identifier. That node will be skipped during restore. Node ID: \(nodeEntity.id.uuidString, privacy: .public)")
+                            return nil
+                        }
+                        content = .terminal(TerminalSessionID(rawValue: sessionID))
                 }
 
                 return .leaf(
                     PaneLeaf(
                         id: PaneID(rawValue: nodeEntity.id),
-                        sessionID: TerminalSessionID(rawValue: sessionID),
+                        content: content,
                     ),
                 )
 
