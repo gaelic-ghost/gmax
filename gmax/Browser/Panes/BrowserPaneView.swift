@@ -90,6 +90,7 @@ struct BrowserPaneChromeView: View {
     let pane: PaneLeaf
     let controller: BrowserPaneController
     @ObservedObject var session: BrowserSession
+
     let focusedTarget: FocusState<WorkspaceFocusTarget?>.Binding
     let onSplitRight: () -> Void
     let onSplitDown: () -> Void
@@ -180,16 +181,19 @@ private struct BrowserPaneFocusIndicator: View {
 private struct BrowserPaneOmniboxOverlay: View {
     @State private var isHovered = false
     @State private var isKeyboardRevealed = false
+    @State private var isFieldFocused = false
     @State private var addressDraft = ""
     @State private var focusSelectionToken = 0
+    @State private var focusRequestToken = 0
 
     let controller: BrowserPaneController
     @ObservedObject var session: BrowserSession
+
     let revealID: Int
     let isPaneFocused: Bool
 
     private var isExpanded: Bool {
-        isHovered || isKeyboardRevealed
+        isHovered || isKeyboardRevealed || isFieldFocused
     }
 
     private var currentAddress: String {
@@ -210,7 +214,8 @@ private struct BrowserPaneOmniboxOverlay: View {
                     BrowserOmniboxTextField(
                         text: $addressDraft,
                         placeholder: currentAddress,
-                        isFocused: $isKeyboardRevealed,
+                        isFocused: $isFieldFocused,
+                        focusRequestToken: focusRequestToken,
                         selectAllToken: focusSelectionToken,
                         onSubmit: {
                             guard let normalizedAddressDraft else {
@@ -219,10 +224,15 @@ private struct BrowserPaneOmniboxOverlay: View {
 
                             controller.loadAddress(normalizedAddressDraft)
                             isKeyboardRevealed = false
+                            isFieldFocused = false
                         },
                         onCancel: {
                             syncDraft()
                             isKeyboardRevealed = false
+                            isFieldFocused = false
+                            Task { @MainActor in
+                                controller.focusWebView()
+                            }
                         },
                     )
                 }
@@ -250,6 +260,7 @@ private struct BrowserPaneOmniboxOverlay: View {
             }
 
             syncDraft()
+            focusRequestToken += 1
             focusSelectionToken += 1
             isKeyboardRevealed = true
         }
@@ -257,12 +268,14 @@ private struct BrowserPaneOmniboxOverlay: View {
             guard !isKeyboardRevealed else {
                 return
             }
+
             syncDraft()
         }
         .onChange(of: session.lastCommittedURL) { _, _ in
             guard !isKeyboardRevealed else {
                 return
             }
+
             syncDraft()
         }
         .onChange(of: isPaneFocused) { _, newValue in
@@ -271,6 +284,7 @@ private struct BrowserPaneOmniboxOverlay: View {
             }
 
             isKeyboardRevealed = false
+            isFieldFocused = false
         }
         .animation(.easeInOut(duration: 0.18), value: isExpanded)
     }
@@ -280,69 +294,23 @@ private struct BrowserPaneOmniboxOverlay: View {
         guard addressDraft != resolvedAddress else {
             return
         }
+
         addressDraft = resolvedAddress
     }
 }
 
 private struct BrowserOmniboxTextField: NSViewRepresentable {
-    @Binding var text: String
-    let placeholder: String
-    @Binding var isFocused: Bool
-    let selectAllToken: Int
-    let onSubmit: () -> Void
-    let onCancel: () -> Void
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator(
-            text: $text,
-            isFocused: $isFocused,
-            onSubmit: onSubmit,
-            onCancel: onCancel,
-        )
-    }
-
-    func makeNSView(context: Context) -> NSSearchField {
-        let field = NSSearchField()
-        field.delegate = context.coordinator
-        field.sendsSearchStringImmediately = true
-        field.focusRingType = .none
-        field.font = NSFont.monospacedSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
-        field.isBordered = false
-        field.drawsBackground = false
-        field.lineBreakMode = .byTruncatingMiddle
-        return field
-    }
-
-    func updateNSView(_ nsView: NSSearchField, context: Context) {
-        if nsView.stringValue != text {
-            nsView.stringValue = text
-        }
-        if nsView.placeholderString != placeholder {
-            nsView.placeholderString = placeholder
-        }
-        context.coordinator.selectAllToken = selectAllToken
-
-        if isFocused {
-            if nsView.window?.firstResponder !== nsView.currentEditor() {
-                nsView.window?.makeFirstResponder(nsView)
-            }
-            if context.coordinator.lastAppliedSelectAllToken != selectAllToken {
-                nsView.currentEditor()?.selectAll(nil)
-                context.coordinator.lastAppliedSelectAllToken = selectAllToken
-            }
-        } else if nsView.window?.firstResponder === nsView.currentEditor() {
-            nsView.window?.makeFirstResponder(nil)
-        }
-    }
-
     @MainActor
     final class Coordinator: NSObject, NSSearchFieldDelegate, NSControlTextEditingDelegate {
         @Binding var text: String
         @Binding var isFocused: Bool
+
         let onSubmit: () -> Void
         let onCancel: () -> Void
 
+        var focusRequestToken: Int = 0
         var selectAllToken: Int = 0
+        var lastAppliedFocusRequestToken: Int = -1
         var lastAppliedSelectAllToken: Int = -1
 
         init(
@@ -388,6 +356,85 @@ private struct BrowserOmniboxTextField: NSViewRepresentable {
                 default:
                     return false
             }
+        }
+    }
+
+    @Binding var text: String
+    let placeholder: String
+    @Binding var isFocused: Bool
+
+    let focusRequestToken: Int
+    let selectAllToken: Int
+    let onSubmit: () -> Void
+    let onCancel: () -> Void
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(
+            text: $text,
+            isFocused: $isFocused,
+            onSubmit: onSubmit,
+            onCancel: onCancel,
+        )
+    }
+
+    func makeNSView(context: Context) -> NSSearchField {
+        let field = NSSearchField()
+        field.delegate = context.coordinator
+        field.sendsSearchStringImmediately = true
+        field.focusRingType = .none
+        field.font = NSFont.monospacedSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
+        field.isBordered = false
+        field.drawsBackground = false
+        field.lineBreakMode = .byTruncatingMiddle
+        return field
+    }
+
+    func updateNSView(_ nsView: NSSearchField, context: Context) {
+        if nsView.stringValue != text {
+            nsView.stringValue = text
+        }
+        if nsView.placeholderString != placeholder {
+            nsView.placeholderString = placeholder
+        }
+        context.coordinator.focusRequestToken = focusRequestToken
+        context.coordinator.selectAllToken = selectAllToken
+
+        if context.coordinator.lastAppliedFocusRequestToken != focusRequestToken {
+            requestFocusIfNeeded(for: nsView, coordinator: context.coordinator)
+        } else if isFocused {
+            requestSelectionIfNeeded(for: nsView, coordinator: context.coordinator)
+        } else if nsView.window?.firstResponder === nsView.currentEditor() {
+            nsView.window?.makeFirstResponder(nil)
+        }
+    }
+
+    private func requestFocusIfNeeded(
+        for nsView: NSSearchField,
+        coordinator: Coordinator,
+    ) {
+        DispatchQueue.main.async {
+            nsView.window?.makeFirstResponder(nsView)
+            nsView.currentEditor()?.selectAll(nil)
+            coordinator.lastAppliedFocusRequestToken = focusRequestToken
+            coordinator.lastAppliedSelectAllToken = selectAllToken
+        }
+    }
+
+    private func requestSelectionIfNeeded(
+        for nsView: NSSearchField,
+        coordinator: Coordinator,
+    ) {
+        guard coordinator.lastAppliedSelectAllToken != selectAllToken else {
+            return
+        }
+
+        DispatchQueue.main.async {
+            guard isFocused else {
+                return
+            }
+
+            nsView.currentEditor()?.selectAll(nil)
+            coordinator.lastAppliedSelectAllToken = selectAllToken
         }
     }
 }

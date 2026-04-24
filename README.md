@@ -143,7 +143,7 @@ Key repo surfaces:
 
 ## Release Notes
 
-The repository already has release tags through `v0.0.7`. The current release-prep checkpoint is [docs/releases/v0.0.8-release-notes.md](docs/releases/v0.0.8-release-notes.md), and the broader internal-release quality bar is tracked in [docs/releases/v0.1.0-release-checklist.md](docs/releases/v0.1.0-release-checklist.md). Both release docs assume `README.md`, `ROADMAP.md`, and the maintainer notes stay aligned with the shipped persistence, library, command, window-restoration, and terminal-history model.
+The repository already has release tags through `v0.0.8`. The current release-prep checkpoint is [docs/releases/v0.0.9-release-notes.md](docs/releases/v0.0.9-release-notes.md), and the broader internal-release quality bar is tracked in [docs/releases/v0.1.0-release-checklist.md](docs/releases/v0.1.0-release-checklist.md). Both release docs assume `README.md`, `ROADMAP.md`, and the maintainer notes stay aligned with the shipped persistence, library, command, window-restoration, terminal-history, and browser-pane model.
 
 ## License
 

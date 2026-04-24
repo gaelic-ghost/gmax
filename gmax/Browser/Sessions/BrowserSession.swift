@@ -24,6 +24,7 @@ final class BrowserSession: ObservableObject, Identifiable {
     @Published var state: BrowserSessionState
     @Published var canGoBack: Bool
     @Published var canGoForward: Bool
+    @Published var history: BrowserSessionHistorySnapshot?
 
     init(
         id: BrowserSessionID,
@@ -33,6 +34,7 @@ final class BrowserSession: ObservableObject, Identifiable {
         state: BrowserSessionState = .idle,
         canGoBack: Bool = false,
         canGoForward: Bool = false,
+        history: BrowserSessionHistorySnapshot? = nil,
     ) {
         self.id = id
         self.title = title
@@ -41,17 +43,17 @@ final class BrowserSession: ObservableObject, Identifiable {
         self.state = state
         self.canGoBack = canGoBack
         self.canGoForward = canGoForward
+        self.history = history
     }
 
     convenience init(snapshot: BrowserSessionSnapshot) {
-        let restoredState: BrowserSessionState
-        switch snapshot.state {
+        let restoredState: BrowserSessionState = switch snapshot.state {
             case .idle:
-                restoredState = .idle
+                .idle
             case .loading:
-                restoredState = .loading
+                .loading
             case .failed:
-                restoredState = .failed(snapshot.failureDescription ?? "Browser navigation failed.")
+                .failed(snapshot.failureDescription ?? "Browser navigation failed.")
         }
         self.init(
             id: snapshot.id,
@@ -59,27 +61,26 @@ final class BrowserSession: ObservableObject, Identifiable {
             url: snapshot.url,
             lastCommittedURL: snapshot.lastCommittedURL,
             state: restoredState,
-            canGoBack: false,
-            canGoForward: false,
+            canGoBack: snapshot.history.map { $0.currentIndex > 0 } ?? false,
+            canGoForward: snapshot.history.map { $0.currentIndex < ($0.items.count - 1) } ?? false,
+            history: snapshot.history,
         )
     }
 
     func makeSnapshot() -> BrowserSessionSnapshot {
-        let failureDescription: String?
-        switch state {
+        let failureDescription: String? = switch state {
             case let .failed(message):
-                failureDescription = message
+                message
             case .idle, .loading:
-                failureDescription = nil
+                nil
         }
-        let snapshotState: BrowserSessionSnapshotState
-        switch state {
+        let snapshotState: BrowserSessionSnapshotState = switch state {
             case .idle:
-                snapshotState = .idle
+                .idle
             case .loading:
-                snapshotState = .loading
+                .loading
             case .failed:
-                snapshotState = .failed
+                .failed
         }
         let trimmedPreviewText = (lastCommittedURL ?? url)?
             .trimmingCharacters(in: .whitespacesAndNewlines)
@@ -93,6 +94,7 @@ final class BrowserSession: ObservableObject, Identifiable {
             state: snapshotState,
             failureDescription: failureDescription,
             previewText: previewText,
+            history: history,
         )
     }
 }

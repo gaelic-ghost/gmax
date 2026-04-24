@@ -24,6 +24,7 @@ final class TerminalSessionRegistry {
                 guard let sessionID = leaf.terminalSessionID else {
                     continue
                 }
+
                 let paneSnapshot = restoredPaneSnapshotsBySessionID[sessionID]
                 let launchConfiguration = paneSnapshot?.launchConfiguration ?? defaultLaunchConfiguration
                 sessionsByID[sessionID] = TerminalSession(

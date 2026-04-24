@@ -849,6 +849,10 @@ extension WorkspacePersistenceController {
             entity.state = sessionSnapshot.state.rawValue
             entity.failureDescription = sessionSnapshot.failureDescription
             entity.previewText = sessionSnapshot.previewText
+            entity.historyURLsData = try? JSONEncoder().encode(sessionSnapshot.history?.items.map(\.url))
+            entity.historyTitlesData = try? JSONEncoder().encode(sessionSnapshot.history?.items.map(\.title))
+            entity.hasHistory = sessionSnapshot.history != nil
+            entity.historyCurrentIndex = Int64(sessionSnapshot.history?.currentIndex ?? 0)
             entity.workspace = workspaceEntity
             return entity
         }
@@ -877,6 +881,7 @@ extension WorkspacePersistenceController {
                     guard let sessionID = leaf.terminalSessionID else {
                         return nil
                     }
+
                     let session = sessions.ensureSession(id: sessionID)
                     let launchConfiguration = TerminalLaunchConfiguration(
                         executable: session.launchConfiguration.executable,
@@ -892,6 +897,7 @@ extension WorkspacePersistenceController {
                     guard let sessionID = leaf.terminalSessionID else {
                         return nil
                     }
+
                     let session = sessions.ensureSession(id: sessionID)
                     return (sessionID, session.title)
                 },
@@ -1061,10 +1067,50 @@ extension WorkspacePersistenceController {
                     state: state,
                     failureDescription: sessionSnapshot.failureDescription,
                     previewText: sessionSnapshot.previewText,
+                    history: decodeBrowserHistorySnapshot(from: sessionSnapshot),
                 )
                 return (snapshot.id, snapshot)
             },
         )
+    }
+
+    private nonisolated static func decodeBrowserHistorySnapshot(
+        from sessionSnapshot: BrowserPaneSessionSnapshotEntity,
+    ) -> BrowserSessionHistorySnapshot? {
+        guard sessionSnapshot.hasHistory else {
+            return nil
+        }
+        guard let historyURLsData = sessionSnapshot.historyURLsData else {
+            Logger.persistence.error("A persisted browser pane history payload is missing its URL list. That browser history will be skipped during restore, but the browser session itself will still load. Browser session payload ID: \(sessionSnapshot.id.uuidString, privacy: .public)")
+            return nil
+        }
+
+        do {
+            let urls = try JSONDecoder().decode([String].self, from: historyURLsData)
+            let titles = try sessionSnapshot.historyTitlesData.map {
+                try JSONDecoder().decode([String?].self, from: $0)
+            } ?? Array(repeating: nil, count: urls.count)
+            guard urls.count == titles.count else {
+                Logger.persistence.error("A persisted browser pane history payload has mismatched URL and title counts. That browser history will be skipped during restore, but the browser session itself will still load. Browser session payload ID: \(sessionSnapshot.id.uuidString, privacy: .public)")
+                return nil
+            }
+
+            let currentIndex = Int(sessionSnapshot.historyCurrentIndex)
+            guard urls.indices.contains(currentIndex) else {
+                Logger.persistence.error("A persisted browser pane history payload has an invalid current index. That browser history will be skipped during restore, but the browser session itself will still load. Browser session payload ID: \(sessionSnapshot.id.uuidString, privacy: .public). Current index: \(currentIndex)")
+                return nil
+            }
+
+            return BrowserSessionHistorySnapshot(
+                items: zip(urls, titles).map { url, title in
+                    BrowserHistoryItemSnapshot(url: url, title: title)
+                },
+                currentIndex: currentIndex,
+            )
+        } catch {
+            Logger.persistence.error("A persisted browser pane history payload could not be decoded. That browser history will be skipped during restore, but the browser session itself will still load. Browser session payload ID: \(sessionSnapshot.id.uuidString, privacy: .public). Error: \(String(describing: error), privacy: .public)")
+            return nil
+        }
     }
 
     private nonisolated static func refreshLivePlacementMetadata(on placement: WorkspacePlacementEntity, from workspaceEntity: WorkspaceEntity) {

@@ -44,6 +44,16 @@ enum BrowserSessionSnapshotState: String, Hashable, Codable {
     case failed
 }
 
+struct BrowserHistoryItemSnapshot: Hashable, Codable {
+    var url: String
+    var title: String?
+}
+
+struct BrowserSessionHistorySnapshot: Hashable, Codable {
+    var items: [BrowserHistoryItemSnapshot]
+    var currentIndex: Int
+}
+
 struct BrowserSessionSnapshot: Hashable, Codable, Identifiable {
     var id: BrowserSessionID
     var title: String
@@ -52,6 +62,7 @@ struct BrowserSessionSnapshot: Hashable, Codable, Identifiable {
     var state: BrowserSessionSnapshotState
     var failureDescription: String?
     var previewText: String?
+    var history: BrowserSessionHistorySnapshot?
 }
 
 struct WorkspaceListing: Hashable, Codable {

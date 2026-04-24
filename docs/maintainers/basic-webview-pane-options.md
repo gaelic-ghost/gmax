@@ -82,13 +82,14 @@ What is true now:
 - focused browser panes now expose a lightweight top-center omnibox overlay
   that expands on hover or `Command-L` instead of living in a permanent
   toolbar strip
+- browser session persistence now also carries a lightweight back-forward
+  history snapshot with a saved current index
 
 What is still terminal-specific:
 
 - `TerminalSessionRegistry` remains the terminal-session registry
 - `TerminalPaneControllerStore` remains the terminal-controller cache
 - `ContentPaneLeafView` is still terminal-only
-- browser history-stack persistence is still deferred
 
 So the current shell is no longer lying about leaf content, and it now has a
 real browser runtime and rendering path. The remaining work is mostly about the
@@ -244,23 +245,28 @@ What this first pass should not try to persist:
 - script injection or extension-style features
 - forensic browser-session reconstruction
 
-One explicit follow-through target should stay on the table:
-
-- persist the browser back-forward history stack too, if WebKit gives us a
-  practical and maintainable way to restore it without turning browser-session
-  persistence into a much heavier reconstruction problem
-
 So the first durability contract should be:
 
-- definitely persist last committed URL, title, and loading or error text
-- attempt to preserve history stack if that proves practical
+- persist last committed URL, title, loading or error text, and a lightweight
+  browser back-forward history snapshot
 - do not block the basic feature on exact browser-session replay
 
 The restore goal should be:
 
 - reopen the pane
-- load the last committed URL
+- rebuild the saved history list by replaying the saved URLs in order
+- navigate back to the saved current history entry
 - restore basic pane-local browser metadata when possible
+
+Current tradeoff to keep explicit:
+
+- rebuilding that saved back-forward list currently means issuing real page
+  loads for the saved history URLs during restore
+- the browser does not stop permanently on each replayed page, but those
+  navigations can still trigger network activity or page-load side effects
+- a better lower-side-effect history-restore path is still worth exploring
+  later if WebKit gives us one or if the current replay model proves too
+  costly in practice
 
 The restore goal should not be:
 
@@ -545,7 +551,12 @@ Current status:
 - browser session restore now reloads basic browser metadata and the last
   committed URL across live restore, saved-workspace reopen, and recent-history
   reopen paths
-- browser history-stack persistence is still deferred
+- browser session restore now also rebuilds a lightweight back-forward list by
+  replaying the saved history URLs and then navigating back to the saved
+  current entry
+- that history restore path currently triggers real page loads while rebuilding
+  the list, so it should be treated as a pragmatic first pass rather than as a
+  neutral or side-effect-free restore mechanism
 - scene commands now expose `New Browser Pane Right` and `New Browser Pane
   Down` as dedicated browser-pane creation actions instead of overloading the
   existing terminal split commands
@@ -646,17 +657,14 @@ Persisted fields should stay intentionally small:
 - last committed URL
 - title
 - loading or last error text
-
-And one stretch goal is explicitly allowed here:
-
-- preserve the back-forward history stack if WebKit makes that feasible without
-  distorting the first-pass model
+- back-forward history items plus the saved current index
 
 Restore behavior should stay modest:
 
 - recreate the browser pane
-- load the saved URL
-- let the page render fresh
+- rebuild the saved back-forward list by replaying those URLs
+- navigate to the saved current entry
+- let the pages render fresh
 
 It should not try to:
 

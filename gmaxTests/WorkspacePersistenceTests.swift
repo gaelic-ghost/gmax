@@ -412,6 +412,23 @@ struct WorkspacePersistenceTests {
         browserSession.url = "https://developer.apple.com/documentation/webkit/wkwebview"
         browserSession.lastCommittedURL = browserSession.url
         browserSession.state = .failed("Browser navigation failed: offline")
+        browserSession.history = BrowserSessionHistorySnapshot(
+            items: [
+                BrowserHistoryItemSnapshot(
+                    url: "https://developer.apple.com/documentation",
+                    title: "Documentation",
+                ),
+                BrowserHistoryItemSnapshot(
+                    url: "https://developer.apple.com/documentation/webkit/wkwebview",
+                    title: "WKWebView",
+                ),
+                BrowserHistoryItemSnapshot(
+                    url: "https://developer.apple.com/documentation/webkit/wkbackforwardlist",
+                    title: "WKBackForwardList",
+                ),
+            ],
+            currentIndex: 1,
+        )
 
         persistence.saveSceneState(
             for: sceneIdentity,
@@ -441,6 +458,58 @@ struct WorkspacePersistenceTests {
         #expect(restoredBrowserSession.url == "https://developer.apple.com/documentation/webkit/wkwebview")
         #expect(restoredBrowserSession.lastCommittedURL == "https://developer.apple.com/documentation/webkit/wkwebview")
         #expect(restoredBrowserSession.state == .failed("Browser navigation failed: offline"))
+        #expect(restoredBrowserSession.history == browserSession.history)
+        #expect(restoredBrowserSession.canGoBack)
+        #expect(restoredBrowserSession.canGoForward)
+    }
+
+    @Test func `save and open saved workspace restore browser history snapshots`() throws {
+        let persistence = WorkspacePersistenceController.inMemoryForTesting()
+        let browserPane = PaneLeaf(content: .browser(BrowserSessionID()))
+        let workspace = Workspace(
+            title: "Workspace 1",
+            root: .leaf(browserPane),
+        )
+        let siblingWorkspace = TestSupport.makeWorkspace(title: "Workspace 2")
+        let model = WorkspaceStore(
+            workspaces: [workspace, siblingWorkspace],
+            persistence: persistence,
+            launchContextBuilder: TestSupport.makeLaunchContextBuilder(defaultCurrentDirectory: "/tmp/gmax-tests"),
+        )
+
+        let browserSessionID = try #require(browserPane.browserSessionID)
+        let browserSession = try #require(model.browserSessions.session(for: browserSessionID))
+        browserSession.title = "WebKit"
+        browserSession.url = "https://developer.apple.com/documentation/webkit/wkbackforwardlist"
+        browserSession.lastCommittedURL = browserSession.url
+        browserSession.history = BrowserSessionHistorySnapshot(
+            items: [
+                BrowserHistoryItemSnapshot(
+                    url: "https://developer.apple.com/documentation/webkit/wkwebview",
+                    title: "WKWebView",
+                ),
+                BrowserHistoryItemSnapshot(
+                    url: "https://developer.apple.com/documentation/webkit/wkbackforwardlist",
+                    title: "WKBackForwardList",
+                ),
+            ],
+            currentIndex: 1,
+        )
+
+        let summary = try #require(model.saveWorkspaceToLibrary(workspace.id))
+        model.deleteWorkspace(workspace.id)
+        let reopenedWorkspaceID = try requireWorkspaceOpenResult(model.openLibraryItem(summary.id))
+        let reopenedWorkspace = try #require(model.workspaces.first(where: { $0.id == reopenedWorkspaceID }))
+        let reopenedBrowserPane = try #require(reopenedWorkspace.root?.firstLeaf())
+        let reopenedBrowserSessionID = try #require(reopenedBrowserPane.browserSessionID)
+        let reopenedBrowserSession = try #require(model.browserSessions.session(for: reopenedBrowserSessionID))
+
+        #expect(reopenedBrowserSession.title == "WebKit")
+        #expect(reopenedBrowserSession.url == "https://developer.apple.com/documentation/webkit/wkbackforwardlist")
+        #expect(reopenedBrowserSession.lastCommittedURL == "https://developer.apple.com/documentation/webkit/wkbackforwardlist")
+        #expect(reopenedBrowserSession.history == browserSession.history)
+        #expect(reopenedBrowserSession.canGoBack)
+        #expect(!reopenedBrowserSession.canGoForward)
     }
 
     @Test func `opening a saved workspace while it is already live reuses the same identity and does not duplicate it`() throws {

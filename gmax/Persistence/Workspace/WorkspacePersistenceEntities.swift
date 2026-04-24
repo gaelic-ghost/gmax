@@ -144,5 +144,9 @@ final class BrowserPaneSessionSnapshotEntity: NSManagedObject {
     @NSManaged var state: String
     @NSManaged var failureDescription: String?
     @NSManaged var previewText: String?
+    @NSManaged var historyURLsData: Data?
+    @NSManaged var historyTitlesData: Data?
+    @NSManaged var hasHistory: Bool
+    @NSManaged var historyCurrentIndex: Int64
     @NSManaged var workspace: WorkspaceEntity?
 }

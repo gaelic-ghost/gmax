@@ -106,12 +106,13 @@ private struct BrowserPaneDetails: View {
     @AppStorage(WorkspacePersistenceDefaults.browserHomePageURLKey)
     private var browserHomePageURL = ""
 
+    @State private var addressDraft = ""
+
     let workspaceTitle: String
     let pane: PaneLeaf
     @ObservedObject var session: BrowserSession
-    let controller: BrowserPaneController
 
-    @State private var addressDraft = ""
+    let controller: BrowserPaneController
 
     var body: some View {
         let state = switch session.state {
@@ -141,6 +142,7 @@ private struct BrowserPaneDetails: View {
                     guard let normalizedAddressDraft else {
                         return
                     }
+
                     controller.loadAddress(normalizedAddressDraft)
                 }
                 .onAppear {
@@ -161,6 +163,7 @@ private struct BrowserPaneDetails: View {
                         guard let normalizedAddressDraft else {
                             return
                         }
+
                         controller.loadAddress(normalizedAddressDraft)
                     }
                     .disabled(normalizedAddressDraft == nil)
@@ -218,7 +221,6 @@ private struct BrowserPaneDetails: View {
             addressDraft = ""
             return
         }
-
         guard addressDraft != resolvedAddress else {
             return
         }

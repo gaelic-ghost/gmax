@@ -325,6 +325,10 @@ extension WorkspacePersistenceController {
         let browserPaneSessionSnapshotState = attribute(name: "state", type: .stringAttributeType)
         let browserPaneSessionSnapshotFailureDescription = attribute(name: "failureDescription", type: .stringAttributeType, isOptional: true)
         let browserPaneSessionSnapshotPreviewText = attribute(name: "previewText", type: .stringAttributeType, isOptional: true)
+        let browserPaneSessionSnapshotHistoryURLsData = attribute(name: "historyURLsData", type: .binaryDataAttributeType, isOptional: true)
+        let browserPaneSessionSnapshotHistoryTitlesData = attribute(name: "historyTitlesData", type: .binaryDataAttributeType, isOptional: true)
+        let browserPaneSessionSnapshotHasHistory = attribute(name: "hasHistory", type: .booleanAttributeType, defaultValue: false)
+        let browserPaneSessionSnapshotHistoryCurrentIndex = attribute(name: "historyCurrentIndex", type: .integer64AttributeType, defaultValue: 0)
 
         let workspaceRootNode = NSRelationshipDescription()
         workspaceRootNode.name = "rootNode"
@@ -548,6 +552,10 @@ extension WorkspacePersistenceController {
             browserPaneSessionSnapshotState,
             browserPaneSessionSnapshotFailureDescription,
             browserPaneSessionSnapshotPreviewText,
+            browserPaneSessionSnapshotHistoryURLsData,
+            browserPaneSessionSnapshotHistoryTitlesData,
+            browserPaneSessionSnapshotHasHistory,
+            browserPaneSessionSnapshotHistoryCurrentIndex,
             browserPaneSessionSnapshotWorkspace,
         ]
 

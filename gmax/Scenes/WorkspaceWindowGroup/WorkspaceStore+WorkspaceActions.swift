@@ -131,6 +131,7 @@ extension WorkspaceStore {
                 }
                 continue
             }
+
             let paneSnapshot = closedWorkspace.revision.paneSnapshotsBySessionID[sessionID]
             let launchConfiguration = paneSnapshot?.launchConfiguration
                 ?? launchContextBuilder.makeLaunchConfiguration()
@@ -501,6 +502,7 @@ extension WorkspaceStore {
             guard let sessionID = leaf.terminalSessionID else {
                 return nil
             }
+
             let session = sessions.ensureSession(id: sessionID)
             let currentDirectory = session.currentDirectory ?? session.launchConfiguration.currentDirectory
             let launchConfiguration = launchContextBuilder.makeLaunchConfiguration(
@@ -512,6 +514,7 @@ extension WorkspaceStore {
             guard let sessionID = leaf.terminalSessionID else {
                 return nil
             }
+
             let session = sessions.ensureSession(id: sessionID)
             return (sessionID, session.title)
         })
@@ -618,6 +621,7 @@ extension WorkspaceStore {
                 else {
                     return .leaf(restoredLeaf)
                 }
+
                 let paneSnapshot = paneSnapshotsBySessionID[sourceSessionID]
                 let launchConfiguration = paneSnapshot?.launchConfiguration
                     ?? launchContextBuilder.makeLaunchConfiguration()

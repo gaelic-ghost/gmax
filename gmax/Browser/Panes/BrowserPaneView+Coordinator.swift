@@ -54,20 +54,21 @@ extension BrowserPaneView {
             controller.detach(webView: hostingView.webView)
         }
 
-        func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
+        func webView(_ webView: WKWebView, didStartProvisionalNavigation _: WKNavigation?) {
             controller.session.state = .loading
             updateNavigationSnapshot(from: webView)
         }
 
-        func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        func webView(_ webView: WKWebView, didFinish _: WKNavigation?) {
             controller.session.state = .idle
             controller.session.lastCommittedURL = webView.url?.absoluteString
             updateNavigationSnapshot(from: webView)
+            controller.continueHistoryRestoreIfNeeded(in: webView)
         }
 
         func webView(
             _ webView: WKWebView,
-            didFail navigation: WKNavigation!,
+            didFail _: WKNavigation?,
             withError error: Error,
         ) {
             handleNavigationFailure(error, in: webView)
@@ -75,7 +76,7 @@ extension BrowserPaneView {
 
         func webView(
             _ webView: WKWebView,
-            didFailProvisionalNavigation navigation: WKNavigation!,
+            didFailProvisionalNavigation _: WKNavigation?,
             withError error: Error,
         ) {
             handleNavigationFailure(error, in: webView)
@@ -151,13 +152,37 @@ extension BrowserPaneView {
             controller.session.url = webView.url?.absoluteString
             controller.session.canGoBack = webView.canGoBack
             controller.session.canGoForward = webView.canGoForward
+            controller.session.history = makeHistorySnapshot(from: webView)
         }
 
         private func handleNavigationFailure(_ error: Error, in webView: WKWebView) {
             let paneID = controller.paneID.rawValue.uuidString
             Logger.pane.error("A browser pane navigation failed. Pane ID: \(paneID, privacy: .public). Error: \(String(describing: error), privacy: .public)")
+            controller.abortHistoryRestore()
             controller.session.state = .failed("Browser navigation failed: \(error.localizedDescription)")
             updateNavigationSnapshot(from: webView)
+        }
+
+        private func makeHistorySnapshot(from webView: WKWebView) -> BrowserSessionHistorySnapshot? {
+            let backItems = webView.backForwardList.backList.map(makeHistoryItemSnapshot(from:))
+            let forwardItems = webView.backForwardList.forwardList.map(makeHistoryItemSnapshot(from:))
+
+            guard let currentItem = webView.backForwardList.currentItem else {
+                return nil
+            }
+
+            let items = backItems + [makeHistoryItemSnapshot(from: currentItem)] + forwardItems
+            return BrowserSessionHistorySnapshot(
+                items: items,
+                currentIndex: backItems.count,
+            )
+        }
+
+        private func makeHistoryItemSnapshot(from item: WKBackForwardListItem) -> BrowserHistoryItemSnapshot {
+            BrowserHistoryItemSnapshot(
+                url: item.url.absoluteString,
+                title: item.title,
+            )
         }
 
         private func shouldOpenExternally(_ url: URL) -> Bool {

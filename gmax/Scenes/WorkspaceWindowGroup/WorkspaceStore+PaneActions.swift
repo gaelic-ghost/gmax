@@ -45,7 +45,6 @@ extension WorkspaceStore {
             Logger.pane.error("The app was asked to relaunch a pane, but the target pane could not be resolved inside the selected workspace. The relaunch request was dropped before any shell state changed. Workspace ID: \(workspaceID.rawValue.uuidString, privacy: .public). Pane ID: \(paneID.rawValue.uuidString, privacy: .public)")
             return
         }
-
         guard let sessionID = pane.terminalSessionID else {
             Logger.pane.error("The app was asked to relaunch a pane, but that pane does not currently host a terminal session. The relaunch request was dropped before any session state changed. Workspace ID: \(workspaceID.rawValue.uuidString, privacy: .public). Pane ID: \(paneID.rawValue.uuidString, privacy: .public)")
             return
@@ -67,7 +66,6 @@ extension WorkspaceStore {
         guard let sourcePane = root.findPane(id: paneID) else {
             return nil
         }
-
         guard let sourceSessionID = sourcePane.terminalSessionID else {
             Logger.pane.error("The app was asked to split a pane and inherit terminal launch state, but the source pane does not currently host a terminal session. The split request was dropped before any pane-tree state changed. Workspace ID: \(workspaceID.rawValue.uuidString, privacy: .public). Pane ID: \(paneID.rawValue.uuidString, privacy: .public)")
             return nil

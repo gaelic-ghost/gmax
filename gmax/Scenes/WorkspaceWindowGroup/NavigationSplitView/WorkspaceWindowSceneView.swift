@@ -353,11 +353,9 @@ struct WorkspaceWindowSceneView: View {
             guard let selectedWorkspace, let focusedPaneID else {
                 return nil
             }
-
             guard let pane = selectedWorkspace.root?.findPane(id: focusedPaneID) else {
                 return nil
             }
-
             guard pane.browserSessionID != nil else {
                 return nil
             }

@@ -126,12 +126,14 @@ extension WorkspacePersistenceController {
                             Logger.persistence.error("A persisted terminal leaf node is missing its terminal session identifier. That node will be skipped during restore. Node ID: \(nodeEntity.id.uuidString, privacy: .public)")
                             return nil
                         }
+
                         content = .terminal(TerminalSessionID(rawValue: sessionID))
                     case .browser:
                         guard let sessionID = nodeEntity.browserSessionID else {
                             Logger.persistence.error("A persisted browser leaf node is missing its browser session identifier. That node will be skipped during restore. Node ID: \(nodeEntity.id.uuidString, privacy: .public)")
                             return nil
                         }
+
                         content = .browser(BrowserSessionID(rawValue: sessionID))
                     case .none:
                         // Compatibility path for older terminal-only stores.
@@ -139,6 +141,7 @@ extension WorkspacePersistenceController {
                             Logger.persistence.error("A persisted leaf node is missing both its content kind and its compatibility terminal session identifier. That node will be skipped during restore. Node ID: \(nodeEntity.id.uuidString, privacy: .public)")
                             return nil
                         }
+
                         content = .terminal(TerminalSessionID(rawValue: sessionID))
                 }
 

@@ -71,6 +71,7 @@ private struct ContentPaneNodeView: View {
     let node: PaneNode
     let focusedTarget: FocusState<WorkspaceFocusTarget?>.Binding
     @ObservedObject var model: WorkspaceStore
+
     let onUpdateSplitFraction: (SplitID, CGFloat) -> Void
     let onMovePaneFocus: (PaneFocusDirection) -> Void
     let onSplitPane: (PaneID, SplitDirection) -> Void
