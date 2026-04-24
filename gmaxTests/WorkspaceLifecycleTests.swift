@@ -315,29 +315,40 @@ struct WorkspaceLifecycleTests {
         #expect(restoredStore.persistedSelectedWorkspaceID == secondWorkspace.id)
     }
 
-    @Test func `shell integration parser recognizes prompt command and completion markers`() {
-        var parser = ShellIntegrationParser()
+    @Test func `terminal host event parser recognizes prompt command and completion markers`() {
+        var parser = TerminalHostEventParser()
         let output = ArraySlice(Array("\u{1B}]133;A\u{07}\u{1B}]133;C\u{07}\u{1B}]133;D;23\u{07}".utf8))
 
         let events = parser.ingest(output)
 
         #expect(events == [
-            .promptStarted,
-            .commandStarted,
-            .commandFinished(exitStatus: 23),
+            .shellIntegration(.promptStarted),
+            .shellIntegration(.commandStarted),
+            .shellIntegration(.commandFinished(exitStatus: 23)),
         ])
     }
 
-    @Test func `shell integration parser preserves incomplete sequences across chunks`() {
-        var parser = ShellIntegrationParser()
+    @Test func `terminal host event parser preserves incomplete sequences across chunks`() {
+        var parser = TerminalHostEventParser()
 
         let firstEvents = parser.ingest(ArraySlice(Array("\u{1B}]133;".utf8)))
         let secondEvents = parser.ingest(ArraySlice(Array("A\u{07}\u{1B}]133;D;7\u{07}".utf8)))
 
         #expect(firstEvents.isEmpty)
         #expect(secondEvents == [
-            .promptStarted,
-            .commandFinished(exitStatus: 7),
+            .shellIntegration(.promptStarted),
+            .shellIntegration(.commandFinished(exitStatus: 7)),
+        ])
+    }
+
+    @Test func `terminal host event parser recognizes explicit terminal notifications`() {
+        var parser = TerminalHostEventParser()
+        let output = ArraySlice(Array("\u{1B}]777;notify;Build Finished;All tests passed\u{07}".utf8))
+
+        let events = parser.ingest(output)
+
+        #expect(events == [
+            .notification(title: "Build Finished", body: "All tests passed"),
         ])
     }
 
@@ -354,6 +365,83 @@ struct WorkspaceLifecycleTests {
         session.applyShellIntegrationEvent(.commandFinished(exitStatus: 2))
         #expect(session.shellPhase == .atPrompt)
         #expect(session.lastCommandExitStatus == 2)
+    }
+
+    @Test func `terminal session records bells and explicit terminal notifications`() {
+        let session = TerminalSession(id: TerminalSessionID())
+        let receivedAt = Date(timeIntervalSince1970: 1_713_888_000)
+
+        session.recordBell(at: receivedAt)
+        session.recordAttentionNotification(
+            title: "Build Finished",
+            body: "All tests passed",
+            at: receivedAt,
+        )
+
+        #expect(session.bellCount == 1)
+        #expect(session.lastBellAt == receivedAt)
+        #expect(session.lastAttentionNotification == TerminalAttentionNotification(
+            title: "Build Finished",
+            body: "All tests passed",
+            receivedAt: receivedAt,
+        ))
+    }
+
+    @Test func `terminal session clears active bell when the next command starts`() {
+        let session = TerminalSession(id: TerminalSessionID())
+
+        session.recordBell()
+        #expect(session.hasActiveBell)
+
+        session.applyShellIntegrationEvent(.commandStarted)
+
+        #expect(!session.hasActiveBell)
+        #expect(session.shellPhase == .runningCommand)
+    }
+
+    @Test func `terminal session can clear bell attention without resetting bell history`() {
+        let session = TerminalSession(id: TerminalSessionID())
+
+        session.recordBell()
+        let bellCount = session.bellCount
+        let lastBellAt = session.lastBellAt
+
+        session.clearBellAttention()
+
+        #expect(!session.hasActiveBell)
+        #expect(session.bellCount == bellCount)
+        #expect(session.lastBellAt == lastBellAt)
+    }
+
+    @Test func `workspace store tracks current bell counts per workspace and per window`() throws {
+        let firstPane = PaneLeaf()
+        let secondPane = PaneLeaf()
+        let firstWorkspace = Workspace(title: "Workspace 1", root: .leaf(firstPane))
+        let secondWorkspace = Workspace(title: "Workspace 2", root: .leaf(secondPane))
+        let model = WorkspaceStore(
+            workspaces: [firstWorkspace, secondWorkspace],
+            persistence: .inMemoryForTesting(),
+        )
+
+        let firstSessionID = try #require(firstPane.terminalSessionID)
+        let secondSessionID = try #require(secondPane.terminalSessionID)
+        let firstSession = try #require(model.sessions.session(for: firstSessionID))
+        let secondSession = try #require(model.sessions.session(for: secondSessionID))
+
+        firstSession.recordBell()
+        secondSession.recordBell()
+        model.refreshBellCounts()
+
+        #expect(model.currentBellCount(for: firstWorkspace.id) == 1)
+        #expect(model.currentBellCount(for: secondWorkspace.id) == 1)
+        #expect(model.currentWindowBellCount == 2)
+
+        firstSession.applyShellIntegrationEvent(.commandStarted)
+        model.refreshBellCounts()
+
+        #expect(model.currentBellCount(for: firstWorkspace.id) == 0)
+        #expect(model.currentBellCount(for: secondWorkspace.id) == 1)
+        #expect(model.currentWindowBellCount == 1)
     }
 }
 

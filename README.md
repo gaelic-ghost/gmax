@@ -45,7 +45,9 @@ From the current app surface you can:
 - move focus across panes with keyboard commands
 - save workspaces and windows into the library and reopen them later
 - restore terminal history for reopened workspaces and ordinary live relaunches, including ordinary scroll position when available
+- surface shell-aware pane status for running, completed, failed, and bell-attention states when the integrated shell markers are available
 - split dedicated browser panes into a workspace and navigate them in place
+- show active terminal bell counts in the workspace sidebar and terminal inspector
 - hide or show the sidebar and inspector independently
 - adjust terminal appearance and workspace persistence behavior in Settings
 
@@ -146,7 +148,7 @@ Key repo surfaces:
 
 ## Release Notes
 
-The repository currently has release tags through `v0.0.9`. The latest shipped checkpoint is documented in [docs/releases/v0.0.9-release-notes.md](docs/releases/v0.0.9-release-notes.md), and the broader internal-release quality bar is tracked in [docs/releases/v0.1.0-release-checklist.md](docs/releases/v0.1.0-release-checklist.md). Both release docs assume `README.md`, `ROADMAP.md`, and the maintainer notes stay aligned with the shipped persistence, library, command, window-restoration, terminal-history, and browser-pane model.
+The repository now includes the `v0.1.0` release tag. The current shell-integration checkpoint is documented in [docs/releases/v0.1.0-release-notes.md](docs/releases/v0.1.0-release-notes.md), and the broader internal-release quality bar remains tracked in [docs/releases/v0.1.0-release-checklist.md](docs/releases/v0.1.0-release-checklist.md). Both release docs assume `README.md`, `ROADMAP.md`, and the maintainer notes stay aligned with the shipped persistence, library, command, window-restoration, browser-pane, and shell-integration model.
 
 ## License
 

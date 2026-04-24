@@ -26,7 +26,18 @@ enum ShellIntegrationEvent: Equatable {
     case commandFinished(exitStatus: Int32?)
 }
 
-struct ShellIntegrationParser {
+enum TerminalHostEvent: Equatable {
+    case shellIntegration(ShellIntegrationEvent)
+    case notification(title: String, body: String)
+}
+
+struct TerminalAttentionNotification: Equatable {
+    let title: String
+    let body: String
+    let receivedAt: Date
+}
+
+struct TerminalHostEventParser {
     private static let escape = UInt8(ascii: "\u{1B}")
     private static let osc = UInt8(ascii: "]")
     private static let bel = UInt8(ascii: "\u{07}")
@@ -34,13 +45,13 @@ struct ShellIntegrationParser {
 
     private var bufferedBytes: [UInt8] = []
 
-    mutating func ingest(_ bytes: ArraySlice<UInt8>) -> [ShellIntegrationEvent] {
+    mutating func ingest(_ bytes: ArraySlice<UInt8>) -> [TerminalHostEvent] {
         guard !bytes.isEmpty else {
             return []
         }
 
         bufferedBytes.append(contentsOf: bytes)
-        var events: [ShellIntegrationEvent] = []
+        var events: [TerminalHostEvent] = []
 
         while let event = nextEvent() {
             events.append(event)
@@ -49,47 +60,40 @@ struct ShellIntegrationParser {
         return events
     }
 
-    private mutating func nextEvent() -> ShellIntegrationEvent? {
+    private mutating func nextEvent() -> TerminalHostEvent? {
         while true {
             guard !bufferedBytes.isEmpty else {
                 return nil
             }
 
-            guard let escapeIndex = bufferedBytes.firstIndex(of: Self.escape) else {
-                bufferedBytes.removeAll(keepingCapacity: true)
-                return nil
-            }
-
-            if escapeIndex > 0 {
-                bufferedBytes.removeFirst(escapeIndex)
+            if bufferedBytes[0] != Self.escape {
+                bufferedBytes.removeFirst()
+                continue
             }
 
             guard bufferedBytes.count >= 2 else {
                 return nil
             }
-
             guard bufferedBytes[1] == Self.osc else {
                 bufferedBytes.removeFirst()
                 continue
             }
-
             guard let terminatorRange = oscTerminatorRange(in: bufferedBytes) else {
                 return nil
             }
 
             let payload = Array(bufferedBytes[2..<terminatorRange.lowerBound])
             bufferedBytes.removeFirst(terminatorRange.upperBound)
-
             guard let payloadString = String(bytes: payload, encoding: .utf8) else {
                 continue
             }
 
             if payloadString == "133;A" {
-                return .promptStarted
+                return .shellIntegration(.promptStarted)
             }
 
             if payloadString.hasPrefix("133;C") {
-                return .commandStarted
+                return .shellIntegration(.commandStarted)
             }
 
             if payloadString.hasPrefix("133;D") {
@@ -98,7 +102,24 @@ struct ShellIntegrationParser {
                     .dropFirst(2)
                     .first
                     .flatMap { Int32($0) }
-                return .commandFinished(exitStatus: exitStatus)
+                return .shellIntegration(.commandFinished(exitStatus: exitStatus))
+            }
+
+            if payloadString.hasPrefix("777;notify;") {
+                let notificationPayload = String(payloadString.dropFirst("777;".count))
+                let parts = notificationPayload.split(
+                    separator: ";",
+                    maxSplits: 2,
+                    omittingEmptySubsequences: false,
+                )
+                guard parts.count >= 3, parts[0] == "notify" else {
+                    continue
+                }
+
+                return .notification(
+                    title: String(parts[1]),
+                    body: String(parts[2]),
+                )
             }
         }
     }
@@ -138,6 +159,10 @@ final class TerminalSession: ObservableObject, Identifiable {
     @Published var state: TerminalSessionState
     @Published private(set) var shellPhase: TerminalShellPhase
     @Published private(set) var lastCommandExitStatus: Int32?
+    @Published private(set) var hasActiveBell: Bool
+    @Published private(set) var bellCount: Int
+    @Published private(set) var lastBellAt: Date?
+    @Published private(set) var lastAttentionNotification: TerminalAttentionNotification?
     @Published private(set) var relaunchGeneration: Int
 
     private var pendingRestoredHistory: WorkspaceSessionHistorySnapshot?
@@ -150,6 +175,10 @@ final class TerminalSession: ObservableObject, Identifiable {
         state: TerminalSessionState = .idle,
         shellPhase: TerminalShellPhase = .unknown,
         lastCommandExitStatus: Int32? = nil,
+        hasActiveBell: Bool = false,
+        bellCount: Int = 0,
+        lastBellAt: Date? = nil,
+        lastAttentionNotification: TerminalAttentionNotification? = nil,
         relaunchGeneration: Int = 0,
     ) {
         self.id = id
@@ -159,6 +188,10 @@ final class TerminalSession: ObservableObject, Identifiable {
         self.state = state
         self.shellPhase = shellPhase
         self.lastCommandExitStatus = lastCommandExitStatus
+        self.hasActiveBell = hasActiveBell
+        self.bellCount = bellCount
+        self.lastBellAt = lastBellAt
+        self.lastAttentionNotification = lastAttentionNotification
         self.relaunchGeneration = relaunchGeneration
     }
 
@@ -168,6 +201,10 @@ final class TerminalSession: ObservableObject, Identifiable {
         state = .idle
         shellPhase = .unknown
         lastCommandExitStatus = nil
+        hasActiveBell = false
+        bellCount = 0
+        lastBellAt = nil
+        lastAttentionNotification = nil
         pendingRestoredHistory = nil
         relaunchGeneration += 1
     }
@@ -178,6 +215,7 @@ final class TerminalSession: ObservableObject, Identifiable {
                 shellPhase = .atPrompt
             case .commandStarted:
                 shellPhase = .runningCommand
+                hasActiveBell = false
             case let .commandFinished(exitStatus):
                 shellPhase = .atPrompt
                 lastCommandExitStatus = exitStatus
@@ -187,6 +225,28 @@ final class TerminalSession: ObservableObject, Identifiable {
     func clearShellIntegrationState() {
         shellPhase = .unknown
         lastCommandExitStatus = nil
+    }
+
+    func clearBellAttention() {
+        hasActiveBell = false
+    }
+
+    func recordBell(at date: Date = Date()) {
+        hasActiveBell = true
+        bellCount += 1
+        lastBellAt = date
+    }
+
+    func recordAttentionNotification(
+        title: String,
+        body: String,
+        at date: Date = Date(),
+    ) {
+        lastAttentionNotification = TerminalAttentionNotification(
+            title: title,
+            body: body,
+            receivedAt: date,
+        )
     }
 
     func setRestoredHistory(_ history: WorkspaceSessionHistorySnapshot?) {

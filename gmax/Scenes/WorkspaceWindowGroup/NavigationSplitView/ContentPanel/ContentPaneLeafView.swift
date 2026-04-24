@@ -20,6 +20,25 @@ struct ContentPaneLeafView: View {
     let onSplitDown: () -> Void
     let onClose: () -> Void
 
+    private var shellStatusIndicatorState: ContentPaneLeafShellStatusIndicator.Status? {
+        if session.hasActiveBell {
+            return .bell
+        }
+
+        switch session.shellPhase {
+            case .runningCommand:
+                return .running
+            case .atPrompt:
+                guard let exitStatus = session.lastCommandExitStatus else {
+                    return nil
+                }
+
+                return exitStatus == 0 ? .finished : .failed
+            case .unknown:
+                return nil
+        }
+    }
+
     var body: some View {
         let isFocused = focusedTarget.wrappedValue == .pane(pane.id)
         let title = session.title.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -34,6 +53,7 @@ struct ContentPaneLeafView: View {
             case .runningCommand: "Shell running a command"
         }
         let shellStatusDescription: String? = switch shellStatusIndicatorState {
+            case .bell: "Terminal bell needs attention"
             case .running: "Command running"
             case .finished: "Last command finished successfully"
             case .failed: "Last command failed"
@@ -62,6 +82,7 @@ struct ContentPaneLeafView: View {
                     return
                 }
 
+                session.clearBellAttention()
                 chromeRevealID += 1
             }
             .contentShape(Rectangle())
@@ -157,20 +178,6 @@ struct ContentPaneLeafView: View {
 
         session.prepareForRelaunch()
     }
-
-    private var shellStatusIndicatorState: ContentPaneLeafShellStatusIndicator.Status? {
-        switch session.shellPhase {
-            case .runningCommand:
-                return .running
-            case .atPrompt:
-                guard let exitStatus = session.lastCommandExitStatus else {
-                    return nil
-                }
-                return exitStatus == 0 ? .finished : .failed
-            case .unknown:
-                return nil
-        }
-    }
 }
 
 private struct ContentPaneLeafHeader: View {
@@ -213,6 +220,7 @@ private struct ContentPaneLeafFocusIndicator: View {
 
 private struct ContentPaneLeafShellStatusIndicator: View {
     enum Status {
+        case bell
         case running
         case finished
         case failed
@@ -225,16 +233,12 @@ private struct ContentPaneLeafShellStatusIndicator: View {
 
     let state: Status
 
-    init(state: Status) {
-        self.state = state
-    }
-
     private var fillColor: Color {
         switch state {
             case .running, .finished:
-                return .blue
-            case .failed:
-                return .red
+                .blue
+            case .failed, .bell:
+                .red
         }
     }
 
@@ -246,10 +250,23 @@ private struct ContentPaneLeafShellStatusIndicator: View {
         state == .failed && isFailureBlinking
     }
 
+    private var opacity: Double {
+        if shouldPulse {
+            return isPulsing ? 0.95 : 0.42
+        }
+        if shouldBlinkFailure {
+            return isFailureBlinking ? 0.95 : 0.2
+        }
+        return 0.95
+    }
+
+    init(state: Status) {
+        self.state = state
+    }
+
     var body: some View {
-        Circle()
-            .fill(fillColor)
-            .frame(width: 10, height: 10)
+        statusContent
+            .foregroundStyle(fillColor)
             .scaleEffect(shouldPulse ? (isPulsing ? 1 : 0.78) : 1)
             .opacity(opacity)
             .padding(8)
@@ -270,14 +287,20 @@ private struct ContentPaneLeafShellStatusIndicator: View {
             .animation(.easeInOut(duration: 0.18), value: isFailureBlinking)
     }
 
-    private var opacity: Double {
-        if shouldPulse {
-            return isPulsing ? 0.95 : 0.42
+    @ViewBuilder
+    private var statusContent: some View {
+        switch state {
+            case .bell:
+                Image(systemName: "bell.and.waves.left.and.right")
+                    .font(.system(size: 11, weight: .semibold))
+            case .failed:
+                Image(systemName: "exclamationmark.warninglight")
+                    .font(.system(size: 11, weight: .semibold))
+            case .running, .finished:
+                Circle()
+                    .fill(fillColor)
+                    .frame(width: 10, height: 10)
         }
-        if shouldBlinkFailure {
-            return isFailureBlinking ? 0.95 : 0.2
-        }
-        return 0.95
     }
 
     private func updateAnimationState() {

@@ -7,6 +7,8 @@ import SwiftUI
 final class WorkspaceStore: ObservableObject {
     @Published var workspaces: [Workspace]
     @Published var recentlyClosedWorkspaceCount = 0
+    @Published private(set) var currentBellCountByWorkspaceID: [WorkspaceID: Int]
+    @Published private(set) var currentWindowBellCount: Int
 
     let sceneIdentity: WorkspaceSceneIdentity
     let persistence: WorkspacePersistenceController
@@ -17,6 +19,8 @@ final class WorkspaceStore: ObservableObject {
     let browserPaneControllers: BrowserPaneControllerStore
     var persistedSelectedWorkspaceID: WorkspaceID?
     var pendingPersistenceTask: Task<Void, Never>?
+
+    private var terminalSessionObservationCancellables: [TerminalSessionID: AnyCancellable]
 
     init(
         sceneIdentity: WorkspaceSceneIdentity = WorkspaceSceneIdentity(),
@@ -105,6 +109,60 @@ final class WorkspaceStore: ObservableObject {
         browserPaneControllers = BrowserPaneControllerStore()
         self.workspaces = resolvedWorkspaces
         recentlyClosedWorkspaceCount = resolvedRecentlyClosedWorkspaceCount
+        currentBellCountByWorkspaceID = [:]
+        currentWindowBellCount = 0
         persistedSelectedWorkspaceID = resolvedWindowState?.selectedWorkspaceID
+        terminalSessionObservationCancellables = [:]
+        reconcileTerminalSessionObservations()
+    }
+
+    func currentBellCount(for workspaceID: WorkspaceID) -> Int {
+        currentBellCountByWorkspaceID[workspaceID, default: 0]
+    }
+
+    func reconcileTerminalSessionObservations() {
+        let activeSessionIDs = Set(
+            workspaces.flatMap { workspace in
+                workspace.paneLeaves.compactMap(\.terminalSessionID)
+            },
+        )
+
+        terminalSessionObservationCancellables = terminalSessionObservationCancellables.filter {
+            activeSessionIDs.contains($0.key)
+        }
+
+        for sessionID in activeSessionIDs where terminalSessionObservationCancellables[sessionID] == nil {
+            guard let session = sessions.session(for: sessionID) else {
+                continue
+            }
+
+            terminalSessionObservationCancellables[sessionID] = session.$hasActiveBell
+                .dropFirst()
+                .sink { [weak self] _ in
+                    self?.refreshBellCounts()
+                }
+        }
+
+        refreshBellCounts()
+    }
+
+    func refreshBellCounts() {
+        currentBellCountByWorkspaceID = Dictionary(
+            uniqueKeysWithValues: workspaces.map { workspace in
+                let activeBellCount = workspace.paneLeaves.reduce(into: 0) { count, pane in
+                    guard
+                        let sessionID = pane.terminalSessionID,
+                        let session = sessions.session(for: sessionID),
+                        session.hasActiveBell
+                    else {
+                        return
+                    }
+
+                    count += 1
+                }
+                return (workspace.id, activeBellCount)
+            },
+        )
+        currentWindowBellCount = currentBellCountByWorkspaceID.values.reduce(0, +)
     }
 }

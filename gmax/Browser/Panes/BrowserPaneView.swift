@@ -338,7 +338,8 @@ private struct BrowserOmniboxTextField: NSViewRepresentable {
                 guard let self else {
                     return
                 }
-                self.isFocused = true
+
+                isFocused = true
             }
         }
 
@@ -347,7 +348,8 @@ private struct BrowserOmniboxTextField: NSViewRepresentable {
                 guard let self else {
                     return
                 }
-                self.isFocused = false
+
+                isFocused = false
             }
         }
 

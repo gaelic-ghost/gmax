@@ -73,6 +73,7 @@ struct DetailPane: View {
 private struct ActivePaneDetails: View {
     let workspaceTitle: String
     let pane: PaneLeaf
+
     @ObservedObject var session: TerminalSession
 
     var body: some View {
@@ -87,6 +88,14 @@ private struct ActivePaneDetails: View {
             case .runningCommand: "Running Command"
         }
         let lastCommandExitStatus = session.lastCommandExitStatus.map(String.init) ?? "Unavailable"
+        let bellCount = String(session.bellCount)
+        let lastBellAt = session.lastBellAt?.formatted(date: .abbreviated, time: .standard) ?? "Unavailable"
+        let lastAttentionNotification = session.lastAttentionNotification.map { notification in
+            if notification.body.isEmpty {
+                return notification.title
+            }
+            return "\(notification.title): \(notification.body)"
+        } ?? "Unavailable"
         VStack(alignment: .leading, spacing: 16) {
             Text("Active Pane")
                 .font(.title2.weight(.semibold))
@@ -98,6 +107,9 @@ private struct ActivePaneDetails: View {
                 DetailValue(label: "State", value: state)
                 DetailValue(label: "Shell Phase", value: shellPhase)
                 DetailValue(label: "Last Command Exit Status", value: lastCommandExitStatus)
+                DetailValue(label: "Bell Count", value: bellCount)
+                DetailValue(label: "Last Bell At", value: lastBellAt)
+                DetailValue(label: "Last Terminal Notification", value: lastAttentionNotification)
                 DetailValue(label: "Current Directory", value: session.currentDirectory ?? "Unavailable")
                 DetailValue(label: "Pane ID", value: pane.id.rawValue.uuidString)
                 DetailValue(label: "Session ID", value: session.id.rawValue.uuidString)

@@ -11,7 +11,7 @@ import Testing
 
 @MainActor
 struct ZshShellIntegrationTests {
-    @Test func `environment overlay configures zdotdir for zsh shells`() throws {
+    @Test func `environment overlay configures zdotdir for zsh shells`() {
         let fileManager = FileManager.default
         let rootDirectory = fileManager.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)

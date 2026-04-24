@@ -60,6 +60,10 @@ final class TerminalSessionRegistry {
         sessionsByID[id]
     }
 
+    func allSessions() -> [TerminalSession] {
+        Array(sessionsByID.values)
+    }
+
     func removeSessions(notIn retainedSessionIDs: Set<TerminalSessionID>) {
         sessionsByID = sessionsByID.filter { retainedSessionIDs.contains($0.key) }
     }

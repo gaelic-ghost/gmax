@@ -22,18 +22,20 @@ struct SidebarPane: View {
             ForEach(model.workspaces) { workspace in
                 let paneCount = workspace.root?.leaves().count ?? 0
                 let paneCountDescription = paneCount == 1 ? "1 pane" : "\(paneCount) panes"
+                let currentBellCount = model.currentBellCount(for: workspace.id)
                 NavigationLink(value: workspace.id) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(workspace.title)
-                            .accessibilityIdentifier("sidebar.workspaceTitle.\(workspace.title)")
-                        Text(paneCountDescription)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .accessibilityIdentifier("sidebar.workspacePaneCount.\(workspace.title)")
-                    }
+                    WorkspaceSidebarRow(
+                        title: workspace.title,
+                        paneCountDescription: paneCountDescription,
+                        currentBellCount: currentBellCount,
+                    )
                 }
                 .accessibilityElement(children: .combine)
-                .accessibilityLabel("\(workspace.title), \(paneCountDescription)")
+                .accessibilityLabel(
+                    currentBellCount > 0
+                        ? "\(workspace.title), \(paneCountDescription), \(currentBellCount) bell\(currentBellCount == 1 ? "" : "s") needing attention"
+                        : "\(workspace.title), \(paneCountDescription)",
+                )
                 .accessibilityIdentifier("sidebar.workspaceRow.\(workspace.title)")
                 .contextMenu {
                     workspaceActions(for: workspace)
@@ -88,6 +90,37 @@ struct SidebarPane: View {
             requestDeleteWorkspace(workspace.id)
         }
         .disabled(model.workspaces.count <= 1)
+    }
+}
+
+private struct WorkspaceSidebarRow: View {
+    let title: String
+    let paneCountDescription: String
+    let currentBellCount: Int
+
+    var body: some View {
+        HStack(alignment: .top) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .accessibilityIdentifier("sidebar.workspaceTitle.\(title)")
+                Text(paneCountDescription)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .accessibilityIdentifier("sidebar.workspacePaneCount.\(title)")
+            }
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .overlay(alignment: .topTrailing) {
+            if currentBellCount > 0 {
+                Text(String(currentBellCount))
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(.red, in: Capsule())
+            }
+        }
     }
 }
 

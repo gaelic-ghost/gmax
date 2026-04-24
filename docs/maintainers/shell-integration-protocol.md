@@ -17,8 +17,8 @@ Use this note when discussing:
 - command completion and exit-status metadata
 - future terminal-history and command-history product work
 
-This note is planning guidance, not a statement that all of the behavior below
-is already shipped.
+This note now covers both the shipped `v0.1.0` shell-integration baseline and
+the still-deferred follow-through beyond it.
 
 ## Why Shell Integration Exists
 
@@ -88,6 +88,23 @@ The first `gmax` shell integration pass should unlock these product outcomes:
 - attribute output to commands more accurately than line-oriented heuristics
 - capture more precise restoration metadata over time
 - surface terminal notifications and bells through pane or window UI
+
+The currently shipped baseline does this much:
+
+- parses prompt-start, command-start, and command-finish markers
+- emits those markers from the `zsh` launch path
+- tracks prompt-idle versus command-running session state
+- surfaces pane-local running, success, failure, and bell-attention chrome
+- aggregates active bell attention into workspace-local sidebar counts
+- records explicit terminal notifications in pane session state and the
+  inspector
+
+The main follow-through still ahead is:
+
+- `bash` integration support
+- routing explicit terminal notifications into real macOS notifications
+- deciding whether richer shell-integration events are worth durable product
+  surface area beyond the current runtime metadata
 
 The first pass should not try to solve:
 
@@ -237,6 +254,11 @@ Possible `gmax` uses:
 - forward to macOS notifications
 - record recent pane notifications in memory
 - expose notification provenance in the inspector later
+
+The current follow-through priority after pane and sidebar attention affordances
+is to route explicit terminal notifications into real macOS notifications
+before doing deeper notification persistence work, then extend the same shell
+marker baseline to `bash`.
 
 These should not be collapsed into one generic “activity happened” signal.
 
