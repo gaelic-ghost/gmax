@@ -150,7 +150,7 @@ In Progress
 - [x] Move recent workspace reopen behavior onto durable window membership plus workspace recency.
 - [ ] Add configurable transcript retention limits for saved workspace history.
 - [ ] Add crash-safe and operator-friendly persistence diagnostics.
-- [ ] Introduce a unified library listing surface that can hold both saved workspaces and saved windows.
+- [x] Introduce a unified library listing surface that can hold both saved workspaces and saved windows.
 - [ ] Add explicit saved-workspace revision history retention instead of replacing the current saved payload in place.
 - [ ] Decide which settings and metadata are sync-worthy.
 - [ ] Evaluate `NSPersistentCloudKitContainer` for future sync support.
