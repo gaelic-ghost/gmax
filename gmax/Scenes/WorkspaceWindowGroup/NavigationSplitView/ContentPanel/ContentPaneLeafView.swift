@@ -103,11 +103,16 @@ struct ContentPaneLeafView: View {
             ContentPaneLeafHeader(title: session.title, revealID: chromeRevealID)
                 .padding(.top, 12)
         }
-        .overlay(alignment: .topLeading) {
-            if let shellStatusIndicatorState {
-                ContentPaneLeafShellStatusIndicator(state: shellStatusIndicatorState)
-                    .padding([.top, .leading], 12)
+        .overlay(alignment: .topTrailing) {
+            HStack(spacing: 6) {
+                if isFocused {
+                    ContentPaneLeafFocusIndicator()
+                }
+                if let shellStatusIndicatorState {
+                    ContentPaneLeafShellStatusIndicator(state: shellStatusIndicatorState)
+                }
             }
+            .padding([.top, .trailing], 12)
         }
         .overlay(alignment: .bottomLeading) {
             if let currentDirectory = session.currentDirectory, !currentDirectory.isEmpty {
@@ -196,6 +201,16 @@ private struct ContentPaneLeafFooter: View {
     }
 }
 
+private struct ContentPaneLeafFocusIndicator: View {
+    var body: some View {
+        Circle()
+            .fill(.green)
+            .frame(width: 10, height: 10)
+            .padding(8)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
+    }
+}
+
 private struct ContentPaneLeafShellStatusIndicator: View {
     enum Status {
         case running
@@ -205,6 +220,7 @@ private struct ContentPaneLeafShellStatusIndicator: View {
 
     @State private var isPulsing = false
     @State private var isFailureBlinking = false
+    @State private var pulseTask: Task<Void, Never>?
     @State private var failureBlinkTask: Task<Void, Never>?
 
     let state: Status
@@ -245,23 +261,13 @@ private struct ContentPaneLeafShellStatusIndicator: View {
                 updateAnimationState()
             }
             .onDisappear {
+                pulseTask?.cancel()
+                pulseTask = nil
                 failureBlinkTask?.cancel()
                 failureBlinkTask = nil
             }
-            .animation(
-                shouldPulse
-                    ? .easeInOut(duration: 1.3).repeatForever(autoreverses: true)
-                    : shouldBlinkFailure
-                        ? .easeInOut(duration: 0.36).repeatForever(autoreverses: true)
-                        : .easeOut(duration: 0.18),
-                value: isPulsing,
-            )
-            .animation(
-                shouldBlinkFailure
-                    ? .easeInOut(duration: 0.36).repeatForever(autoreverses: true)
-                    : .easeOut(duration: 0.18),
-                value: isFailureBlinking,
-            )
+            .animation(.easeInOut(duration: 0.18), value: isPulsing)
+            .animation(.easeInOut(duration: 0.18), value: isFailureBlinking)
     }
 
     private var opacity: Double {
@@ -275,18 +281,50 @@ private struct ContentPaneLeafShellStatusIndicator: View {
     }
 
     private func updateAnimationState() {
+        pulseTask?.cancel()
+        pulseTask = nil
         failureBlinkTask?.cancel()
         failureBlinkTask = nil
-        isPulsing = shouldPulse
+        isFailureBlinking = false
+
+        if shouldPulse {
+            isPulsing = true
+            pulseTask = Task { @MainActor in
+                while !Task.isCancelled, state == .running {
+                    try? await Task.sleep(for: .seconds(0.65))
+                    guard !Task.isCancelled, state == .running else {
+                        break
+                    }
+
+                    isPulsing.toggle()
+                }
+
+                guard !Task.isCancelled else {
+                    return
+                }
+
+                isPulsing = false
+            }
+        } else {
+            isPulsing = false
+        }
 
         guard state == .failed else {
-            isFailureBlinking = false
             return
         }
 
         isFailureBlinking = true
         failureBlinkTask = Task { @MainActor in
-            try? await Task.sleep(for: .seconds(2))
+            let endTime = ContinuousClock.now + .seconds(1.1)
+            while !Task.isCancelled, ContinuousClock.now < endTime, state == .failed {
+                try? await Task.sleep(for: .seconds(0.11))
+                guard !Task.isCancelled, state == .failed else {
+                    break
+                }
+
+                isFailureBlinking.toggle()
+            }
+
             guard !Task.isCancelled else {
                 return
             }

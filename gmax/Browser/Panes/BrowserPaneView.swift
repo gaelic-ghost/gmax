@@ -334,11 +334,21 @@ private struct BrowserOmniboxTextField: NSViewRepresentable {
         }
 
         func controlTextDidBeginEditing(_ obj: Notification) {
-            isFocused = true
+            DispatchQueue.main.async { [weak self] in
+                guard let self else {
+                    return
+                }
+                self.isFocused = true
+            }
         }
 
         func controlTextDidEndEditing(_ obj: Notification) {
-            isFocused = false
+            DispatchQueue.main.async { [weak self] in
+                guard let self else {
+                    return
+                }
+                self.isFocused = false
+            }
         }
 
         func control(
