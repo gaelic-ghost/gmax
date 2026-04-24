@@ -6,7 +6,12 @@ extension FocusedValues {
     @Entry var activeWorkspaceSceneIdentity: WorkspaceSceneIdentity?
     @Entry var selectedWorkspaceSelection: Binding<WorkspaceID?>?
     @Entry var dismissPresentedWorkspaceModal: (() -> Void)?
+    @Entry var isWorkspaceSidebarVisible: Bool?
+    @Entry var toggleWorkspaceSidebar: (() -> Void)?
+    @Entry var isWorkspaceInspectorVisible: Bool?
+    @Entry var toggleWorkspaceInspector: (() -> Void)?
     @Entry var closeWorkspaceWindow: (() -> Void)?
+    @Entry var closeWorkspaceWindowToLibrary: (() -> Void)?
     @Entry var openLibrary: (() -> Void)?
     @Entry var presentWorkspaceRename: ((WorkspaceID) -> Void)?
     @Entry var presentWorkspaceDeletion: ((WorkspaceID) -> Void)?
@@ -22,7 +27,12 @@ struct WorkspaceWindowSceneCommands: Commands {
     @FocusedValue(\.activeWorkspaceSceneIdentity) private var activeWorkspaceSceneIdentity
     @FocusedValue(\.selectedWorkspaceSelection) private var selectedWorkspaceSelection
     @FocusedValue(\.dismissPresentedWorkspaceModal) private var dismissPresentedWorkspaceModal
+    @FocusedValue(\.isWorkspaceSidebarVisible) private var isWorkspaceSidebarVisible
+    @FocusedValue(\.toggleWorkspaceSidebar) private var toggleWorkspaceSidebar
+    @FocusedValue(\.isWorkspaceInspectorVisible) private var isWorkspaceInspectorVisible
+    @FocusedValue(\.toggleWorkspaceInspector) private var toggleWorkspaceInspector
     @FocusedValue(\.closeWorkspaceWindow) private var closeWorkspaceWindow
+    @FocusedValue(\.closeWorkspaceWindowToLibrary) private var closeWorkspaceWindowToLibrary
     @FocusedValue(\.openLibrary) private var openLibrary
     @FocusedValue(\.presentWorkspaceRename) private var presentWorkspaceRename
     @FocusedValue(\.presentWorkspaceDeletion) private var presentWorkspaceDeletion
@@ -40,6 +50,8 @@ struct WorkspaceWindowSceneCommands: Commands {
         let canSplitFocusedPane = splitFocusedPane != nil
         let canDeleteSelectedWorkspace = selectedWorkspace != nil && workspaces.count > 1
         let canCycleWorkspaces = workspaces.count > 1
+        let sidebarCommandTitle = (isWorkspaceSidebarVisible ?? false) ? "Hide Sidebar" : "Show Sidebar"
+        let inspectorCommandTitle = (isWorkspaceInspectorVisible ?? false) ? "Hide Inspector" : "Show Inspector"
         let canCloseWindow = activeWorkspaceSceneIdentity != nil
         let canUndoCloseWindow = !windowRestoration.recentlyClosedWindowSceneIdentities.isEmpty
         let closeWorkspaceAction: (() -> Void)? = {
@@ -92,11 +104,23 @@ struct WorkspaceWindowSceneCommands: Commands {
             }
         }
 
-        SidebarCommands()
-        InspectorCommands()
         TextEditingCommands()
         TextFormattingCommands()
         ToolbarCommands()
+
+        CommandGroup(replacing: .sidebar) {
+            Button(sidebarCommandTitle) {
+                toggleWorkspaceSidebar?()
+            }
+            .keyboardShortcut("b", modifiers: [.command])
+            .disabled(toggleWorkspaceSidebar == nil)
+
+            Button(inspectorCommandTitle) {
+                toggleWorkspaceInspector?()
+            }
+            .keyboardShortcut("b", modifiers: [.command, .shift])
+            .disabled(toggleWorkspaceInspector == nil)
+        }
 
         CommandGroup(after: .newItem) {
             Button("New Workspace") {
@@ -104,7 +128,7 @@ struct WorkspaceWindowSceneCommands: Commands {
                     selectedWorkspaceSelection?.wrappedValue = workspaceStore.createWorkspace()
                 }
             }
-            .keyboardShortcut("n", modifiers: [.command, .shift])
+            .keyboardShortcut("n", modifiers: [.command])
             .disabled(workspaceStore == nil)
         }
 
@@ -133,7 +157,6 @@ struct WorkspaceWindowSceneCommands: Commands {
                 )
                 _ = workspaceStore.saveWorkspaceToLibrary(selectedWorkspaceID)
             }
-            .keyboardShortcut("s", modifiers: [.command])
             .disabled(selectedWorkspaceSelection?.wrappedValue == nil || workspaceStore == nil)
 
             Divider()
@@ -149,27 +172,33 @@ struct WorkspaceWindowSceneCommands: Commands {
             Button("Close Window") {
                 closeWindowAction?()
             }
-            .keyboardShortcut("w", modifiers: [.command, .option])
+            .keyboardShortcut("w", modifiers: [.command, .shift])
             .disabled(closeWindowAction == nil)
 
-            Button("Undo Close Window") {
+            Button("Close Window to Library") {
+                closeWorkspaceWindowToLibrary?()
+            }
+            .keyboardShortcut("s", modifiers: [.command, .shift])
+            .disabled(closeWorkspaceWindowToLibrary == nil)
+
+            Button("Open Recent Window") {
                 guard let sceneIdentity = windowRestoration.popMostRecentlyClosedWindow() else {
                     return
                 }
 
                 openWindow(value: sceneIdentity)
             }
-            .keyboardShortcut("w", modifiers: [.command, .shift, .option])
+            .keyboardShortcut("o", modifiers: [.command, .shift])
             .disabled(!canUndoCloseWindow)
         }
 
         CommandMenu("Workspace") {
-            Button("Undo Close Workspace") {
+            Button("Open Recent Workspace") {
                 if let workspaceStore {
                     selectedWorkspaceSelection?.wrappedValue = workspaceStore.undoCloseWorkspace()
                 }
             }
-            .keyboardShortcut("o", modifiers: [.command, .shift])
+            .keyboardShortcut("o", modifiers: [.command, .option])
             .disabled((workspaceStore?.recentlyClosedWorkspaceCount ?? 0) == 0)
 
             Divider()
@@ -179,6 +208,7 @@ struct WorkspaceWindowSceneCommands: Commands {
                     presentWorkspaceRename?(selectedWorkspaceID)
                 }
             }
+            .keyboardShortcut("r", modifiers: [.command, .option])
             .disabled(selectedWorkspaceID == nil || presentWorkspaceRename == nil)
 
             Button("Duplicate Workspace Layout") {
@@ -193,6 +223,7 @@ struct WorkspaceWindowSceneCommands: Commands {
                     selectedWorkspaceSelection?.wrappedValue = workspaceStore.closeWorkspaceToLibrary(selectedWorkspaceID)
                 }
             }
+            .keyboardShortcut("s", modifiers: [.command, .option])
             .disabled(selectedWorkspaceID == nil || workspaceStore == nil)
 
             Button("Close Workspace") {
@@ -208,6 +239,7 @@ struct WorkspaceWindowSceneCommands: Commands {
 
                 selectedWorkspaceSelection?.wrappedValue = workspaceStore.closeWorkspace(selectedWorkspaceID)
             }
+            .keyboardShortcut("w", modifiers: [.command, .option])
             .disabled(selectedWorkspaceID == nil || workspaceStore == nil)
 
             Button("Delete Workspace", role: .destructive) {

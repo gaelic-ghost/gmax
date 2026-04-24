@@ -23,7 +23,8 @@ struct gmaxApp: App {
         }
         .defaultLaunchBehavior(.presented)
         .restorationBehavior(UITestLaunchBehavior.isEnabled ? .disabled : .automatic)
-        .defaultSize(width: 1440, height: 900)
+        .defaultSize(width: 1240, height: 780)
+        .keyboardShortcut(.init("n", modifiers: [.command, .shift]))
         .commands {
             WorkspaceWindowSceneCommands(windowRestoration: windowRestoration)
         }

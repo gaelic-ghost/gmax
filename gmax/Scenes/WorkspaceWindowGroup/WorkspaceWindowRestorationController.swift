@@ -75,7 +75,7 @@ final class WorkspaceWindowRestorationController: ObservableObject {
         return WorkspaceSceneIdentity()
     }
 
-    func recordWindowClosed(_ sceneIdentity: WorkspaceSceneIdentity) {
+    func recordWindowClosed(_ sceneIdentity: WorkspaceSceneIdentity, saveToLibrary: Bool) {
         guard !isApplicationTerminating else {
             openSceneIdentities.remove(sceneIdentity)
             return
@@ -83,7 +83,7 @@ final class WorkspaceWindowRestorationController: ObservableObject {
 
         openSceneIdentities.remove(sceneIdentity)
         launchRestoreSceneIdentities.removeAll { $0 == sceneIdentity }
-        persistence.markWindowClosed(sceneIdentity)
+        persistence.markWindowClosed(sceneIdentity, saveToLibrary: saveToLibrary)
         recentlyClosedWindowSceneIdentities = persistence.loadRecentlyClosedWindowSceneIdentities()
     }
 

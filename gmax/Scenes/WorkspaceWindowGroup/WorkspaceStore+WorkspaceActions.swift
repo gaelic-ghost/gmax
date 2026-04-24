@@ -94,8 +94,8 @@ extension WorkspaceStore {
             recordRecentlyClosed: UserDefaults.standard.bool(
                 forKey: WorkspacePersistenceDefaults.keepRecentlyClosedWorkspacesKey,
             ),
-            saveToLibrary: UserDefaults.standard.bool(
-                forKey: WorkspacePersistenceDefaults.autoSaveClosedWorkspacesKey,
+            saveToLibrary: WorkspacePersistenceDefaults.autoSavesClosedItems(
+                userDefaults: .standard,
             ),
         )
     }

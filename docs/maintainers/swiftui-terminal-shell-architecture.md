@@ -575,7 +575,7 @@ Preferred follow-through:
 - but simplify the implementation over time so "recently closed" becomes a
   durable disk-backed recency query for workspaces associated with the active
   window identity
-- let `Undo Close Workspace` and any future "Open Recent Workspace" behavior
+- let `Open Recent Workspace` behavior
   query Core Data by window identity plus latest durable activity timestamp
   instead of depending on a separate in-memory stack model
 
@@ -584,13 +584,13 @@ Preferred follow-through:
 The command model should map to these layers clearly:
 
 - `Close Workspace`: remove from live session, then apply the settings matrix above
-- `Undo Close Workspace`: restore the most recent durable workspace associated
+- `Open Recent Workspace`: restore the most recent durable workspace associated
   with the active window
 - `Save Workspace`: explicitly persist the current live workspace into the saved library without closing it
 - `Open Library...`: browse and reopen saved workspaces and saved windows from the library
 - `Delete Saved Workspace`: remove a saved workspace from the saved library without affecting any currently live workspace
 
-This means `Undo Close Workspace` and `Open Library...` should remain distinct:
+This means `Open Recent Workspace` and `Open Library...` should remain distinct:
 
 - undo is temporal and window-recency-based
 - open is indexed and library-based
@@ -616,7 +616,7 @@ The app now has the following workspace-lifecycle surfaces in place:
 - stable workspace identity across live and library state
 - library filtering that hides currently live workspaces instead of offering a
   forked reopen path, and hides currently open windows for the same reason
-- user-facing settings for restore-on-launch, recently closed workspaces, and auto-save closed workspaces
+- user-facing settings for restore-on-launch, recently closed workspaces, and auto-save closed workspaces and windows
 
 The command surface is also now split intentionally across:
 
