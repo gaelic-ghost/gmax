@@ -18,7 +18,9 @@ enum ZshShellIntegration {
             return [:]
         }
 
-        let originalZdotdir = baseEnvironment["ZDOTDIR"] ?? NSHomeDirectory()
+        let originalZdotdir = baseEnvironment["GMAX_ORIGINAL_ZDOTDIR"]
+            ?? baseEnvironment["ZDOTDIR"]
+            ?? NSHomeDirectory()
         guard
             let wrapperDirectory = try? install(
                 originalZdotdir: originalZdotdir,

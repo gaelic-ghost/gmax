@@ -29,6 +29,26 @@ struct ZshShellIntegrationTests {
         #expect(overlay["ZDOTDIR"] == rootDirectory.appendingPathComponent("zsh", isDirectory: true).path)
     }
 
+    @Test func `environment overlay preserves inherited original zdotdir`() {
+        let fileManager = FileManager.default
+        let rootDirectory = fileManager.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? fileManager.removeItem(at: rootDirectory) }
+
+        let overlay = ZshShellIntegration.environmentOverlay(
+            shellExecutable: "/bin/zsh",
+            baseEnvironment: [
+                "ZDOTDIR": "/tmp/gmax-wrapper-zdotdir",
+                "GMAX_ORIGINAL_ZDOTDIR": "/tmp/original-user-zdotdir",
+            ],
+            fileManager: fileManager,
+            rootDirectory: rootDirectory,
+        )
+
+        #expect(overlay["GMAX_ORIGINAL_ZDOTDIR"] == "/tmp/original-user-zdotdir")
+        #expect(overlay["ZDOTDIR"] == rootDirectory.appendingPathComponent("zsh", isDirectory: true).path)
+    }
+
     @Test func `install writes zsh wrapper files and shell integration snippet`() throws {
         let fileManager = FileManager.default
         let rootDirectory = fileManager.temporaryDirectory
