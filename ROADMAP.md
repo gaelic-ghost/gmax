@@ -203,6 +203,7 @@ Planned
 ### Tickets
 
 - [ ] Explore other SwiftTerm types, particularly `TerminalView`.
+- [ ] Add a small shell-integration protocol for prompt start, command start, command completion, and cwd reporting before attempting richer command-aware terminal UX.
 - [ ] Decide how local-shell, headless, and remote-session backends should share one durable session model.
 - [ ] Add a headless terminal path for workflow command execution.
 - [ ] Add a remote SSH session path with clear connection lifecycle and operator-facing state.
