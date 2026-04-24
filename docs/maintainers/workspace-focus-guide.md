@@ -360,6 +360,8 @@ Scene-wide publication from `WorkspaceWindowSceneView`:
   goForwardFocusedBrowserPaneAction)`
 - `.focusedSceneValue(\.reloadFocusedBrowserPane,
   reloadFocusedBrowserPaneAction)`
+- `.focusedSceneValue(\.focusFocusedBrowserOmnibox,
+  focusFocusedBrowserOmniboxAction)`
 - `.focusedSceneValue(\.closeFocusedPane, closeFocusedPaneAction)`
 
 Those values represent scene-scoped state and scene-scoped actions:
@@ -405,6 +407,7 @@ That creates a simpler command context:
 - `goBackFocusedBrowserPane`
 - `goForwardFocusedBrowserPane`
 - `reloadFocusedBrowserPane`
+- `focusFocusedBrowserOmnibox`
 - `closeFocusedPane`
 
 The file currently mixes the focused-value key declarations and the command
@@ -454,6 +457,7 @@ It also adds:
 - `Back` in the focused browser pane with `Command-[`
 - `Forward` in the focused browser pane with `Command-]`
 - `Reload` in the focused browser pane with `Command-R`
+- `Focus Address Bar` in the focused browser pane with `Command-L`
 - a custom `Workspace` menu
 - a custom `Pane` menu
 
@@ -480,6 +484,7 @@ The `Pane` menu currently exposes:
 - `Split Down`
 - `New Browser Pane Right`
 - `New Browser Pane Down`
+- `Focus Address Bar`
 - `Back`
 - `Forward`
 - `Reload`

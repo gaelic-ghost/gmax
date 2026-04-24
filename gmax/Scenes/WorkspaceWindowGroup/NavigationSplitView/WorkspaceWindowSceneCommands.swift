@@ -21,6 +21,7 @@ extension FocusedValues {
     @Entry var goBackFocusedBrowserPane: (() -> Void)?
     @Entry var goForwardFocusedBrowserPane: (() -> Void)?
     @Entry var reloadFocusedBrowserPane: (() -> Void)?
+    @Entry var focusFocusedBrowserOmnibox: (() -> Void)?
     @Entry var closeFocusedPane: (() -> Void)?
 }
 
@@ -46,6 +47,7 @@ struct WorkspaceWindowSceneCommands: Commands {
     @FocusedValue(\.goBackFocusedBrowserPane) private var goBackFocusedBrowserPane
     @FocusedValue(\.goForwardFocusedBrowserPane) private var goForwardFocusedBrowserPane
     @FocusedValue(\.reloadFocusedBrowserPane) private var reloadFocusedBrowserPane
+    @FocusedValue(\.focusFocusedBrowserOmnibox) private var focusFocusedBrowserOmnibox
     @FocusedValue(\.closeFocusedPane) private var closeFocusedPane
     @ObservedObject private var windowRestoration: WorkspaceWindowRestorationController
 
@@ -60,6 +62,7 @@ struct WorkspaceWindowSceneCommands: Commands {
         let canGoBackFocusedBrowserPane = goBackFocusedBrowserPane != nil
         let canGoForwardFocusedBrowserPane = goForwardFocusedBrowserPane != nil
         let canReloadFocusedBrowserPane = reloadFocusedBrowserPane != nil
+        let canFocusFocusedBrowserOmnibox = focusFocusedBrowserOmnibox != nil
         let canDeleteSelectedWorkspace = selectedWorkspace != nil && workspaces.count > 1
         let canCycleWorkspaces = workspaces.count > 1
         let sidebarCommandTitle = (isWorkspaceSidebarVisible ?? false) ? "Hide Sidebar" : "Show Sidebar"
@@ -376,6 +379,12 @@ struct WorkspaceWindowSceneCommands: Commands {
             }
 
             Section("Browser") {
+                Button("Focus Address Bar") {
+                    focusFocusedBrowserOmnibox?()
+                }
+                .keyboardShortcut("l", modifiers: [.command])
+                .disabled(!canFocusFocusedBrowserOmnibox)
+
                 Button("Back") {
                     goBackFocusedBrowserPane?()
                 }

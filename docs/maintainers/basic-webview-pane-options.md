@@ -34,6 +34,10 @@ On commands, the current intended browser-pane creation surface is:
 
 - `New Browser Pane Right`: `Option-Command-D`
 - `New Browser Pane Down`: `Shift-Option-Command-D`
+- `Focus Address Bar`: `Command-L` when a browser pane is focused
+- `Back`: `Command-[` when a browser pane is focused
+- `Forward`: `Command-]` when a browser pane is focused
+- `Reload`: `Command-R` when a browser pane is focused
 
 These are additive pane-creation actions. They should not imply a reversible
 "switch this pane type" model.
@@ -75,6 +79,9 @@ What is true now:
   the earlier unsupported-pane placeholder
 - browser session metadata now persists and restores basic pane state including
   title, URL, last committed URL, and loading or failure text
+- focused browser panes now expose a lightweight top-center omnibox overlay
+  that expands on hover or `Command-L` instead of living in a permanent
+  toolbar strip
 
 What is still terminal-specific:
 
@@ -483,6 +490,8 @@ Current status:
   from the source pane's last committed URL
 - browser persistence now carries basic browser-session metadata instead of
   stopping at leaf identity alone
+- browser-only commands now cover creation, navigation, reload, and omnibox
+  focus through the scene command surface
 
 ### Slice 3: Add The WebView Host
 
@@ -545,6 +554,8 @@ Current status:
   terminal-style pane command
 - Settings now expose a configurable browser home URL, and new browser panes
   fall back to that URL when there is no restored last-committed page
+- focused browser panes now use a compact omnibox overlay instead of a fixed
+  toolbar strip, with `Command-L` revealing and focusing the address field
 
 ### Slice 4: Connect `ContentPane` To Mixed Leaves
 
@@ -617,6 +628,7 @@ Settled command shape for the first pass:
 - `Back` in the focused browser pane with `Command-[`
 - `Forward` in the focused browser pane with `Command-]`
 - `Reload` in the focused browser pane with `Command-R`
+- `Focus Address Bar` in the focused browser pane with `Command-L`
 - no pane-type conversion yet
 
 ### Slice 6: Browser Persistence

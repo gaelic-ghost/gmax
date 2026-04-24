@@ -58,8 +58,10 @@ The command surface is intentionally keyboard-forward. The current menu and shor
 - `cmd-option-s` to close the selected workspace into the library
 - `cmd-shift-s` to close the active window into the library
 - `cmd-b` and `cmd-shift-b` to toggle the sidebar and inspector
-- `cmd-t`, `cmd-d`, and `cmd-shift-d` for pane creation and splits
+- `cmd-d` and `cmd-shift-d` for terminal pane splits
+- `cmd-option-d` and `cmd-option-shift-d` for browser-pane splits
 - `cmd-option-left/right/up/down` plus `cmd-option-[` and `cmd-option-]` for pane focus movement
+- `cmd-l`, `cmd-[`, `cmd-]`, and `cmd-r` for focused browser-pane address, back, forward, and reload
 - `cmd-w` for the context-sensitive close behavior documented in [docs/maintainers/workspace-focus-guide.md](docs/maintainers/workspace-focus-guide.md)
 - `cmd-option-w` for `Close Workspace`
 - `cmd-shift-w` for `Close Window`

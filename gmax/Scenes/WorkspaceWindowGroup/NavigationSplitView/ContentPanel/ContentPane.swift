@@ -17,6 +17,7 @@ struct ContentPane: View {
     let onClosePane: (WorkspaceID, PaneID) -> Void
     let onUpdatePaneFrames: ([PaneID: CGRect]) -> Void
     let onMovePaneFocus: (PaneFocusDirection) -> Void
+    let browserOmniboxRevealIDByPaneID: [PaneID: Int]
 
     var body: some View {
         let workspace = selectedWorkspaceID.flatMap { workspaceID in model.workspaces.first { $0.id == workspaceID } }
@@ -37,6 +38,7 @@ struct ContentPane: View {
                         onClosePane: { paneID in
                             onClosePane(workspace.id, paneID)
                         },
+                        browserOmniboxRevealIDByPaneID: browserOmniboxRevealIDByPaneID,
                     )
                     .coordinateSpace(name: "workspace-pane-tree")
                     .focusSection()
@@ -73,6 +75,7 @@ private struct ContentPaneNodeView: View {
     let onMovePaneFocus: (PaneFocusDirection) -> Void
     let onSplitPane: (PaneID, SplitDirection) -> Void
     let onClosePane: (PaneID) -> Void
+    let browserOmniboxRevealIDByPaneID: [PaneID: Int]
 
     var body: some View {
         switch node {
@@ -118,6 +121,7 @@ private struct ContentPaneNodeView: View {
                             onClose: {
                                 onClosePane(leaf.id)
                             },
+                            omniboxRevealID: browserOmniboxRevealIDByPaneID[leaf.id] ?? 0,
                         )
                     } else {
                         ContentPaneUnsupportedLeafView(
@@ -141,6 +145,7 @@ private struct ContentPaneNodeView: View {
                         onMovePaneFocus: onMovePaneFocus,
                         onSplitPane: onSplitPane,
                         onClosePane: onClosePane,
+                        browserOmniboxRevealIDByPaneID: browserOmniboxRevealIDByPaneID,
                     )
                 } second: {
                     ContentPaneNodeView(
@@ -151,6 +156,7 @@ private struct ContentPaneNodeView: View {
                         onMovePaneFocus: onMovePaneFocus,
                         onSplitPane: onSplitPane,
                         onClosePane: onClosePane,
+                        browserOmniboxRevealIDByPaneID: browserOmniboxRevealIDByPaneID,
                     )
                 }
         }
@@ -166,57 +172,19 @@ private struct BrowserPaneLeafView: View {
     let onSplitRight: () -> Void
     let onSplitDown: () -> Void
     let onClose: () -> Void
+    let omniboxRevealID: Int
 
     var body: some View {
-        let isFocused = focusedTarget.wrappedValue == .pane(pane.id)
-        let title = session.title.trimmingCharacters(in: .whitespacesAndNewlines)
-        let state = switch session.state {
-            case .idle: "Browser ready"
-            case .loading: "Browser loading"
-            case let .failed(message): message
-        }
-        let accessibilityLabel = title.isEmpty || title == "Browser" ? "Browser pane" : "\(title) browser pane"
-        let accessibilityValue = [
-            isFocused ? "Focused" : nil,
-            state,
-            session.url.flatMap { $0.isEmpty ? nil : "URL \($0)" },
-        ]
-        .compactMap(\.self)
-        .joined(separator: ". ")
-        let focusBackgroundStyle = isFocused ? AnyShapeStyle(.tint.opacity(0.18)) : AnyShapeStyle(.quaternary.opacity(0.35))
-        BrowserPaneView(
+        BrowserPaneChromeView(
+            pane: pane,
             controller: controller,
             session: session,
+            focusedTarget: focusedTarget,
             onSplitRight: onSplitRight,
             onSplitDown: onSplitDown,
             onClose: onClose,
+            omniboxRevealID: omniboxRevealID,
         )
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background {
-            GeometryReader { geometry in
-                Color.clear.preference(
-                    key: ContentPaneFramePreferenceKey.self,
-                    value: [pane.id: geometry.frame(in: .named("workspace-pane-tree"))],
-                )
-            }
-        }
-        .background(focusBackgroundStyle)
-        .contentShape(Rectangle())
-        .focusable(interactions: .edit)
-        .focused(focusedTarget, equals: .pane(pane.id))
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel(accessibilityLabel)
-        .accessibilityValue(accessibilityValue)
-        .accessibilityIdentifier("contentPane.browserLeaf.\(pane.id.rawValue.uuidString)")
-        .accessibilityAction(named: Text("Split Right")) {
-            onSplitRight()
-        }
-        .accessibilityAction(named: Text("Split Down")) {
-            onSplitDown()
-        }
-        .accessibilityAction(named: Text("Close Pane")) {
-            onClose()
-        }
     }
 }
 
@@ -287,6 +255,7 @@ private struct ContentPanePreview: View {
             onClosePane: { _, _ in },
             onUpdatePaneFrames: { _ in },
             onMovePaneFocus: { _ in },
+            browserOmniboxRevealIDByPaneID: [:],
         )
     }
 }

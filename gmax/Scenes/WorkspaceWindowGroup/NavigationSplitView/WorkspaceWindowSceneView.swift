@@ -37,6 +37,7 @@ struct WorkspaceWindowSceneView: View {
     @State private var hasAppliedSceneState = false
     @State private var paneFrames: [PaneID: CGRect] = [:]
     @State private var paneFocusHistory: [PaneID] = []
+    @State private var browserOmniboxRevealIDByPaneID: [PaneID: Int] = [:]
     @State private var pendingFocusedPaneID: PaneID?
     @State private var pendingHistoryPaneID: PaneID?
     @State private var shouldSaveWindowToLibraryOnClose = false
@@ -81,6 +82,14 @@ struct WorkspaceWindowSceneView: View {
         let closeWindowToLibrary = {
             shouldSaveWindowToLibraryOnClose = true
             dismissWindow()
+        }
+        let pruneBrowserOmniboxState = {
+            let activePaneIDs = Set(
+                workspaceStore.workspaces.flatMap { workspace in
+                    workspace.paneLeaves.map(\.id)
+                },
+            )
+            browserOmniboxRevealIDByPaneID = browserOmniboxRevealIDByPaneID.filter { activePaneIDs.contains($0.key) }
         }
         let normalizeSelection = {
             selectedWorkspaceID = if let selectedWorkspaceID, workspaceStore.workspaces.contains(where: { $0.id == selectedWorkspaceID }) {
@@ -249,16 +258,19 @@ struct WorkspaceWindowSceneView: View {
         let createPaneInWorkspace: (WorkspaceID) -> Void = { workspaceID in
             let createdPaneID = workspaceStore.createPane(in: workspaceID)
             prunePaneNavigationState()
+            pruneBrowserOmniboxState()
             requestPaneFocus(createdPaneID)
         }
         let splitPaneInWorkspace: (WorkspaceID, PaneID, SplitDirection) -> Void = { workspaceID, paneID, direction in
             let insertedPaneID = workspaceStore.splitPane(paneID, in: workspaceID, direction: direction)
             prunePaneNavigationState()
+            pruneBrowserOmniboxState()
             requestPaneFocus(insertedPaneID)
         }
         let closePaneInWorkspace: (WorkspaceID, PaneID) -> Void = { workspaceID, paneID in
             workspaceStore.closePane(paneID, in: workspaceID)
             prunePaneNavigationState()
+            pruneBrowserOmniboxState()
             switch paneFocusTargetAfterClosingPane(
                 closedPaneID: paneID,
                 focusedTarget: focusedTarget,
@@ -321,6 +333,7 @@ struct WorkspaceWindowSceneView: View {
 
             let insertedPaneID = workspaceStore.splitPane(focusedPaneID, in: selectedWorkspaceID, direction: direction)
             prunePaneNavigationState()
+            pruneBrowserOmniboxState()
             requestPaneFocus(insertedPaneID)
         }
         let splitFocusedPaneAsBrowser: (SplitDirection) -> Void = { direction in
@@ -330,6 +343,7 @@ struct WorkspaceWindowSceneView: View {
 
             let insertedPaneID = workspaceStore.splitBrowserPane(focusedPaneID, in: selectedWorkspaceID, direction: direction)
             prunePaneNavigationState()
+            pruneBrowserOmniboxState()
             requestPaneFocus(insertedPaneID)
         }
         let canSplitFocusedPane = selectedWorkspace.flatMap { workspace in
@@ -391,6 +405,14 @@ struct WorkspaceWindowSceneView: View {
         } else {
             nil
         }
+        let focusFocusedBrowserOmniboxAction: (() -> Void)? = if let focusedBrowserPane {
+            {
+                browserOmniboxRevealIDByPaneID[focusedBrowserPane.id] =
+                    (browserOmniboxRevealIDByPaneID[focusedBrowserPane.id] ?? 0) + 1
+            }
+        } else {
+            nil
+        }
         let closeFocusedPaneAction: (() -> Void)? = {
             guard let selectedWorkspaceID, let focusedPaneID else {
                 return nil
@@ -427,6 +449,7 @@ struct WorkspaceWindowSceneView: View {
                     prunePaneNavigationState()
                 },
                 onMovePaneFocus: moveFocusedPaneFocus,
+                browserOmniboxRevealIDByPaneID: browserOmniboxRevealIDByPaneID,
             )
             .navigationSplitViewColumnWidth(ideal: 760)
         }
@@ -488,6 +511,7 @@ struct WorkspaceWindowSceneView: View {
         .focusedSceneValue(\.goBackFocusedBrowserPane, goBackFocusedBrowserPaneAction)
         .focusedSceneValue(\.goForwardFocusedBrowserPane, goForwardFocusedBrowserPaneAction)
         .focusedSceneValue(\.reloadFocusedBrowserPane, reloadFocusedBrowserPaneAction)
+        .focusedSceneValue(\.focusFocusedBrowserOmnibox, focusFocusedBrowserOmniboxAction)
         .focusedSceneValue(\.closeFocusedPane, closeFocusedPaneAction)
         .modifier(WorkspaceWindowLifecycleModifier(
             normalizedBackgroundSaveIntervalMinutes: normalizedBackgroundSaveIntervalMinutes,
