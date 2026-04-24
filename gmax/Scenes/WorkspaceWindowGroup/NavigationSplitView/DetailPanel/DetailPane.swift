@@ -81,6 +81,12 @@ private struct ActivePaneDetails: View {
             case .running: "Running"
             case let .exited(exitCode): exitCode.map { "Exited (\($0))" } ?? "Exited"
         }
+        let shellPhase = switch session.shellPhase {
+            case .unknown: "Unavailable"
+            case .atPrompt: "At Prompt"
+            case .runningCommand: "Running Command"
+        }
+        let lastCommandExitStatus = session.lastCommandExitStatus.map(String.init) ?? "Unavailable"
         VStack(alignment: .leading, spacing: 16) {
             Text("Active Pane")
                 .font(.title2.weight(.semibold))
@@ -90,6 +96,8 @@ private struct ActivePaneDetails: View {
                     .accessibilityIdentifier("detailPane.workspaceTitleValue")
                 DetailValue(label: "Title", value: session.title)
                 DetailValue(label: "State", value: state)
+                DetailValue(label: "Shell Phase", value: shellPhase)
+                DetailValue(label: "Last Command Exit Status", value: lastCommandExitStatus)
                 DetailValue(label: "Current Directory", value: session.currentDirectory ?? "Unavailable")
                 DetailValue(label: "Pane ID", value: pane.id.rawValue.uuidString)
                 DetailValue(label: "Session ID", value: session.id.rawValue.uuidString)

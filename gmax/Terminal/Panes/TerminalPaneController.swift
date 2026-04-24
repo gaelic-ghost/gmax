@@ -27,6 +27,7 @@ final class TerminalPaneController: ObservableObject {
     private var startedTerminalGeneration: Int?
     private var capturedHostOutput = ""
     private var pendingHostOutputBytes: [UInt8] = []
+    private var shellIntegrationParser = ShellIntegrationParser()
 
     init(paneID: PaneID, session: TerminalSession) {
         self.paneID = paneID
@@ -50,6 +51,7 @@ final class TerminalPaneController: ObservableObject {
         startedTerminalGeneration = nil
         capturedHostOutput = ""
         pendingHostOutputBytes = []
+        shellIntegrationParser = ShellIntegrationParser()
         configureTerminalView(terminalView, processDelegate: processDelegate)
         return terminalView
     }
@@ -193,6 +195,11 @@ final class TerminalPaneController: ObservableObject {
     private func appendHostOutput(_ slice: ArraySlice<UInt8>) {
         guard !slice.isEmpty else {
             return
+        }
+
+        let shellIntegrationEvents = shellIntegrationParser.ingest(slice)
+        for event in shellIntegrationEvents {
+            session.applyShellIntegrationEvent(event)
         }
 
         let combinedBytes = pendingHostOutputBytes + slice

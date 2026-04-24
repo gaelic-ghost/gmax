@@ -314,6 +314,47 @@ struct WorkspaceLifecycleTests {
 
         #expect(restoredStore.persistedSelectedWorkspaceID == secondWorkspace.id)
     }
+
+    @Test func `shell integration parser recognizes prompt command and completion markers`() {
+        var parser = ShellIntegrationParser()
+        let output = ArraySlice(Array("\u{1B}]133;A\u{07}\u{1B}]133;C\u{07}\u{1B}]133;D;23\u{07}".utf8))
+
+        let events = parser.ingest(output)
+
+        #expect(events == [
+            .promptStarted,
+            .commandStarted,
+            .commandFinished(exitStatus: 23),
+        ])
+    }
+
+    @Test func `shell integration parser preserves incomplete sequences across chunks`() {
+        var parser = ShellIntegrationParser()
+
+        let firstEvents = parser.ingest(ArraySlice(Array("\u{1B}]133;".utf8)))
+        let secondEvents = parser.ingest(ArraySlice(Array("A\u{07}\u{1B}]133;D;7\u{07}".utf8)))
+
+        #expect(firstEvents.isEmpty)
+        #expect(secondEvents == [
+            .promptStarted,
+            .commandFinished(exitStatus: 7),
+        ])
+    }
+
+    @Test func `terminal session updates shell phase and exit status from shell integration events`() {
+        let session = TerminalSession(id: TerminalSessionID())
+
+        session.applyShellIntegrationEvent(.promptStarted)
+        #expect(session.shellPhase == .atPrompt)
+        #expect(session.lastCommandExitStatus == nil)
+
+        session.applyShellIntegrationEvent(.commandStarted)
+        #expect(session.shellPhase == .runningCommand)
+
+        session.applyShellIntegrationEvent(.commandFinished(exitStatus: 2))
+        #expect(session.shellPhase == .atPrompt)
+        #expect(session.lastCommandExitStatus == 2)
+    }
 }
 
 private func fetchWindowWorkspaceMemberships(

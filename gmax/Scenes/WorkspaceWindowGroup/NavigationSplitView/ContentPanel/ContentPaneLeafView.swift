@@ -28,11 +28,17 @@ struct ContentPaneLeafView: View {
             case .running: "Shell running"
             case let .exited(exitCode): exitCode.map { "Shell exited with status \($0)" } ?? "Shell exited"
         }
+        let shellPhase: String? = switch session.shellPhase {
+            case .unknown: nil
+            case .atPrompt: "Shell at prompt"
+            case .runningCommand: "Shell running a command"
+        }
         let paneHostIdentity = "\(pane.id.rawValue.uuidString)-\(session.relaunchGeneration)"
         let accessibilityLabel = title.isEmpty || title == "Shell" ? "Shell pane" : "\(title) pane"
         let accessibilityValue = [
             isFocused ? "Focused" : nil,
             state,
+            shellPhase,
             session.currentDirectory.flatMap { $0.isEmpty ? nil : "Directory \($0)" },
         ]
         .compactMap(\.self)

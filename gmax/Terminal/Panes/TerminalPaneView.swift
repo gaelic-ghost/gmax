@@ -37,8 +37,16 @@ struct TerminalPaneView: NSViewRepresentable {
             case .running: "Shell running"
             case let .exited(exitCode): exitCode.map { "Shell exited with status \($0)" } ?? "Shell exited"
         }
+        let shellPhase: String? = switch session.shellPhase {
+            case .unknown: nil
+            case .atPrompt: "Shell at prompt"
+            case .runningCommand: "Shell running a command"
+        }
 
         var valueParts: [String] = [state]
+        if let shellPhase {
+            valueParts.append(shellPhase)
+        }
         if let currentDirectory = session.currentDirectory, !currentDirectory.isEmpty {
             valueParts.append("Directory \(currentDirectory)")
         }
