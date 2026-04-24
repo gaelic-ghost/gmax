@@ -160,7 +160,7 @@ struct WorkspacePersistenceTests {
         model.deleteWorkspace(workspace.id)
         #expect(summary.workspaceID == workspace.id)
 
-        let reopenedWorkspaceID = try #require(model.openWorkspaceLibraryItem(summary.id))
+        let reopenedWorkspaceID = try requireWorkspaceOpenResult(model.openLibraryItem(summary.id))
         let reopenedWorkspace = try #require(model.workspaces.first(where: { $0.id == reopenedWorkspaceID }))
         let reopenedRoot = try #require(reopenedWorkspace.root)
         let reopenedLeaves = reopenedWorkspace.paneLeaves
@@ -239,7 +239,7 @@ struct WorkspacePersistenceTests {
         model.deleteWorkspace(workspace.id)
         #expect(summary.workspaceID == workspace.id)
 
-        let reopenedWorkspaceID = try #require(model.openWorkspaceLibraryItem(summary.id))
+        let reopenedWorkspaceID = try requireWorkspaceOpenResult(model.openLibraryItem(summary.id))
         let reopenedWorkspace = try #require(model.workspaces.first(where: { $0.id == reopenedWorkspaceID }))
         let reopenedRoot = try #require(reopenedWorkspace.root)
         let reopenedLeaves = reopenedWorkspace.paneLeaves
@@ -286,7 +286,7 @@ struct WorkspacePersistenceTests {
         model.deleteWorkspace(workspace.id)
         #expect(summary.workspaceID == workspace.id)
 
-        let reopenedWorkspaceID = try #require(model.openWorkspaceLibraryItem(summary.id))
+        let reopenedWorkspaceID = try requireWorkspaceOpenResult(model.openLibraryItem(summary.id))
         let reopenedWorkspace = try #require(model.workspaces.first(where: { $0.id == reopenedWorkspaceID }))
         let reopenedPane = try #require(reopenedWorkspace.root?.firstLeaf())
         let reopenedSession = try #require(model.sessions.session(for: reopenedPane.sessionID))
@@ -342,7 +342,7 @@ struct WorkspacePersistenceTests {
 
         #expect(summary.workspaceID == workspace.id)
 
-        let reopenedWorkspaceID = try #require(model.openWorkspaceLibraryItem(summary.id))
+        let reopenedWorkspaceID = try requireWorkspaceOpenResult(model.openLibraryItem(summary.id))
         let reopenedWorkspace = try #require(model.workspaces.first(where: { $0.id == reopenedWorkspaceID }))
         let reopenedRoot = try #require(reopenedWorkspace.root)
 
@@ -372,6 +372,56 @@ struct WorkspacePersistenceTests {
 
         #expect(visibleWorkspaceLibraryItems(in: model).isEmpty)
         #expect(persistence.listLibraryItems().isEmpty)
+    }
+
+    @Test func `closing a window adds a saved window item to the library listing`() {
+        let firstWorkspace = TestSupport.makeWorkspace(title: "Workspace 1")
+        let secondWorkspace = TestSupport.makeWorkspace(title: "Workspace 2")
+        let persistence = WorkspacePersistenceController.inMemoryForTesting()
+        let sceneIdentity = WorkspaceSceneIdentity()
+        let model = WorkspaceStore(
+            sceneIdentity: sceneIdentity,
+            workspaces: [firstWorkspace, secondWorkspace],
+            persistence: persistence,
+            launchContextBuilder: TestSupport.makeLaunchContextBuilder(defaultCurrentDirectory: "/tmp/gmax-tests"),
+        )
+
+        model.persistedSelectedWorkspaceID = secondWorkspace.id
+        model.persistSceneStateNow(reason: .unitTestImmediateFlush)
+        persistence.markWindowClosed(sceneIdentity)
+
+        let windowItems = persistence.listLibraryItems().filter { $0.kind == .window }
+
+        #expect(windowItems.count == 1)
+        #expect(windowItems.first?.windowID == sceneIdentity)
+        #expect(windowItems.first?.workspaceID == nil)
+        #expect(windowItems.first?.title == "Workspace 2")
+        #expect(windowItems.first?.workspaceCount == 2)
+        #expect(windowItems.first?.paneCount == 2)
+    }
+
+    @Test func `opening a saved window library item returns the same durable scene identity`() throws {
+        let workspace = TestSupport.makeWorkspace(title: "Workspace 1")
+        let persistence = WorkspacePersistenceController.inMemoryForTesting()
+        let sceneIdentity = WorkspaceSceneIdentity()
+        let model = WorkspaceStore(
+            sceneIdentity: sceneIdentity,
+            workspaces: [workspace],
+            persistence: persistence,
+            launchContextBuilder: TestSupport.makeLaunchContextBuilder(defaultCurrentDirectory: "/tmp/gmax-tests"),
+        )
+
+        model.persistedSelectedWorkspaceID = workspace.id
+        model.persistSceneStateNow(reason: .unitTestImmediateFlush)
+        persistence.markWindowClosed(sceneIdentity)
+
+        let libraryItemID = try #require(
+            persistence.listLibraryItems().first(where: { $0.kind == .window })?.id,
+        )
+
+        let openResult = model.openLibraryItem(libraryItemID)
+
+        #expect(openResult == .window(sceneIdentity))
     }
 
     @Test func `open saved workspace returns nil when saved workspace pane tree is corrupted`() throws {
@@ -409,7 +459,7 @@ struct WorkspacePersistenceTests {
         model.deleteWorkspace(workspace.id)
         #expect(summary.workspaceID == workspace.id)
 
-        let reopenedWorkspaceID = model.openWorkspaceLibraryItem(summary.id)
+        let reopenedWorkspaceID = workspaceOpenResult(model.openLibraryItem(summary.id))
 
         #expect(reopenedWorkspaceID == nil)
         #expect(model.workspaces.count == 1)
@@ -468,7 +518,7 @@ struct WorkspacePersistenceTests {
         model.deleteWorkspace(workspace.id)
         #expect(summary.workspaceID == workspace.id)
 
-        let reopenedWorkspaceID = try #require(model.openWorkspaceLibraryItem(summary.id))
+        let reopenedWorkspaceID = try requireWorkspaceOpenResult(model.openLibraryItem(summary.id))
         let reopenedWorkspace = try #require(model.workspaces.first(where: { $0.id == reopenedWorkspaceID }))
         let reopenedLeaves = reopenedWorkspace.paneLeaves
         #expect(reopenedLeaves.count == 2)
@@ -503,7 +553,7 @@ struct WorkspacePersistenceTests {
         )
 
         let savedWorkspace = try #require(visibleWorkspaceLibraryItems(in: model).first)
-        let reopenedWorkspaceID = try #require(model.openWorkspaceLibraryItem(savedWorkspace.id))
+        let reopenedWorkspaceID = try requireWorkspaceOpenResult(model.openLibraryItem(savedWorkspace.id))
         let reopenedWorkspace = try #require(model.workspaces.first(where: { $0.id == reopenedWorkspaceID }))
 
         #expect(nextSelectedWorkspaceID == secondWorkspace.id)
@@ -808,6 +858,21 @@ private func visibleWorkspaceLibraryItems(in model: WorkspaceStore) -> [LibraryI
 
         return !liveWorkspaceIDs.contains(workspaceID)
     }
+}
+
+private func workspaceOpenResult(_ result: LibraryOpenResult?) -> WorkspaceID? {
+    guard case let .workspace(workspaceID)? = result else {
+        return nil
+    }
+
+    return workspaceID
+}
+
+private func requireWorkspaceOpenResult(
+    _ result: LibraryOpenResult?,
+    sourceLocation: SourceLocation = #_sourceLocation,
+) throws -> WorkspaceID {
+    try #require(workspaceOpenResult(result), sourceLocation: sourceLocation)
 }
 
 private func fetchWorkspaceLibraryItem(

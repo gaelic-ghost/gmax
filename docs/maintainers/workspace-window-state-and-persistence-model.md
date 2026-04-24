@@ -848,10 +848,10 @@ Current progress:
 
 - `LibraryItemEntity`, `LibraryItemKind`, and `LibraryItemListing` are now the
   active library surfaces
-- the current library sheet still renders only workspace rows, but it now reads
-  from the shared library listing, filters workspace rows locally, and acts on
-  shared library item IDs instead of depending on a saved-workspace-specific
-  listing type all the way through the UI
+- the current library sheet now renders both saved workspaces and saved windows
+  from the shared library listing, reopens window items through the durable
+  `WorkspaceSceneIdentity` path, and continues hiding currently live workspaces
+  and currently open windows from the browser
 - the old `SavedWorkspaceListing` compatibility type and its wrapper methods are
   gone from the active model surface
 
@@ -864,8 +864,22 @@ Goals:
 
 Likely work:
 
-- save a window record and its memberships as one library item
+- save a window record and its live workspace placements as one library item
 - implement open/delete/list behavior for `LibraryItemKind.window`
+
+Current progress:
+
+- closing a window now upserts a `LibraryItemKind.window` row keyed by the same
+  durable `WorkspaceSceneIdentity.windowID`
+- listing filters now hide currently open window items just like currently live
+  workspaces are hidden
+- opening a saved window library item now routes back through
+  `openWindow(value:)`, which reuses the same window identity and lets SwiftUI
+  bring an existing match forward or recreate the closed window from the same
+  persisted scene value
+- window-library metadata currently derives from the durable window record plus
+  the window's live workspace placements, including title, preview text, pane
+  count, and workspace count
 
 ## Command And UI Implications
 
@@ -890,12 +904,13 @@ query as undo:
 - exclude currently live workspaces
 - sort by `lastActiveAt`
 
-### Open Workspace
+### Open Library
 
 The library browser should eventually:
 
 - show both workspace and window items
 - hide workspaces that are already live
+- hide windows that are already open
 - activate an already-live workspace instead of cloning it if a direct reopen
   path is triggered by ID
 

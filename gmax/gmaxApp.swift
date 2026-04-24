@@ -19,7 +19,7 @@ struct gmaxApp: App {
                 windowRestoration: windowRestoration,
             )
         } defaultValue: {
-            windowRestoration.initialSceneIdentity
+            windowRestoration.nextDefaultSceneIdentity()
         }
         .defaultLaunchBehavior(.presented)
         .restorationBehavior(UITestLaunchBehavior.isEnabled ? .disabled : .automatic)

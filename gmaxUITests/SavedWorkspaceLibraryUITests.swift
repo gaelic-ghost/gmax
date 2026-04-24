@@ -144,20 +144,20 @@ final class SavedWorkspaceLibraryUITests: GmaxUITestCase {
 
         assertWorkspaceDoesNotExist("Workspace 2", in: app)
 
-        openSavedWorkspaceLibrary(in: app)
-        let savedWorkspaceTitle = savedWorkspaceLibraryRow(titled: "Workspace 2", in: app)
+        openLibrary(in: app)
+        let savedWorkspaceTitle = libraryRow(titled: "Workspace 2", in: app)
         XCTAssertTrue(
             savedWorkspaceTitle.waitForExistence(timeout: 5),
-            "The saved-workspace library should list the workspace that was closed into the library.",
+            "The library should list the workspace that was closed into it.",
         )
 
         savedWorkspaceTitle.click()
-        savedWorkspaceLibraryOpenButton(in: app).click()
+        libraryOpenButton(in: app).click()
         assertWorkspaceExists("Workspace 2", in: app)
     }
 
     @MainActor
-    func testSavedWorkspaceLibraryCanDeleteSavedWorkspace() {
+    func testLibraryCanDeleteSavedWorkspace() {
         let app = launchApp()
 
         createWorkspace(titled: "Workspace 2", in: app)
@@ -168,62 +168,62 @@ final class SavedWorkspaceLibraryUITests: GmaxUITestCase {
             in: app,
         )
 
-        openSavedWorkspaceLibrary(in: app)
-        let savedWorkspaceTitle = savedWorkspaceLibraryRow(titled: "Workspace 2", in: app)
+        openLibrary(in: app)
+        let savedWorkspaceTitle = libraryRow(titled: "Workspace 2", in: app)
         XCTAssertTrue(
             savedWorkspaceTitle.waitForExistence(timeout: 5),
-            "The saved-workspace library should list the saved workspace before deletion.",
+            "The library should list the saved workspace before deletion.",
         )
 
         savedWorkspaceTitle.click()
-        savedWorkspaceLibraryDeleteButton(in: app).click()
+        libraryDeleteButton(in: app).click()
 
         XCTAssertTrue(
             waitForNonExistence(timeout: 2) {
-                self.savedWorkspaceLibraryRow(titled: "Workspace 2", in: app)
+                self.libraryRow(titled: "Workspace 2", in: app)
             },
             "The deleted saved workspace should no longer appear in the library list.",
         )
         XCTAssertFalse(
-            savedWorkspaceLibraryDeleteButton(in: app).isEnabled,
+            libraryDeleteButton(in: app).isEnabled,
             "The delete action should disable itself once there is no saved workspace selection left in the library.",
         )
     }
 
     @MainActor
-    func testToolbarOpenSavedWorkspacesButtonPresentsAndDismissesLibrary() {
+    func testToolbarOpenLibraryButtonPresentsAndDismissesLibrary() {
         let app = launchApp()
 
-        openSavedWorkspaceLibraryFromToolbar(in: app)
+        openLibraryFromToolbar(in: app)
         XCTAssertTrue(
-            savedWorkspaceLibraryCancelButton(in: app).waitForExistence(timeout: 5),
-            "The saved-workspace library sheet should show its cancel control after the toolbar opens it.",
+            libraryCancelButton(in: app).waitForExistence(timeout: 5),
+            "The library sheet should show its cancel control after the toolbar opens it.",
         )
 
-        savedWorkspaceLibraryCancelButton(in: app).click()
+        libraryCancelButton(in: app).click()
         XCTAssertTrue(
             waitForNonExistence(timeout: 2) {
-                self.savedWorkspaceLibraryCancelButton(in: app)
+                self.libraryCancelButton(in: app)
             },
-            "The saved-workspace library sheet should dismiss after the cancel action.",
+            "The library sheet should dismiss after the cancel action.",
         )
     }
 
     @MainActor
-    func testCommandWDismissesSavedWorkspaceLibraryBeforeClosingWorkspace() {
+    func testCommandWDismissesLibraryBeforeClosingWorkspace() {
         let app = launchApp()
 
         createWorkspace(titled: "Workspace 2", in: app)
         selectWorkspace("Workspace 2", in: app)
-        openSavedWorkspaceLibrary(in: app)
+        openLibrary(in: app)
 
         app.typeKey("w", modifierFlags: .command)
 
         XCTAssertTrue(
             waitForNonExistence(timeout: 2) {
-                self.savedWorkspaceLibraryCancelButton(in: app)
+                self.libraryCancelButton(in: app)
             },
-            "Command-W should dismiss the frontmost saved-workspace library sheet before it mutates the selected workspace underneath it.",
+            "Command-W should dismiss the frontmost library sheet before it mutates the selected workspace underneath it.",
         )
         assertWorkspaceExists("Workspace 2", in: app)
     }

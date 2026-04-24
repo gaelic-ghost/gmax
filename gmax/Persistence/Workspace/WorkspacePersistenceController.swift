@@ -483,11 +483,20 @@ final class WorkspacePersistenceController {
                 try Self.migrateLegacyLibraryItems(in: context)
                 return try Self.loadLibraryItems(matching: trimmedQuery, in: context)
                     .filter { item in
-                        guard item.kind == .workspace, let workspaceID = item.workspaceID else {
-                            return true
-                        }
+                        switch item.kind {
+                            case .workspace:
+                                guard let workspaceID = item.workspaceID else {
+                                    return false
+                                }
 
-                        return !Self.isWorkspaceLive(workspaceID: workspaceID.rawValue, in: context)
+                                return !Self.isWorkspaceLive(workspaceID: workspaceID.rawValue, in: context)
+                            case .window:
+                                guard let sceneIdentity = item.windowID else {
+                                    return false
+                                }
+
+                                return !Self.isWindowOpen(windowID: sceneIdentity.windowID, in: context)
+                        }
                     }
             } catch {
                 Logger.persistence.error("Core Data failed to list library items. The app will continue, but the library index could not be read. Error: \(String(describing: error), privacy: .public)")
@@ -596,6 +605,20 @@ final class WorkspacePersistenceController {
         }
     }
 
+    func loadLibraryItemListing(id: UUID) -> LibraryItemListing? {
+        let context = container.viewContext
+        return context.performAndWait {
+            do {
+                try Self.migrateLegacyLibraryItems(in: context)
+                return try Self.loadLibraryItem(id: id, in: context)
+                    .flatMap(Self.makeLibraryItemListing(from:))
+            } catch {
+                Logger.persistence.error("Core Data failed while reading a library item listing. The requested entry could not be loaded. Library item ID: \(id.uuidString, privacy: .public). Error: \(String(describing: error), privacy: .public)")
+                return nil
+            }
+        }
+    }
+
     @discardableResult
     func deleteLibraryItem(id: UUID) -> Bool {
         let context = container.viewContext
@@ -679,6 +702,9 @@ extension WorkspacePersistenceController {
                     window.title = title
                 }
                 window.isOpen = isOpen
+                if !isOpen {
+                    _ = try Self.upsertWindowLibraryItem(for: sceneIdentity, in: context, now: now)
+                }
                 if context.hasChanges {
                     try context.save()
                 }
@@ -942,6 +968,46 @@ extension WorkspacePersistenceController {
         libraryItem.workspaceCount = 1
     }
 
+    private nonisolated static func refreshListingMetadata(
+        on libraryItem: LibraryItemEntity,
+        from windowEntity: WorkspaceWindowEntity,
+        livePlacements: [WorkspacePlacementEntity],
+    ) {
+        let orderedWorkspaceEntities = livePlacements.compactMap(\.workspace)
+        let selectedWorkspaceEntity = windowEntity.selectedWorkspaceID.flatMap { selectedWorkspaceID in
+            orderedWorkspaceEntities.first { $0.id == selectedWorkspaceID }
+        }
+        let representativeWorkspaceEntity = selectedWorkspaceEntity ?? orderedWorkspaceEntities.first
+        let trimmedWindowTitle = windowEntity.title?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let resolvedTitle = if let trimmedWindowTitle, !trimmedWindowTitle.isEmpty {
+            trimmedWindowTitle
+        } else if let selectedWorkspaceEntity {
+            selectedWorkspaceEntity.title
+        } else if let representativeWorkspaceEntity {
+            representativeWorkspaceEntity.title
+        } else {
+            "Window"
+        }
+        let paneCount = orderedWorkspaceEntities.reduce(into: 0) { count, workspaceEntity in
+            count += decodeNode(workspaceEntity.rootNode)?.leaves().count ?? 0
+        }
+        let previewText = representativeWorkspaceEntity?.previewText
+        let searchText = (
+            [resolvedTitle, previewText, representativeWorkspaceEntity?.searchText]
+                + orderedWorkspaceEntities.map(\.title).map(Optional.some)
+                + orderedWorkspaceEntities.compactMap(\.previewText).map(Optional.some),
+        )
+        .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+        .filter { !$0.isEmpty }
+        .joined(separator: "\n")
+
+        libraryItem.title = resolvedTitle
+        libraryItem.previewText = previewText
+        libraryItem.searchText = searchText
+        libraryItem.paneCount = Int64(paneCount)
+        libraryItem.workspaceCount = Int64(orderedWorkspaceEntities.count)
+    }
+
     private nonisolated static func makeLibraryItemListing(from libraryItem: LibraryItemEntity) -> LibraryItemListing? {
         guard let kind = LibraryItemKind(rawValue: libraryItem.kind) else {
             return nil
@@ -1136,6 +1202,21 @@ extension WorkspacePersistenceController {
         return try context.fetch(request)
     }
 
+    private nonisolated static func loadLibraryItems(
+        kind: LibraryItemKind,
+        windowID: UUID,
+        in context: NSManagedObjectContext,
+    ) throws -> [LibraryItemEntity] {
+        let request = NSFetchRequest<LibraryItemEntity>(entityName: "LibraryItemEntity")
+        request.predicate = NSCompoundPredicate(
+            andPredicateWithSubpredicates: [
+                NSPredicate(format: "kind == %@", kind.rawValue),
+                NSPredicate(format: "windowID == %@", windowID as CVarArg),
+            ],
+        )
+        return try context.fetch(request)
+    }
+
     private nonisolated static func loadLibraryItem(
         id: UUID,
         in context: NSManagedObjectContext,
@@ -1154,6 +1235,14 @@ extension WorkspacePersistenceController {
         try loadLibraryItems(kind: kind, workspaceID: workspaceID, in: context).first
     }
 
+    private nonisolated static func loadLibraryItem(
+        kind: LibraryItemKind,
+        windowID: UUID,
+        in context: NSManagedObjectContext,
+    ) throws -> LibraryItemEntity? {
+        try loadLibraryItems(kind: kind, windowID: windowID, in: context).first
+    }
+
     private nonisolated static func requireOrCreateLibraryItem(
         kind: LibraryItemKind,
         workspaceID: UUID,
@@ -1167,6 +1256,22 @@ extension WorkspacePersistenceController {
         entity.id = UUID()
         entity.kind = kind.rawValue
         entity.workspaceID = workspaceID
+        return entity
+    }
+
+    private nonisolated static func requireOrCreateLibraryItem(
+        kind: LibraryItemKind,
+        windowID: UUID,
+        context: NSManagedObjectContext,
+    ) throws -> LibraryItemEntity {
+        if let libraryItem = try loadLibraryItem(kind: kind, windowID: windowID, in: context) {
+            return libraryItem
+        }
+
+        let entity = LibraryItemEntity(context: context)
+        entity.id = UUID()
+        entity.kind = kind.rawValue
+        entity.windowID = windowID
         return entity
     }
 
@@ -1184,6 +1289,15 @@ extension WorkspacePersistenceController {
             return try !context.fetch(request).isEmpty
         } catch {
             Logger.persistence.error("Core Data failed to determine whether a workspace is currently live while listing library items. The app will continue, but the library may briefly show a stale row. Workspace ID: \(workspaceID.uuidString, privacy: .public). Error: \(String(describing: error), privacy: .public)")
+            return false
+        }
+    }
+
+    private nonisolated static func isWindowOpen(windowID: UUID, in context: NSManagedObjectContext) -> Bool {
+        do {
+            return try loadWindowEntity(id: windowID, in: context)?.isOpen ?? false
+        } catch {
+            Logger.persistence.error("Core Data failed to determine whether a window is currently live while listing library items. The app will continue, but the library may briefly show a stale row. Window ID: \(windowID.uuidString, privacy: .public). Error: \(String(describing: error), privacy: .public)")
             return false
         }
     }
@@ -1227,6 +1341,37 @@ extension WorkspacePersistenceController {
         if context.hasChanges {
             try context.save()
         }
+    }
+
+    @discardableResult
+    private nonisolated static func upsertWindowLibraryItem(
+        for sceneIdentity: WorkspaceSceneIdentity,
+        in context: NSManagedObjectContext,
+        now: Date,
+    ) throws -> LibraryItemEntity? {
+        guard let windowEntity = try loadWindowEntity(id: sceneIdentity.windowID, in: context) else {
+            return nil
+        }
+
+        let livePlacements = loadPlacements(role: .live, sceneIdentity: sceneIdentity, in: context)
+        guard !livePlacements.isEmpty else {
+            return nil
+        }
+
+        let libraryItem = try requireOrCreateLibraryItem(
+            kind: .window,
+            windowID: sceneIdentity.windowID,
+            context: context,
+        )
+        if libraryItem.objectID.isTemporaryID {
+            libraryItem.createdAt = windowEntity.createdAt
+        }
+        libraryItem.kind = LibraryItemKind.window.rawValue
+        libraryItem.workspaceID = nil
+        libraryItem.windowID = sceneIdentity.windowID
+        libraryItem.updatedAt = now
+        refreshListingMetadata(on: libraryItem, from: windowEntity, livePlacements: livePlacements)
+        return libraryItem
     }
 
     private nonisolated static func loadWindowWorkspaceMemberships(

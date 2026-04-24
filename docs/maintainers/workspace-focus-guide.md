@@ -347,7 +347,7 @@ Scene-wide publication from `WorkspaceWindowSceneView`:
 - `.focusedSceneValue(\.selectedWorkspaceSelection, $selectedWorkspaceID)`
 - `.focusedSceneValue(\.dismissPresentedWorkspaceModal,
   dismissPresentedWorkspaceModal)`
-- `.focusedSceneValue(\.openSavedWorkspaceLibrary, openSavedWorkspaceLibrary)`
+- `.focusedSceneValue(\.openLibrary, openLibrary)`
 - `.focusedSceneValue(\.presentWorkspaceRename, presentWorkspaceRename)`
 - `.focusedSceneValue(\.presentWorkspaceDeletion, presentWorkspaceDeletion)`
 - `.focusedSceneValue(\.moveFocusedPaneFocus, moveFocusedPaneFocusAction)`
@@ -359,7 +359,7 @@ Those values represent scene-scoped state and scene-scoped actions:
 - which logical workspace focus target is active in this window
 - which workspace is selected in this window
 - how to dismiss the frontmost scene-owned modal in this window
-- how to open the saved workspace sheet in this window
+- how to open the library sheet in this window
 - how to present rename and deletion flows in this window
 - how to move, split, or close the currently focused pane in this window
 - the store that backs this window
@@ -388,7 +388,7 @@ That creates a simpler command context:
 - `activeWorkspaceFocusTarget`
 - `selectedWorkspaceSelection`
 - `dismissPresentedWorkspaceModal`
-- `openSavedWorkspaceLibrary`
+- `openLibrary`
 - `presentWorkspaceRename`
 - `presentWorkspaceDeletion`
 - `moveFocusedPaneFocus`
@@ -425,7 +425,7 @@ It also adds:
 
 - `New gmax Window` through the `WindowGroup` scene title
 - `New Workspace` with `Shift-Command-N`
-- `Open Workspace…` with `Command-O`
+- `Open Library…` with `Command-O`
 - `Save Workspace` with `Command-S`
 - a context-sensitive `Command-W` slot
 - `Close Window` with `Option-Command-W`
@@ -460,9 +460,9 @@ The app currently has three different close layers.
 
 Sheet dismissal:
 
-- `SavedWorkspaceLibrarySheet` uses `@Environment(\.dismiss)` and dismisses
-  itself directly after opening a saved workspace or when the user presses
-  Cancel
+- `LibrarySheet` uses `@Environment(\.dismiss)` to close itself
+  and `@Environment(\.openWindow)` to reopen saved window items through the
+  same `WorkspaceSceneIdentity`-driven `WindowGroup` path
 - the workspace rename sheet is scene-owned and dismisses by clearing
   `workspacePendingRenameID`
 - the deletion confirmation alert dismisses by clearing

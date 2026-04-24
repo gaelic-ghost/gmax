@@ -27,6 +27,11 @@ enum WorkspacePersistenceSaveReason: String {
     var logName: String { rawValue }
 }
 
+enum LibraryOpenResult: Equatable {
+    case workspace(WorkspaceID)
+    case window(WorkspaceSceneIdentity)
+}
+
 // MARK: - Workspace Lifecycle
 
 // MARK: Workspace creation, duplication, close, restore, and library persistence flows.
@@ -185,7 +190,69 @@ extension WorkspaceStore {
     }
 
     @discardableResult
-    func openWorkspaceLibraryItem(_ libraryItemID: UUID) -> WorkspaceID? {
+    func openLibraryItem(_ libraryItemID: UUID) -> LibraryOpenResult? {
+        guard let libraryItem = persistence.loadLibraryItemListing(id: libraryItemID) else {
+            Logger.workspace.error("The app could not reopen a library item because the requested entry was missing or unreadable. Check the persistence logs for the exact load failure. Library item ID: \(libraryItemID.uuidString, privacy: .public)")
+            return nil
+        }
+
+        switch libraryItem.kind {
+            case .workspace:
+                return openWorkspaceLibraryItem(libraryItemID)
+                    .map(LibraryOpenResult.workspace)
+            case .window:
+                guard let sceneIdentity = libraryItem.windowID else {
+                    Logger.workspace.error("The app could not reopen a saved window because the library item was missing its durable window identity. Library item ID: \(libraryItemID.uuidString, privacy: .public)")
+                    return nil
+                }
+
+                persistence.markLibraryItemOpened(libraryItemID)
+                Logger.workspace.notice("Opened a saved window from the library. Library item ID: \(libraryItemID.uuidString, privacy: .public). Window ID: \(sceneIdentity.windowID.uuidString, privacy: .public)")
+                return .window(sceneIdentity)
+        }
+    }
+
+    func deleteLibraryItem(_ libraryItemID: UUID) {
+        guard persistence.deleteLibraryItem(id: libraryItemID) else {
+            Logger.workspace.error("The app could not delete a library item because persistence did not confirm the deletion. Check the persistence logs for the exact failure. Library item ID: \(libraryItemID.uuidString, privacy: .public)")
+            return
+        }
+
+        objectWillChange.send()
+        Logger.workspace.notice("Deleted a library item. Library item ID: \(libraryItemID.uuidString, privacy: .public)")
+    }
+}
+
+// MARK: - Workspace Helpers
+
+// MARK: Internal helpers that support workspace cloning, restore, close, and persistence workflows.
+
+extension WorkspaceStore {
+    private struct PersistenceSnapshot {
+        let liveWorkspaces: [Workspace]
+        let selectedWorkspaceID: WorkspaceID?
+        let liveTranscriptsByWorkspaceID: [WorkspaceID: [TerminalSessionID: String]]
+    }
+
+    private func uniqueWorkspaceTitle(startingWith baseTitle: String) -> String {
+        let normalizedBaseTitle = baseTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        let resolvedBaseTitle = normalizedBaseTitle.isEmpty ? "Workspace" : normalizedBaseTitle
+        let existingTitles = Set(workspaces.map(\.title))
+        guard existingTitles.contains(resolvedBaseTitle) else {
+            return resolvedBaseTitle
+        }
+
+        var suffix = 2
+        while true {
+            let candidate = "\(resolvedBaseTitle) \(suffix)"
+            if !existingTitles.contains(candidate) {
+                return candidate
+            }
+            suffix += 1
+        }
+    }
+
+    private func openWorkspaceLibraryItem(_ libraryItemID: UUID) -> WorkspaceID? {
         guard let savedWorkspace = persistence.loadWorkspaceLibraryItem(id: libraryItemID) else {
             Logger.workspace.error("The app could not reopen a workspace from the library because the requested library item was missing or unreadable. Check the persistence logs for the exact load failure. Library item ID: \(libraryItemID.uuidString, privacy: .public)")
             return nil
@@ -230,46 +297,6 @@ extension WorkspaceStore {
         Logger.workspace.notice("Opened a workspace from a library item. Workspace title: \(savedWorkspace.title, privacy: .public). Library item ID: \(libraryItemID.uuidString, privacy: .public). Workspace ID: \(restoredWorkspace.id.rawValue.uuidString, privacy: .public). Restored pane count: \((restoredWorkspace.root?.leaves().count ?? 0))")
         schedulePersistenceSave(reason: .workspaceOpenedFromLibrary)
         return restoredWorkspace.id
-    }
-
-    func deleteLibraryItem(_ libraryItemID: UUID) {
-        guard persistence.deleteLibraryItem(id: libraryItemID) else {
-            Logger.workspace.error("The app could not delete a library item because persistence did not confirm the deletion. Check the persistence logs for the exact failure. Library item ID: \(libraryItemID.uuidString, privacy: .public)")
-            return
-        }
-
-        objectWillChange.send()
-        Logger.workspace.notice("Deleted a library item. Library item ID: \(libraryItemID.uuidString, privacy: .public)")
-    }
-}
-
-// MARK: - Workspace Helpers
-
-// MARK: Internal helpers that support workspace cloning, restore, close, and persistence workflows.
-
-extension WorkspaceStore {
-    private struct PersistenceSnapshot {
-        let liveWorkspaces: [Workspace]
-        let selectedWorkspaceID: WorkspaceID?
-        let liveTranscriptsByWorkspaceID: [WorkspaceID: [TerminalSessionID: String]]
-    }
-
-    private func uniqueWorkspaceTitle(startingWith baseTitle: String) -> String {
-        let normalizedBaseTitle = baseTitle.trimmingCharacters(in: .whitespacesAndNewlines)
-        let resolvedBaseTitle = normalizedBaseTitle.isEmpty ? "Workspace" : normalizedBaseTitle
-        let existingTitles = Set(workspaces.map(\.title))
-        guard existingTitles.contains(resolvedBaseTitle) else {
-            return resolvedBaseTitle
-        }
-
-        var suffix = 2
-        while true {
-            let candidate = "\(resolvedBaseTitle) \(suffix)"
-            if !existingTitles.contains(candidate) {
-                return candidate
-            }
-            suffix += 1
-        }
     }
 
     private func duplicateNode(_ node: PaneNode) -> PaneNode {

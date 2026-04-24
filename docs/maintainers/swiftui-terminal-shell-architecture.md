@@ -587,10 +587,10 @@ The command model should map to these layers clearly:
 - `Undo Close Workspace`: restore the most recent durable workspace associated
   with the active window
 - `Save Workspace`: explicitly persist the current live workspace into the saved library without closing it
-- `Open Workspace...`: browse and reopen saved workspaces from the saved library
+- `Open Library...`: browse and reopen saved workspaces and saved windows from the library
 - `Delete Saved Workspace`: remove a saved workspace from the saved library without affecting any currently live workspace
 
-This means `Undo Close Workspace` and `Open Workspace...` should remain distinct:
+This means `Undo Close Workspace` and `Open Library...` should remain distinct:
 
 - undo is temporal and window-recency-based
 - open is indexed and library-based
@@ -602,20 +602,20 @@ Preferred follow-through:
 - keep the command distinction
 - but change the implementation of undo from an in-memory recent-close stack to
   a disk-backed recency query for the active window's inactive workspaces
-- evolve `Open Workspace...` into a unified library browser that can later show
-  both workspace items and window items
+- keep `Open Library...` as the unified browser for both workspace items and
+  window items
 
 ## Current Implementation Status
 
 The app now has the following workspace-lifecycle surfaces in place:
 
-- a searchable saved-workspace library sheet
-- explicit `Save Workspace` and `Open Workspace...` commands
+- a searchable library sheet that can show saved workspaces and closed windows
+- explicit `Save Workspace` and `Open Library...` commands
 - `Close Workspace to Library` for one-step archival
 - transcript-backed restore so reopened workspaces preserve shell history
 - stable workspace identity across live and library state
 - library filtering that hides currently live workspaces instead of offering a
-  forked reopen path
+  forked reopen path, and hides currently open windows for the same reason
 - user-facing settings for restore-on-launch, recently closed workspaces, and auto-save closed workspaces
 
 The command surface is also now split intentionally across:

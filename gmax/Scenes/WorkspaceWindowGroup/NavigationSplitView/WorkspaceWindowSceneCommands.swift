@@ -6,7 +6,8 @@ extension FocusedValues {
     @Entry var activeWorkspaceSceneIdentity: WorkspaceSceneIdentity?
     @Entry var selectedWorkspaceSelection: Binding<WorkspaceID?>?
     @Entry var dismissPresentedWorkspaceModal: (() -> Void)?
-    @Entry var openSavedWorkspaceLibrary: (() -> Void)?
+    @Entry var closeWorkspaceWindow: (() -> Void)?
+    @Entry var openLibrary: (() -> Void)?
     @Entry var presentWorkspaceRename: ((WorkspaceID) -> Void)?
     @Entry var presentWorkspaceDeletion: ((WorkspaceID) -> Void)?
     @Entry var moveFocusedPaneFocus: ((PaneFocusDirection) -> Void)?
@@ -15,14 +16,14 @@ extension FocusedValues {
 }
 
 struct WorkspaceWindowSceneCommands: Commands {
-    @Environment(\.dismiss) private var dismiss
     @Environment(\.openWindow) private var openWindow
     @FocusedObject private var workspaceStore: WorkspaceStore?
     @FocusedValue(\.activeWorkspaceFocusTarget) private var activeWorkspaceFocusTarget
     @FocusedValue(\.activeWorkspaceSceneIdentity) private var activeWorkspaceSceneIdentity
     @FocusedValue(\.selectedWorkspaceSelection) private var selectedWorkspaceSelection
     @FocusedValue(\.dismissPresentedWorkspaceModal) private var dismissPresentedWorkspaceModal
-    @FocusedValue(\.openSavedWorkspaceLibrary) private var openSavedWorkspaceLibrary
+    @FocusedValue(\.closeWorkspaceWindow) private var closeWorkspaceWindow
+    @FocusedValue(\.openLibrary) private var openLibrary
     @FocusedValue(\.presentWorkspaceRename) private var presentWorkspaceRename
     @FocusedValue(\.presentWorkspaceDeletion) private var presentWorkspaceDeletion
     @FocusedValue(\.moveFocusedPaneFocus) private var moveFocusedPaneFocus
@@ -55,7 +56,7 @@ struct WorkspaceWindowSceneCommands: Commands {
                 return nil
             }
 
-            return dismiss.callAsFunction
+            return closeWorkspaceWindow
         }()
         let resolvedCloseCommand: (title: String, action: (() -> Void)?) = if let dismissPresentedWorkspaceModal {
             ("Close", dismissPresentedWorkspaceModal)
@@ -67,7 +68,7 @@ struct WorkspaceWindowSceneCommands: Commands {
                 case .sidebar:
                     if isOnlyWorkspaceInWindow {
                         if isSelectedWorkspaceEmpty {
-                            ("Close Window", dismiss.callAsFunction)
+                            ("Close Window", closeWindowAction)
                         } else {
                             ("Close Workspace", closeWorkspaceAction)
                         }
@@ -81,12 +82,12 @@ struct WorkspaceWindowSceneCommands: Commands {
                 case nil:
                     if isSelectedWorkspaceEmpty {
                         if isOnlyWorkspaceInWindow {
-                            ("Close Window", dismiss.callAsFunction)
+                            ("Close Window", closeWindowAction)
                         } else {
                             ("Close Workspace", closeWorkspaceAction)
                         }
                     } else {
-                        ("Close Window", dismiss.callAsFunction)
+                        ("Close Window", closeWindowAction)
                     }
             }
         }
@@ -108,11 +109,11 @@ struct WorkspaceWindowSceneCommands: Commands {
         }
 
         CommandGroup(after: .newItem) {
-            Button("Open Workspace…") {
-                openSavedWorkspaceLibrary?()
+            Button("Open Library…") {
+                openLibrary?()
             }
             .keyboardShortcut("o", modifiers: [.command])
-            .disabled(openSavedWorkspaceLibrary == nil)
+            .disabled(openLibrary == nil)
         }
 
         CommandGroup(replacing: .saveItem) {
