@@ -1088,6 +1088,65 @@ PaneSessionSnapshotEntity
 The important point is that the app no longer has one payload shape for "live
 workspaces" and another payload shape for "saved workspaces."
 
+### Current terminal history restore model
+
+The current pane session snapshot persists readable transcript history, not a
+fully replayable terminal emulator state.
+
+The first improved-history slice is now landed enough for ordinary shell
+relaunch and library reopen behavior.
+
+What is persisted now:
+
+- transcript text
+- transcript byte and line counts
+- preview metadata derived from transcript text
+- normalized normal-buffer scroll position when available
+- whether the pane was captured while SwiftTerm was showing the alternate
+  buffer
+
+What is restored now:
+
+- transcript-backed readable history for ordinary live relaunch and library
+  reopen
+- a saved scroll position for ordinary normal-buffer history
+
+What still remains outside the current implementation:
+
+- alternate-buffer contents
+- exact full-screen TUI presentation
+- cursor and attribute state
+- a richer visible-range model than one normalized scroll position
+
+The current implementation now prefers raw host-output capture for transcript
+history and keeps buffer-derived text as a fallback path. That makes the saved
+history materially closer to the original shell stream than the older
+screen-shaped text export path.
+
+The recommended next persistence slice is to keep improving that model rather
+than jumping straight to full emulator-state serialization:
+
+1. preserve transcript content more faithfully
+2. add a small history-restore metadata surface alongside the transcript
+
+The first landed metadata is:
+
+- normalized normal-buffer scroll position
+- alternate-buffer-active state
+
+Good next metadata candidates are:
+
+- viewport anchor or last viewed position
+- visible-range or row-window metadata
+- a flag that distinguishes ordinary normal-buffer history from more volatile
+  alternate-screen situations
+
+That would let pane restore bring back "what the user was looking at" more
+faithfully without claiming exact TUI or emulator-state restoration.
+
+Full terminal-state persistence remains a later architectural option, not part
+of the current recommended payload expansion.
+
 ## Scene Model
 
 With the durable model above, each workspace window scene restores from a

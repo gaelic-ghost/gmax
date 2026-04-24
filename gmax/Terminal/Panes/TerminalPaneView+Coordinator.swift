@@ -25,7 +25,9 @@ extension TerminalPaneView {
             )
             controller.attach(terminalView: terminalView)
             let hostingView = TerminalPaneHostView(terminalView: terminalView)
-            startProcessIfNeeded(in: terminalView)
+            hostingView.onTerminalViewportReady = { [weak self] terminalView in
+                self?.startProcessIfNeeded(in: terminalView)
+            }
             return hostingView
         }
 
@@ -73,8 +75,17 @@ extension TerminalPaneView {
             guard controller.needsProcessStart(for: generation) else {
                 return
             }
+            guard !terminalView.bounds.isEmpty else {
+                return
+            }
 
-            controller.restoreTranscriptIfNeeded(into: terminalView)
+            let pendingViewportRestore = controller.restoreHistoryIfNeeded(into: terminalView)
+            if let transcript = pendingViewportRestore?.transcript {
+                let bytes = ArraySlice(Array(transcript.utf8))
+                if !bytes.isEmpty {
+                    terminalView.feed(byteArray: bytes)
+                }
+            }
 
             let launch = controller.session.launchConfiguration
             terminalView.startProcess(
@@ -91,6 +102,23 @@ extension TerminalPaneView {
             Task { @MainActor in
                 await Task.yield()
                 controller.session.state = .running
+            }
+            if let pendingViewportRestore {
+                Task { @MainActor in
+                    guard controller.session.relaunchGeneration == generation else {
+                        return
+                    }
+
+                    await Task.yield()
+                    guard !pendingViewportRestore.shouldSkipRestoreBecauseAlternateBufferWasActive else {
+                        return
+                    }
+                    guard let scrollPosition = pendingViewportRestore.normalScrollPosition else {
+                        return
+                    }
+
+                    terminalView.scroll(toPosition: scrollPosition)
+                }
             }
         }
     }

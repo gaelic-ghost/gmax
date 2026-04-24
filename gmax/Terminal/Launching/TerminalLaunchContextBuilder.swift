@@ -84,6 +84,8 @@ struct TerminalLaunchContextBuilder {
         [
             "TERM": "xterm-256color",
             "COLORTERM": "truecolor",
+            "TERM_PROGRAM": "gmax",
+            "ITERM_SHELL_INTEGRATION_INSTALLED": "Yes",
         ]
     }
 

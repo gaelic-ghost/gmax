@@ -20,7 +20,7 @@
 
 ### What This Project Is
 
-`gmax` is a native macOS shell workspace app for managing multiple terminal workspaces across an intentional multi-window SwiftUI scene model. The shipped repo surface already includes a data-driven `WindowGroup` shell, recursive split-pane workspaces, SwiftTerm-hosted local shell sessions, a saved-workspace library with transcript-backed restore, Core Data persistence for live, recent, and saved workspace state, durable per-window restoration, scene-local command context, and a settings window for terminal appearance plus persistence behavior.
+`gmax` is a native macOS shell workspace app for managing multiple terminal workspaces across an intentional multi-window SwiftUI scene model. The shipped repo surface already includes a data-driven `WindowGroup` shell, recursive split-pane workspaces, SwiftTerm-hosted local shell sessions, a saved-workspace library with restored terminal history, Core Data persistence for live, recent, and saved workspace state, durable per-window restoration, ordinary shell scrollback restore on relaunch, scene-local command context, and a settings window for terminal appearance plus persistence behavior.
 
 This repository is the app itself. It also carries the maintainer notes, release checklists, and repo-maintenance scripts that document how the current shell is supposed to behave and how maintainers validate it.
 
@@ -44,7 +44,7 @@ From the current app surface you can:
 - split panes right or down inside the selected workspace
 - move focus across panes with keyboard commands
 - save workspaces into the library and reopen them later
-- restore transcript-backed shell history for reopened saved workspaces
+- restore saved terminal history for reopened workspaces and ordinary live relaunches, including ordinary scroll position when available
 - hide or show the sidebar and inspector independently
 - adjust terminal appearance and workspace persistence behavior in Settings
 
@@ -141,7 +141,7 @@ Key repo surfaces:
 
 ## Release Notes
 
-The repository already has release tags through `v0.0.6`. The current release-prep checkpoint is [docs/releases/v0.0.7-release-notes.md](docs/releases/v0.0.7-release-notes.md), and the broader internal-release quality bar is tracked in [docs/releases/v0.1.0-release-checklist.md](docs/releases/v0.1.0-release-checklist.md). Both release docs assume `README.md`, `ROADMAP.md`, and the maintainer notes stay aligned with the shipped persistence, library, command, and window-restoration model.
+The repository already has release tags through `v0.0.7`. The current release-prep checkpoint is [docs/releases/v0.0.8-release-notes.md](docs/releases/v0.0.8-release-notes.md), and the broader internal-release quality bar is tracked in [docs/releases/v0.1.0-release-checklist.md](docs/releases/v0.1.0-release-checklist.md). Both release docs assume `README.md`, `ROADMAP.md`, and the maintainer notes stay aligned with the shipped persistence, library, command, window-restoration, and terminal-history model.
 
 ## License
 

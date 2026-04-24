@@ -305,6 +305,9 @@ extension WorkspacePersistenceController {
         let paneSessionSnapshotCurrentDirectory = attribute(name: "currentDirectory", type: .stringAttributeType, isOptional: true)
         let paneSessionSnapshotTitle = attribute(name: "title", type: .stringAttributeType)
         let paneSessionSnapshotTranscript = attribute(name: "transcript", type: .stringAttributeType, isOptional: true)
+        let paneSessionSnapshotNormalScrollPosition = attribute(name: "normalScrollPosition", type: .doubleAttributeType, defaultValue: 0)
+        let paneSessionSnapshotHasNormalScrollPosition = attribute(name: "hasNormalScrollPosition", type: .booleanAttributeType, defaultValue: false)
+        let paneSessionSnapshotWasAlternateBufferActive = attribute(name: "wasAlternateBufferActive", type: .booleanAttributeType, defaultValue: false)
         let paneSessionSnapshotTranscriptByteCount = attribute(name: "transcriptByteCount", type: .integer64AttributeType)
         let paneSessionSnapshotTranscriptLineCount = attribute(name: "transcriptLineCount", type: .integer64AttributeType)
         let paneSessionSnapshotPreviewText = attribute(name: "previewText", type: .stringAttributeType, isOptional: true)
@@ -493,6 +496,9 @@ extension WorkspacePersistenceController {
             paneSessionSnapshotCurrentDirectory,
             paneSessionSnapshotTitle,
             paneSessionSnapshotTranscript,
+            paneSessionSnapshotNormalScrollPosition,
+            paneSessionSnapshotHasNormalScrollPosition,
+            paneSessionSnapshotWasAlternateBufferActive,
             paneSessionSnapshotTranscriptByteCount,
             paneSessionSnapshotTranscriptLineCount,
             paneSessionSnapshotPreviewText,

@@ -35,24 +35,33 @@ final class WorkspaceStore: ObservableObject {
         let persistence = persistence ?? .shared
         let launchContextBuilder = launchContextBuilder ?? .live()
         let resolvedWorkspaces: [Workspace]
+        let resolvedPaneSnapshotsBySessionID: [TerminalSessionID: WorkspaceSessionSnapshot]
         let resolvedRecentlyClosedWorkspaceCount: Int
         let resolvedWindowState: WorkspaceWindowStateSnapshot?
 
         if let workspaces {
             resolvedWorkspaces = workspaces
+            resolvedPaneSnapshotsBySessionID = [:]
             resolvedRecentlyClosedWorkspaceCount = 0
             resolvedWindowState = nil
         } else {
             let shouldRestorePersistedWorkspaces = WorkspacePersistenceDefaults.restoreWorkspacesOnLaunch()
-            let persistedWorkspaces = shouldRestorePersistedWorkspaces
-                ? persistence.loadWorkspaces(for: sceneIdentity)
+            let persistedWorkspaceRevisions = shouldRestorePersistedWorkspaces
+                ? persistence.loadWorkspaceRevisions(for: sceneIdentity)
                 : []
+            let persistedWorkspaces = persistedWorkspaceRevisions.map(\.workspace)
             resolvedRecentlyClosedWorkspaceCount = shouldRestorePersistedWorkspaces
                 ? persistence.countRecentWorkspaceHistory(for: sceneIdentity)
                 : 0
             resolvedWindowState = shouldRestorePersistedWorkspaces
                 ? persistence.loadWindowState(for: sceneIdentity)
                 : nil
+            resolvedPaneSnapshotsBySessionID = Dictionary(
+                persistedWorkspaceRevisions.flatMap { revision in
+                    revision.paneSnapshotsBySessionID
+                },
+                uniquingKeysWith: { _, newest in newest },
+            )
             if persistedWorkspaces.isEmpty {
                 let pane = PaneLeaf()
                 resolvedWorkspaces = [Workspace(title: "Workspace 1", root: .leaf(pane))]
@@ -75,6 +84,7 @@ final class WorkspaceStore: ObservableObject {
         sessions = TerminalSessionRegistry(
             workspaces: resolvedWorkspaces,
             defaultLaunchConfiguration: launchContextBuilder.makeLaunchConfiguration(),
+            restoredPaneSnapshotsBySessionID: resolvedPaneSnapshotsBySessionID,
         )
         paneControllers = TerminalPaneControllerStore()
         self.workspaces = resolvedWorkspaces

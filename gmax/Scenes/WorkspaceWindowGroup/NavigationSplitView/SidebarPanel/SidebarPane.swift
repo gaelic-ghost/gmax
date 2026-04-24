@@ -12,12 +12,12 @@ struct SidebarPane: View {
     @Binding var selection: WorkspaceID?
 
     let focusedTarget: FocusState<WorkspaceFocusTarget?>.Binding
+    let openLibrary: () -> Void
+    let createWorkspace: () -> Void
     let requestRenameWorkspace: (WorkspaceID) -> Void
     let requestDeleteWorkspace: (WorkspaceID) -> Void
 
     var body: some View {
-        let selectedWorkspace = selection.flatMap { workspaceID in model.workspaces.first { $0.id == workspaceID } }
-
         List(selection: $selection) {
             ForEach(model.workspaces) { workspace in
                 let paneCount = workspace.root?.leaves().count ?? 0
@@ -44,16 +44,16 @@ struct SidebarPane: View {
         .focused(focusedTarget, equals: .sidebar)
         .navigationTitle("Workspaces")
         .toolbar {
-            ToolbarItem(placement: .automatic) {
-                if let workspace = selectedWorkspace {
-                    Menu {
-                        workspaceActions(for: workspace)
-                    } label: {
-                        Label("Workspace Actions", systemImage: "ellipsis.circle")
-                    }
-                    .help("Show contextual workspace actions")
-                    .accessibilityIdentifier("sidebar.workspaceActionsButton")
-                }
+            ToolbarItemGroup(placement: .automatic) {
+                Button("Open Library", systemImage: "folder", action: openLibrary)
+                    .labelStyle(.iconOnly)
+                    .help("Open the library (\u{2318}O)")
+                    .accessibilityIdentifier("sidebar.openLibraryButton")
+
+                Button("New Workspace", systemImage: "plus.rectangle.on.rectangle", action: createWorkspace)
+                    .labelStyle(.iconOnly)
+                    .help("Create a new workspace (\u{2318}N)")
+                    .accessibilityIdentifier("sidebar.newWorkspaceButton")
             }
         }
     }
@@ -103,6 +103,8 @@ private struct SidebarPanePreview: View {
             model: WorkspaceStore(),
             selection: .constant(nil),
             focusedTarget: $focusedTarget,
+            openLibrary: {},
+            createWorkspace: {},
             requestRenameWorkspace: { _ in },
             requestDeleteWorkspace: { _ in },
         )

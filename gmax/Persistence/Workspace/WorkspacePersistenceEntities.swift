@@ -118,6 +118,9 @@ final class PaneSessionSnapshotEntity: NSManagedObject {
     @NSManaged var currentDirectory: String?
     @NSManaged var title: String
     @NSManaged var transcript: String?
+    @NSManaged var normalScrollPosition: Double
+    @NSManaged var hasNormalScrollPosition: Bool
+    @NSManaged var wasAlternateBufferActive: Bool
     @NSManaged var transcriptByteCount: Int64
     @NSManaged var transcriptLineCount: Int64
     @NSManaged var previewText: String?

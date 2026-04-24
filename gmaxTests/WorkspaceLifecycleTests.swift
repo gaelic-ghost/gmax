@@ -141,7 +141,7 @@ struct WorkspaceLifecycleTests {
                 formerIndex: 0,
                 launchConfigurationsBySessionID: [:],
                 titlesBySessionID: [:],
-                transcriptsBySessionID: [:],
+                historyBySessionID: [:],
             ),
             for: sceneIdentity,
             limit: WorkspacePersistenceDefaults.maxRecentlyClosedWorkspaceCount,
