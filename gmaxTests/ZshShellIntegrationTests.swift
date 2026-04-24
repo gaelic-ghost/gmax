@@ -49,11 +49,30 @@ struct ZshShellIntegrationTests {
         #expect(fileManager.fileExists(atPath: wrapperDirectory.appendingPathComponent(".zshenv").path))
         #expect(fileManager.fileExists(atPath: wrapperDirectory.appendingPathComponent(".zprofile").path))
         #expect(fileManager.fileExists(atPath: wrapperDirectory.appendingPathComponent(".zlogin").path))
-        #expect(zshrc.contains("source \"${ZDOTDIR}/gmax-shell-integration.zsh\""))
+        #expect(zshrc.contains("typeset -g GMAX_SHELL_INTEGRATION_WRAPPER_ZDOTDIR=\"${ZDOTDIR:-}\""))
+        #expect(zshrc.contains("source \"${GMAX_SHELL_INTEGRATION_WRAPPER_ZDOTDIR}/gmax-shell-integration.zsh\""))
         #expect(integrationScript.contains("gmax_emit_osc '133;A'"))
         #expect(integrationScript.contains("gmax_emit_osc '133;C'"))
         #expect(integrationScript.contains("gmax_emit_osc \"133;D;${status}\""))
         #expect(integrationScript.contains("gmax_emit_osc \"7;file://"))
+    }
+
+    @Test func `wrapper zshrc sources integration from stable wrapper path`() throws {
+        let fileManager = FileManager.default
+        let rootDirectory = fileManager.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? fileManager.removeItem(at: rootDirectory) }
+
+        let wrapperDirectory = try ZshShellIntegration.install(
+            originalZdotdir: "/tmp/original-zdotdir",
+            fileManager: fileManager,
+            rootDirectory: rootDirectory,
+        )
+
+        let zshrc = try String(contentsOf: wrapperDirectory.appendingPathComponent(".zshrc"))
+
+        #expect(!zshrc.contains("source \"${ZDOTDIR}/gmax-shell-integration.zsh\""))
+        #expect(zshrc.contains("GMAX_SHELL_INTEGRATION_WRAPPER_ZDOTDIR"))
     }
 
     @Test func `environment overlay stays empty for non-zsh shells`() {
