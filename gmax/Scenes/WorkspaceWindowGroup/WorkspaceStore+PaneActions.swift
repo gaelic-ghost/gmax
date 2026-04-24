@@ -99,6 +99,35 @@ extension WorkspaceStore {
         return newPane.id
     }
 
+    @discardableResult
+    func splitBrowserPane(_ paneID: PaneID, in workspaceID: WorkspaceID, direction: SplitDirection) -> PaneID? {
+        guard let workspaceIndex = workspaces.firstIndex(where: { $0.id == workspaceID }) else {
+            return nil
+        }
+        guard var root = workspaces[workspaceIndex].root else {
+            return nil
+        }
+        guard root.findPane(id: paneID) != nil else {
+            return nil
+        }
+
+        let newPane = PaneLeaf(content: .browser(BrowserSessionID()))
+        guard root.split(
+            paneID: paneID,
+            direction: direction,
+            newPane: newPane,
+        ) else {
+            return nil
+        }
+
+        workspaces[workspaceIndex].root = root
+        if let sessionID = newPane.browserSessionID {
+            _ = browserSessions.ensureSession(id: sessionID)
+        }
+        schedulePersistenceSave(reason: .paneSplit)
+        return newPane.id
+    }
+
     func closePane(_ paneID: PaneID, in workspaceID: WorkspaceID) {
         guard let workspaceIndex = workspaces.firstIndex(where: { $0.id == workspaceID }) else {
             return

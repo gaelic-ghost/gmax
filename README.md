@@ -20,7 +20,7 @@
 
 ### What This Project Is
 
-`gmax` is a native macOS shell workspace app for managing multiple terminal workspaces across an intentional multi-window SwiftUI scene model. The shipped repo surface already includes a data-driven `WindowGroup` shell, recursive split-pane workspaces, SwiftTerm-hosted local shell sessions, a saved-workspace library with restored terminal history, Core Data persistence for live, recent, and saved workspace state, durable per-window restoration, ordinary shell scrollback restore on relaunch, scene-local command context, and a settings window for terminal appearance plus persistence behavior.
+`gmax` is a native macOS shell workspace app for managing multiple terminal workspaces across an intentional multi-window SwiftUI scene model. The shipped repo surface already includes a data-driven `WindowGroup` shell, recursive split-pane workspaces, SwiftTerm-hosted local shell sessions, basic `WKWebView` browser panes, a saved-workspace library with restored terminal history, Core Data persistence for live, recent, and saved workspace state, durable per-window restoration, ordinary shell scrollback restore on relaunch, scene-local command context, and a settings window for terminal appearance plus workspace persistence and browser-home behavior.
 
 This repository is the app itself. It also carries the maintainer notes, release checklists, and repo-maintenance scripts that document how the current shell is supposed to behave and how maintainers validate it.
 

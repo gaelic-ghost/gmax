@@ -12,6 +12,7 @@ enum WorkspacePersistenceDefaults {
     nonisolated static let keepRecentlyClosedWorkspacesKey = "workspacePersistence.keepRecentlyClosed"
     nonisolated static let autoSaveClosedItemsKey = "workspacePersistence.autoSaveClosedWorkspaces"
     nonisolated static let backgroundSaveIntervalMinutesKey = "workspacePersistence.backgroundSaveIntervalMinutes"
+    nonisolated static let browserHomePageURLKey = BrowserNavigationDefaults.homePageURLKey
     nonisolated static let launchRestoreWindowIDsKey = "workspacePersistence.launchRestoreWindowIDs"
     nonisolated static let maxRecentlyClosedWorkspaceCount = 20
     nonisolated static let defaultBackgroundSaveIntervalMinutes = 5

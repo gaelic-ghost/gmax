@@ -44,6 +44,10 @@ struct DetailPane: View {
                     workspaceTitle: workspace.title,
                     pane: pane,
                     session: session,
+                    controller: model.browserPaneControllers.controller(
+                        for: pane,
+                        session: session,
+                    ),
                 )
             } else {
                 UnsupportedPaneDetails(
@@ -99,9 +103,15 @@ private struct ActivePaneDetails: View {
 }
 
 private struct BrowserPaneDetails: View {
+    @AppStorage(WorkspacePersistenceDefaults.browserHomePageURLKey)
+    private var browserHomePageURL = ""
+
     let workspaceTitle: String
     let pane: PaneLeaf
     @ObservedObject var session: BrowserSession
+    let controller: BrowserPaneController
+
+    @State private var addressDraft = ""
 
     var body: some View {
         let state = switch session.state {
@@ -109,9 +119,76 @@ private struct BrowserPaneDetails: View {
             case .loading: "Loading"
             case let .failed(message): "Failed: \(message)"
         }
+        let currentAddress = session.url ?? session.lastCommittedURL ?? ""
+        let normalizedAddressDraft = BrowserNavigationDefaults.normalizedNavigationURLString(from: addressDraft)
+        let normalizedHomePageURL = BrowserNavigationDefaults.normalizedNavigationURLString(from: browserHomePageURL)
         VStack(alignment: .leading, spacing: 16) {
             Text("Active Pane")
                 .font(.title2.weight(.semibold))
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Address")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+
+                TextField(
+                    "Enter a URL",
+                    text: $addressDraft,
+                    prompt: Text(currentAddress.isEmpty ? "about:blank" : currentAddress),
+                )
+                .textFieldStyle(.roundedBorder)
+                .onSubmit {
+                    guard let normalizedAddressDraft else {
+                        return
+                    }
+                    controller.loadAddress(normalizedAddressDraft)
+                }
+                .onAppear {
+                    syncAddressDraft(with: currentAddress)
+                }
+                .onChange(of: pane.id) { _, _ in
+                    syncAddressDraft(with: currentAddress)
+                }
+                .onChange(of: session.url) { _, newValue in
+                    syncAddressDraft(with: newValue ?? session.lastCommittedURL ?? "")
+                }
+                .onChange(of: session.lastCommittedURL) { _, newValue in
+                    syncAddressDraft(with: session.url ?? newValue ?? "")
+                }
+
+                HStack {
+                    Button("Go") {
+                        guard let normalizedAddressDraft else {
+                            return
+                        }
+                        controller.loadAddress(normalizedAddressDraft)
+                    }
+                    .disabled(normalizedAddressDraft == nil)
+
+                    Button("Home") {
+                        controller.goHome()
+                    }
+                    .disabled(normalizedHomePageURL == nil)
+
+                    Spacer()
+                }
+            }
+
+            HStack {
+                Button("Back") {
+                    controller.goBack()
+                }
+                .disabled(!session.canGoBack)
+
+                Button("Forward") {
+                    controller.goForward()
+                }
+                .disabled(!session.canGoForward)
+
+                Button("Reload") {
+                    controller.reload()
+                }
+            }
 
             Group {
                 DetailValue(label: "Workspace", value: workspaceTitle)
@@ -131,6 +208,22 @@ private struct BrowserPaneDetails: View {
         }
         .padding()
         .accessibilityIdentifier("detailPane.browserPane")
+    }
+
+    private func syncAddressDraft(with resolvedAddress: String) {
+        guard !resolvedAddress.isEmpty else {
+            if addressDraft.isEmpty {
+                return
+            }
+            addressDraft = ""
+            return
+        }
+
+        guard addressDraft != resolvedAddress else {
+            return
+        }
+
+        addressDraft = resolvedAddress
     }
 }
 

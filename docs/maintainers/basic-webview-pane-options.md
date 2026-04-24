@@ -22,7 +22,7 @@ These are now treated as decided for the basic WebView-pane direction:
   modes
 - each browser pane leaf owns one durable `BrowserSessionID`
 - new browser panes start blank or on a lightweight start page by default
-- the app should eventually expose a configurable home URL in Settings
+- the app now exposes a configurable browser home URL in Settings
 - browser panes use one shared app-owned persistent WebKit data store
 - ordinary `http` and `https` navigation stays inside the pane
 - special URL schemes should hand off through the system instead of being
@@ -82,13 +82,11 @@ What is still terminal-specific:
 - `TerminalPaneControllerStore` remains the terminal-controller cache
 - `ContentPaneLeafView` is still terminal-only
 - browser history-stack persistence is still deferred
-- there are not yet user-facing browser pane creation commands or browser
-  settings surfaces
 
 So the current shell is no longer lying about leaf content, and it now has a
 real browser runtime and rendering path. The remaining work is mostly about the
-user-facing creation surface, browser settings, and any deeper persistence we
-choose to add later.
+deeper browser product surface and any richer persistence we choose to add
+later.
 
 ## Apple Framework Behavior This Plan Relies On
 
@@ -539,6 +537,14 @@ Current status:
   committed URL across live restore, saved-workspace reopen, and recent-history
   reopen paths
 - browser history-stack persistence is still deferred
+- scene commands now expose `New Browser Pane Right` and `New Browser Pane
+  Down` as dedicated browser-pane creation actions instead of overloading the
+  existing terminal split commands
+- scene commands now expose browser-only `Back`, `Forward`, and `Reload`
+  actions for the focused browser pane instead of treating navigation as a
+  terminal-style pane command
+- Settings now expose a configurable browser home URL, and new browser panes
+  fall back to that URL when there is no restored last-committed page
 
 ### Slice 4: Connect `ContentPane` To Mixed Leaves
 
@@ -598,20 +604,19 @@ Likely source edits:
 
 Recommended first product actions:
 
-- create browser pane
+- create browser pane through dedicated split commands
 - duplicate current pane split into a browser pane, if that proves useful
 - open URL in focused browser pane
 - reload focused browser pane
 - navigate back and forward in focused browser pane
 
-One design choice to settle early:
+Settled command shape for the first pass:
 
-- whether browser-pane creation is a dedicated command like `New Browser Pane`
-- or whether it is a pane replacement or conversion action
-
-The simpler first pass is probably:
-
-- `New Browser Pane`
+- `New Browser Pane Right` with `Option-Command-D`
+- `New Browser Pane Down` with `Shift-Option-Command-D`
+- `Back` in the focused browser pane with `Command-[`
+- `Forward` in the focused browser pane with `Command-]`
+- `Reload` in the focused browser pane with `Command-R`
 - no pane-type conversion yet
 
 ### Slice 6: Browser Persistence

@@ -17,6 +17,10 @@ extension FocusedValues {
     @Entry var presentWorkspaceDeletion: ((WorkspaceID) -> Void)?
     @Entry var moveFocusedPaneFocus: ((PaneFocusDirection) -> Void)?
     @Entry var splitFocusedPane: ((SplitDirection) -> Void)?
+    @Entry var splitFocusedPaneAsBrowser: ((SplitDirection) -> Void)?
+    @Entry var goBackFocusedBrowserPane: (() -> Void)?
+    @Entry var goForwardFocusedBrowserPane: (() -> Void)?
+    @Entry var reloadFocusedBrowserPane: (() -> Void)?
     @Entry var closeFocusedPane: (() -> Void)?
 }
 
@@ -38,6 +42,10 @@ struct WorkspaceWindowSceneCommands: Commands {
     @FocusedValue(\.presentWorkspaceDeletion) private var presentWorkspaceDeletion
     @FocusedValue(\.moveFocusedPaneFocus) private var moveFocusedPaneFocus
     @FocusedValue(\.splitFocusedPane) private var splitFocusedPane
+    @FocusedValue(\.splitFocusedPaneAsBrowser) private var splitFocusedPaneAsBrowser
+    @FocusedValue(\.goBackFocusedBrowserPane) private var goBackFocusedBrowserPane
+    @FocusedValue(\.goForwardFocusedBrowserPane) private var goForwardFocusedBrowserPane
+    @FocusedValue(\.reloadFocusedBrowserPane) private var reloadFocusedBrowserPane
     @FocusedValue(\.closeFocusedPane) private var closeFocusedPane
     @ObservedObject private var windowRestoration: WorkspaceWindowRestorationController
 
@@ -48,6 +56,10 @@ struct WorkspaceWindowSceneCommands: Commands {
         let isOnlyWorkspaceInWindow = workspaces.count == 1
         let isSelectedWorkspaceEmpty = selectedWorkspace?.root == nil
         let canSplitFocusedPane = splitFocusedPane != nil
+        let canSplitFocusedPaneAsBrowser = splitFocusedPaneAsBrowser != nil
+        let canGoBackFocusedBrowserPane = goBackFocusedBrowserPane != nil
+        let canGoForwardFocusedBrowserPane = goForwardFocusedBrowserPane != nil
+        let canReloadFocusedBrowserPane = reloadFocusedBrowserPane != nil
         let canDeleteSelectedWorkspace = selectedWorkspace != nil && workspaces.count > 1
         let canCycleWorkspaces = workspaces.count > 1
         let sidebarCommandTitle = (isWorkspaceSidebarVisible ?? false) ? "Hide Sidebar" : "Show Sidebar"
@@ -130,6 +142,18 @@ struct WorkspaceWindowSceneCommands: Commands {
             }
             .keyboardShortcut("n", modifiers: [.command])
             .disabled(workspaceStore == nil)
+
+            Button("New Browser Pane Right") {
+                splitFocusedPaneAsBrowser?(.right)
+            }
+            .keyboardShortcut("d", modifiers: [.command, .option])
+            .disabled(!canSplitFocusedPaneAsBrowser)
+
+            Button("New Browser Pane Down") {
+                splitFocusedPaneAsBrowser?(.down)
+            }
+            .keyboardShortcut("d", modifiers: [.command, .option, .shift])
+            .disabled(!canSplitFocusedPaneAsBrowser)
         }
 
         CommandGroup(after: .newItem) {
@@ -337,6 +361,38 @@ struct WorkspaceWindowSceneCommands: Commands {
                 }
                 .keyboardShortcut("d", modifiers: [.command, .shift])
                 .disabled(!canSplitFocusedPane)
+
+                Button("New Browser Pane Right") {
+                    splitFocusedPaneAsBrowser?(.right)
+                }
+                .keyboardShortcut("d", modifiers: [.command, .option])
+                .disabled(!canSplitFocusedPaneAsBrowser)
+
+                Button("New Browser Pane Down") {
+                    splitFocusedPaneAsBrowser?(.down)
+                }
+                .keyboardShortcut("d", modifiers: [.command, .option, .shift])
+                .disabled(!canSplitFocusedPaneAsBrowser)
+            }
+
+            Section("Browser") {
+                Button("Back") {
+                    goBackFocusedBrowserPane?()
+                }
+                .keyboardShortcut("[", modifiers: [.command])
+                .disabled(!canGoBackFocusedBrowserPane)
+
+                Button("Forward") {
+                    goForwardFocusedBrowserPane?()
+                }
+                .keyboardShortcut("]", modifiers: [.command])
+                .disabled(!canGoForwardFocusedBrowserPane)
+
+                Button("Reload") {
+                    reloadFocusedBrowserPane?()
+                }
+                .keyboardShortcut("r", modifiers: [.command])
+                .disabled(!canReloadFocusedBrowserPane)
             }
         }
     }

@@ -32,6 +32,7 @@ final class WorkspaceStore: ObservableObject {
                 WorkspacePersistenceDefaults.autoSaveClosedItemsKey: false,
                 WorkspacePersistenceDefaults.backgroundSaveIntervalMinutesKey:
                     WorkspacePersistenceDefaults.defaultBackgroundSaveIntervalMinutes,
+                WorkspacePersistenceDefaults.browserHomePageURLKey: "",
             ],
         )
         let persistence = persistence ?? .shared
