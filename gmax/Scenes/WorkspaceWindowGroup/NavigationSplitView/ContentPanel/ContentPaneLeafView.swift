@@ -204,6 +204,8 @@ private struct ContentPaneLeafShellStatusIndicator: View {
     }
 
     @State private var isPulsing = false
+    @State private var isFailureBlinking = false
+    @State private var failureBlinkTask: Task<Void, Never>?
 
     let state: Status
 
@@ -224,26 +226,73 @@ private struct ContentPaneLeafShellStatusIndicator: View {
         state == .running
     }
 
+    private var shouldBlinkFailure: Bool {
+        state == .failed && isFailureBlinking
+    }
+
     var body: some View {
         Circle()
             .fill(fillColor)
             .frame(width: 10, height: 10)
             .scaleEffect(shouldPulse ? (isPulsing ? 1 : 0.78) : 1)
-            .opacity(shouldPulse ? (isPulsing ? 0.95 : 0.42) : 0.95)
+            .opacity(opacity)
             .padding(8)
             .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
             .onAppear {
-                isPulsing = shouldPulse
+                updateAnimationState()
             }
             .onChange(of: state) { _, _ in
-                isPulsing = shouldPulse
+                updateAnimationState()
+            }
+            .onDisappear {
+                failureBlinkTask?.cancel()
+                failureBlinkTask = nil
             }
             .animation(
                 shouldPulse
                     ? .easeInOut(duration: 1.3).repeatForever(autoreverses: true)
-                    : .easeOut(duration: 0.18),
+                    : shouldBlinkFailure
+                        ? .easeInOut(duration: 0.36).repeatForever(autoreverses: true)
+                        : .easeOut(duration: 0.18),
                 value: isPulsing,
             )
+            .animation(
+                shouldBlinkFailure
+                    ? .easeInOut(duration: 0.36).repeatForever(autoreverses: true)
+                    : .easeOut(duration: 0.18),
+                value: isFailureBlinking,
+            )
+    }
+
+    private var opacity: Double {
+        if shouldPulse {
+            return isPulsing ? 0.95 : 0.42
+        }
+        if shouldBlinkFailure {
+            return isFailureBlinking ? 0.95 : 0.2
+        }
+        return 0.95
+    }
+
+    private func updateAnimationState() {
+        failureBlinkTask?.cancel()
+        failureBlinkTask = nil
+        isPulsing = shouldPulse
+
+        guard state == .failed else {
+            isFailureBlinking = false
+            return
+        }
+
+        isFailureBlinking = true
+        failureBlinkTask = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(2))
+            guard !Task.isCancelled else {
+                return
+            }
+
+            isFailureBlinking = false
+        }
     }
 }
 
