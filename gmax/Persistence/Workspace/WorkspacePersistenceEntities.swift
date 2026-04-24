@@ -13,6 +13,11 @@ enum PaneNodeKind: String {
     case split
 }
 
+enum PersistedPaneContentKind: String {
+    case terminal
+    case browser
+}
+
 @objc(WorkspaceEntity)
 final class WorkspaceEntity: NSManagedObject {
     @NSManaged var id: UUID
@@ -29,13 +34,16 @@ final class WorkspaceEntity: NSManagedObject {
     @NSManaged var rootNode: PaneNodeEntity?
     @NSManaged var placements: NSSet?
     @NSManaged var sessionSnapshots: NSSet?
+    @NSManaged var browserSessionSnapshots: NSSet?
 }
 
 @objc(PaneNodeEntity)
 final class PaneNodeEntity: NSManagedObject {
     @NSManaged var id: UUID
     @NSManaged var kind: String
+    @NSManaged var contentKind: String?
     @NSManaged var sessionID: UUID?
+    @NSManaged var browserSessionID: UUID?
     @NSManaged var axis: String?
     @NSManaged var fraction: Double
     @NSManaged var workspaceRoot: WorkspaceEntity?
@@ -124,5 +132,21 @@ final class PaneSessionSnapshotEntity: NSManagedObject {
     @NSManaged var transcriptByteCount: Int64
     @NSManaged var transcriptLineCount: Int64
     @NSManaged var previewText: String?
+    @NSManaged var workspace: WorkspaceEntity?
+}
+
+@objc(BrowserPaneSessionSnapshotEntity)
+final class BrowserPaneSessionSnapshotEntity: NSManagedObject {
+    @NSManaged var id: UUID
+    @NSManaged var title: String
+    @NSManaged var url: String?
+    @NSManaged var lastCommittedURL: String?
+    @NSManaged var state: String
+    @NSManaged var failureDescription: String?
+    @NSManaged var previewText: String?
+    @NSManaged var historyURLsData: Data?
+    @NSManaged var historyTitlesData: Data?
+    @NSManaged var hasHistory: Bool
+    @NSManaged var historyCurrentIndex: Int64
     @NSManaged var workspace: WorkspaceEntity?
 }

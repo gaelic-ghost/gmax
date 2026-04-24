@@ -50,11 +50,11 @@ struct WorkspaceLifecycleTests {
         let originalLeaves = Set(workspace.paneLeaves.map(\.id))
         let duplicatedWorkspace = model.workspaces[1]
         let duplicatedLeaves = Set(duplicatedWorkspace.paneLeaves.map(\.id))
-        let duplicatedSessions = Set(duplicatedWorkspace.paneLeaves.map(\.sessionID))
+        let duplicatedSessions = Set(duplicatedWorkspace.paneLeaves.compactMap(\.terminalSessionID))
 
         #expect(duplicatedWorkspace.paneCount == workspace.paneCount)
         #expect(originalLeaves.isDisjoint(with: duplicatedLeaves))
-        #expect(Set(workspace.paneLeaves.map(\.sessionID)).isDisjoint(with: duplicatedSessions))
+        #expect(Set(workspace.paneLeaves.compactMap(\.terminalSessionID)).isDisjoint(with: duplicatedSessions))
     }
 
     @Test func `delete workspace removes it and selects the neighbor`() {
@@ -90,7 +90,8 @@ struct WorkspaceLifecycleTests {
         )
 
         let firstPane = try #require(firstWorkspace.root?.firstLeaf())
-        let firstSession = model.sessions.ensureSession(id: firstPane.sessionID)
+        let firstSessionID = try #require(firstPane.terminalSessionID)
+        let firstSession = model.sessions.ensureSession(id: firstSessionID)
         firstSession.currentDirectory = "/tmp/restored-workspace"
 
         _ = model.closeWorkspace(firstWorkspace.id)
@@ -101,7 +102,8 @@ struct WorkspaceLifecycleTests {
 
         let reopenedWorkspace = try #require(model.workspaces.first(where: { $0.id == firstWorkspace.id }))
         let reopenedPane = try #require(reopenedWorkspace.root?.firstLeaf())
-        let reopenedSession = try #require(model.sessions.session(for: reopenedPane.sessionID))
+        let reopenedSessionID = try #require(reopenedPane.terminalSessionID)
+        let reopenedSession = try #require(model.sessions.session(for: reopenedSessionID))
         #expect(reopenedSession.currentDirectory == "/tmp/restored-workspace")
     }
 
@@ -142,6 +144,7 @@ struct WorkspaceLifecycleTests {
                 launchConfigurationsBySessionID: [:],
                 titlesBySessionID: [:],
                 historyBySessionID: [:],
+                browserSnapshotsBySessionID: [:],
             ),
             for: sceneIdentity,
             limit: WorkspacePersistenceDefaults.maxRecentlyClosedWorkspaceCount,
@@ -176,6 +179,116 @@ struct WorkspaceLifecycleTests {
 
         #expect(model.workspaces.count == 1)
         #expect(model.workspaces[0].title == "Workspace 1")
+    }
+
+    @Test func `workspace store bootstraps browser sessions for browser leaves`() throws {
+        let browserPane = PaneLeaf(content: .browser(BrowserSessionID()))
+        let workspace = Workspace(
+            title: "Workspace 1",
+            root: .leaf(browserPane),
+        )
+        let model = WorkspaceStore(workspaces: [workspace])
+
+        let browserSessionID = try #require(browserPane.browserSessionID)
+        let session = try #require(model.browserSessions.session(for: browserSessionID))
+
+        #expect(session.id == browserSessionID)
+        #expect(session.title == "Browser")
+        #expect(session.url == nil)
+    }
+
+    @Test func `browser navigation normalization prefers http for localhost and https for hostnames`() {
+        #expect(
+            BrowserNavigationDefaults.normalizedNavigationURLString(from: "localhost:3000")
+                == "http://localhost:3000",
+        )
+        #expect(
+            BrowserNavigationDefaults.normalizedNavigationURLString(from: "developer.apple.com/documentation/webkit/wkwebview")
+                == "https://developer.apple.com/documentation/webkit/wkwebview",
+        )
+    }
+
+    @Test func `browser home URL normalization preserves supported explicit schemes`() {
+        #expect(
+            BrowserNavigationDefaults.normalizedNavigationURLString(from: "about:blank")
+                == "about:blank",
+        )
+        #expect(
+            BrowserNavigationDefaults.normalizedNavigationURLString(from: "file:///tmp/example.html")
+                == "file:///tmp/example.html",
+        )
+    }
+
+    @Test func `closing a browser pane removes its browser session`() throws {
+        let browserPane = PaneLeaf(content: .browser(BrowserSessionID()))
+        let workspace = Workspace(
+            title: "Workspace 1",
+            root: .leaf(browserPane),
+        )
+        let model = WorkspaceStore(
+            workspaces: [workspace],
+            persistence: .inMemoryForTesting(),
+        )
+
+        let browserSessionID = try #require(browserPane.browserSessionID)
+        #expect(model.browserSessions.session(for: browserSessionID) != nil)
+
+        model.closePane(browserPane.id, in: workspace.id)
+
+        #expect(model.browserSessions.session(for: browserSessionID) == nil)
+        #expect(try #require(model.workspaces.first)?.root == nil)
+    }
+
+    @Test func `splitting a focused pane into a browser pane creates a new browser session`() throws {
+        let sourcePane = PaneLeaf()
+        let workspace = Workspace(
+            title: "Workspace 1",
+            root: .leaf(sourcePane),
+        )
+        let model = WorkspaceStore(
+            workspaces: [workspace],
+            persistence: .inMemoryForTesting(),
+        )
+
+        let insertedPaneID = try #require(model.splitBrowserPane(sourcePane.id, in: workspace.id, direction: .right))
+        let updatedWorkspace = try #require(model.workspaces.first(where: { $0.id == workspace.id }))
+        let insertedPane = try #require(updatedWorkspace.root?.findPane(id: insertedPaneID))
+        let insertedSessionID = try #require(insertedPane.browserSessionID)
+        let insertedSession = try #require(model.browserSessions.session(for: insertedSessionID))
+
+        #expect(updatedWorkspace.paneCount == 2)
+        #expect(insertedSession.id == insertedSessionID)
+        #expect(insertedSession.lastCommittedURL == nil)
+        #expect(insertedSession.url == nil)
+    }
+
+    @Test func `duplicating a workspace remints browser session IDs and copies the last committed URL`() throws {
+        let browserPane = PaneLeaf(content: .browser(BrowserSessionID()))
+        let workspace = Workspace(
+            title: "Workspace 1",
+            root: .leaf(browserPane),
+        )
+        let model = WorkspaceStore(
+            workspaces: [workspace],
+            persistence: .inMemoryForTesting(),
+        )
+
+        let sourceSessionID = try #require(browserPane.browserSessionID)
+        let sourceSession = try #require(model.browserSessions.session(for: sourceSessionID))
+        sourceSession.title = "Docs"
+        sourceSession.lastCommittedURL = "https://developer.apple.com/documentation/webkit/wkwebview"
+        sourceSession.url = sourceSession.lastCommittedURL
+
+        let duplicatedWorkspaceID = try #require(model.duplicateWorkspace(workspace.id))
+        let duplicatedWorkspace = try #require(model.workspaces.first(where: { $0.id == duplicatedWorkspaceID }))
+        let duplicatedPane = try #require(duplicatedWorkspace.root?.firstLeaf())
+        let duplicatedSessionID = try #require(duplicatedPane.browserSessionID)
+        let duplicatedSession = try #require(model.browserSessions.session(for: duplicatedSessionID))
+
+        #expect(duplicatedSessionID != sourceSessionID)
+        #expect(duplicatedSession.lastCommittedURL == sourceSession.lastCommittedURL)
+        #expect(duplicatedSession.url == sourceSession.lastCommittedURL)
+        #expect(duplicatedSession.title == sourceSession.title)
     }
 
     @Test func `workspace store loads the durable selected workspace for its window`() {

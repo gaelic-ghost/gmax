@@ -17,6 +17,7 @@ struct ContentPane: View {
     let onClosePane: (WorkspaceID, PaneID) -> Void
     let onUpdatePaneFrames: ([PaneID: CGRect]) -> Void
     let onMovePaneFocus: (PaneFocusDirection) -> Void
+    let browserOmniboxRevealIDByPaneID: [PaneID: Int]
 
     var body: some View {
         let workspace = selectedWorkspaceID.flatMap { workspaceID in model.workspaces.first { $0.id == workspaceID } }
@@ -26,12 +27,7 @@ struct ContentPane: View {
                     ContentPaneNodeView(
                         node: root,
                         focusedTarget: focusedTarget,
-                        controllerForPane: { pane in
-                            model.paneControllers.controller(
-                                for: pane,
-                                session: model.sessions.ensureSession(id: pane.sessionID),
-                            )
-                        },
+                        model: model,
                         onUpdateSplitFraction: { splitID, fraction in
                             model.setSplitFraction(fraction, for: splitID, in: workspace.id)
                         },
@@ -42,6 +38,7 @@ struct ContentPane: View {
                         onClosePane: { paneID in
                             onClosePane(workspace.id, paneID)
                         },
+                        browserOmniboxRevealIDByPaneID: browserOmniboxRevealIDByPaneID,
                     )
                     .coordinateSpace(name: "workspace-pane-tree")
                     .focusSection()
@@ -73,32 +70,67 @@ struct ContentPane: View {
 private struct ContentPaneNodeView: View {
     let node: PaneNode
     let focusedTarget: FocusState<WorkspaceFocusTarget?>.Binding
-    let controllerForPane: (PaneLeaf) -> TerminalPaneController
+    @ObservedObject var model: WorkspaceStore
+
     let onUpdateSplitFraction: (SplitID, CGFloat) -> Void
     let onMovePaneFocus: (PaneFocusDirection) -> Void
     let onSplitPane: (PaneID, SplitDirection) -> Void
     let onClosePane: (PaneID) -> Void
+    let browserOmniboxRevealIDByPaneID: [PaneID: Int]
 
     var body: some View {
         switch node {
             case let .leaf(leaf):
-                let controller = controllerForPane(leaf)
-                ContentPaneLeafView(
-                    pane: leaf,
-                    controller: controller,
-                    session: controller.session,
-                    focusedTarget: focusedTarget,
-                    onMovePaneFocus: onMovePaneFocus,
-                    onSplitRight: {
-                        onSplitPane(leaf.id, .right)
-                    },
-                    onSplitDown: {
-                        onSplitPane(leaf.id, .down)
-                    },
-                    onClose: {
-                        onClosePane(leaf.id)
-                    },
-                )
+                Group {
+                    if let sessionID = leaf.terminalSessionID {
+                        let controller = model.paneControllers.controller(
+                            for: leaf,
+                            session: model.sessions.ensureSession(id: sessionID),
+                        )
+                        ContentPaneLeafView(
+                            pane: leaf,
+                            controller: controller,
+                            session: controller.session,
+                            focusedTarget: focusedTarget,
+                            onMovePaneFocus: onMovePaneFocus,
+                            onSplitRight: {
+                                onSplitPane(leaf.id, .right)
+                            },
+                            onSplitDown: {
+                                onSplitPane(leaf.id, .down)
+                            },
+                            onClose: {
+                                onClosePane(leaf.id)
+                            },
+                        )
+                    } else if let sessionID = leaf.browserSessionID {
+                        let controller = model.browserPaneControllers.controller(
+                            for: leaf,
+                            session: model.browserSessions.ensureSession(id: sessionID),
+                        )
+                        BrowserPaneLeafView(
+                            pane: leaf,
+                            controller: controller,
+                            session: controller.session,
+                            focusedTarget: focusedTarget,
+                            onSplitRight: {
+                                onSplitPane(leaf.id, .right)
+                            },
+                            onSplitDown: {
+                                onSplitPane(leaf.id, .down)
+                            },
+                            onClose: {
+                                onClosePane(leaf.id)
+                            },
+                            omniboxRevealID: browserOmniboxRevealIDByPaneID[leaf.id] ?? 0,
+                        )
+                    } else {
+                        ContentPaneUnsupportedLeafView(
+                            pane: leaf,
+                            focusedTarget: focusedTarget,
+                        )
+                    }
+                }
 
             case let .split(split):
                 ContentPaneSplitView(
@@ -109,24 +141,77 @@ private struct ContentPaneNodeView: View {
                     ContentPaneNodeView(
                         node: split.first,
                         focusedTarget: focusedTarget,
-                        controllerForPane: controllerForPane,
+                        model: model,
                         onUpdateSplitFraction: onUpdateSplitFraction,
                         onMovePaneFocus: onMovePaneFocus,
                         onSplitPane: onSplitPane,
                         onClosePane: onClosePane,
+                        browserOmniboxRevealIDByPaneID: browserOmniboxRevealIDByPaneID,
                     )
                 } second: {
                     ContentPaneNodeView(
                         node: split.second,
                         focusedTarget: focusedTarget,
-                        controllerForPane: controllerForPane,
+                        model: model,
                         onUpdateSplitFraction: onUpdateSplitFraction,
                         onMovePaneFocus: onMovePaneFocus,
                         onSplitPane: onSplitPane,
                         onClosePane: onClosePane,
+                        browserOmniboxRevealIDByPaneID: browserOmniboxRevealIDByPaneID,
                     )
                 }
         }
+    }
+}
+
+private struct BrowserPaneLeafView: View {
+    let pane: PaneLeaf
+    let controller: BrowserPaneController
+    @ObservedObject var session: BrowserSession
+
+    let focusedTarget: FocusState<WorkspaceFocusTarget?>.Binding
+    let onSplitRight: () -> Void
+    let onSplitDown: () -> Void
+    let onClose: () -> Void
+    let omniboxRevealID: Int
+
+    var body: some View {
+        BrowserPaneChromeView(
+            pane: pane,
+            controller: controller,
+            session: session,
+            focusedTarget: focusedTarget,
+            onSplitRight: onSplitRight,
+            onSplitDown: onSplitDown,
+            onClose: onClose,
+            omniboxRevealID: omniboxRevealID,
+        )
+    }
+}
+
+private struct ContentPaneUnsupportedLeafView: View {
+    let pane: PaneLeaf
+    let focusedTarget: FocusState<WorkspaceFocusTarget?>.Binding
+
+    var body: some View {
+        let isFocused = focusedTarget.wrappedValue == .pane(pane.id)
+        let backgroundStyle = isFocused
+            ? AnyShapeStyle(.tint.opacity(0.18))
+            : AnyShapeStyle(Color.secondary.opacity(0.12))
+        ContentUnavailableView {
+            Label("Pane Content Unavailable", systemImage: "globe")
+        } description: {
+            Text("This pane uses a non-terminal content type that the current build cannot render yet.")
+        }
+        .focusable(interactions: .edit)
+        .focused(focusedTarget, equals: .pane(pane.id))
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(backgroundStyle)
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Unsupported pane")
+        .accessibilityValue(isFocused ? "Focused" : "Not focused")
+        .accessibilityIdentifier("contentPane.unsupportedLeaf.\(pane.id.rawValue.uuidString)")
     }
 }
 
@@ -171,6 +256,7 @@ private struct ContentPanePreview: View {
             onClosePane: { _, _ in },
             onUpdatePaneFrames: { _ in },
             onMovePaneFocus: { _ in },
+            browserOmniboxRevealIDByPaneID: [:],
         )
     }
 }

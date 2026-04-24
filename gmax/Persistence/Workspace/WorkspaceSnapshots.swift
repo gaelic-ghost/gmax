@@ -38,6 +38,33 @@ struct WorkspaceSessionHistorySnapshot: Hashable, Codable {
     var wasAlternateBufferActive: Bool
 }
 
+enum BrowserSessionSnapshotState: String, Hashable, Codable {
+    case idle
+    case loading
+    case failed
+}
+
+struct BrowserHistoryItemSnapshot: Hashable, Codable {
+    var url: String
+    var title: String?
+}
+
+struct BrowserSessionHistorySnapshot: Hashable, Codable {
+    var items: [BrowserHistoryItemSnapshot]
+    var currentIndex: Int
+}
+
+struct BrowserSessionSnapshot: Hashable, Codable, Identifiable {
+    var id: BrowserSessionID
+    var title: String
+    var url: String?
+    var lastCommittedURL: String?
+    var state: BrowserSessionSnapshotState
+    var failureDescription: String?
+    var previewText: String?
+    var history: BrowserSessionHistorySnapshot?
+}
+
 struct WorkspaceListing: Hashable, Codable {
     var title: String
     var previewText: String?
@@ -74,6 +101,7 @@ struct WorkspaceRevision: Identifiable, Hashable, Codable {
     var previewText: String?
     var workspace: Workspace
     var paneSnapshotsBySessionID: [TerminalSessionID: WorkspaceSessionSnapshot]
+    var browserSnapshotsBySessionID: [BrowserSessionID: BrowserSessionSnapshot]
 }
 
 struct WindowWorkspaceHistoryRecord: Hashable, Codable {
@@ -99,4 +127,5 @@ struct WindowWorkspaceHistoryInput {
     var launchConfigurationsBySessionID: [TerminalSessionID: TerminalLaunchConfiguration]
     var titlesBySessionID: [TerminalSessionID: String]
     var historyBySessionID: [TerminalSessionID: WorkspaceSessionHistorySnapshot]
+    var browserSnapshotsBySessionID: [BrowserSessionID: BrowserSessionSnapshot]
 }

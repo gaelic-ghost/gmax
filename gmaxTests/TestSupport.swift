@@ -27,3 +27,17 @@ enum TestSupport {
         )
     }
 }
+
+extension PaneLeaf {
+    var requiredTerminalSessionID: TerminalSessionID {
+        guard let terminalSessionID else {
+            preconditionFailure("Test fixture expected a terminal pane.")
+        }
+
+        return terminalSessionID
+    }
+
+    var sessionID: TerminalSessionID {
+        requiredTerminalSessionID
+    }
+}

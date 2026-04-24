@@ -352,6 +352,16 @@ Scene-wide publication from `WorkspaceWindowSceneView`:
 - `.focusedSceneValue(\.presentWorkspaceDeletion, presentWorkspaceDeletion)`
 - `.focusedSceneValue(\.moveFocusedPaneFocus, moveFocusedPaneFocusAction)`
 - `.focusedSceneValue(\.splitFocusedPane, splitFocusedPaneAction)`
+- `.focusedSceneValue(\.splitFocusedPaneAsBrowser,
+  splitFocusedPaneAsBrowserAction)`
+- `.focusedSceneValue(\.goBackFocusedBrowserPane,
+  goBackFocusedBrowserPaneAction)`
+- `.focusedSceneValue(\.goForwardFocusedBrowserPane,
+  goForwardFocusedBrowserPaneAction)`
+- `.focusedSceneValue(\.reloadFocusedBrowserPane,
+  reloadFocusedBrowserPaneAction)`
+- `.focusedSceneValue(\.focusFocusedBrowserOmnibox,
+  focusFocusedBrowserOmniboxAction)`
 - `.focusedSceneValue(\.closeFocusedPane, closeFocusedPaneAction)`
 
 Those values represent scene-scoped state and scene-scoped actions:
@@ -393,6 +403,11 @@ That creates a simpler command context:
 - `presentWorkspaceDeletion`
 - `moveFocusedPaneFocus`
 - `splitFocusedPane`
+- `splitFocusedPaneAsBrowser`
+- `goBackFocusedBrowserPane`
+- `goForwardFocusedBrowserPane`
+- `reloadFocusedBrowserPane`
+- `focusFocusedBrowserOmnibox`
 - `closeFocusedPane`
 
 The file currently mixes the focused-value key declarations and the command
@@ -427,6 +442,8 @@ It also adds:
 
 - `New gmax Window` through the `WindowGroup` scene title
 - `New Workspace` with `Command-N`
+- `New Browser Pane Right` with `Option-Command-D`
+- `New Browser Pane Down` with `Shift-Option-Command-D`
 - `Open Library…` with `Command-O`
 - `Open Recent Workspace` with `Option-Command-O`
 - `Close Workspace to Library` with `Option-Command-S`
@@ -437,6 +454,10 @@ It also adds:
 - `Close Window` with `Shift-Command-W`
 - `Close Window to Library` with `Shift-Command-S`
 - `Open Recent Window` with `Shift-Command-O`
+- `Back` in the focused browser pane with `Command-[`
+- `Forward` in the focused browser pane with `Command-]`
+- `Reload` in the focused browser pane with `Command-R`
+- `Focus Address Bar` in the focused browser pane with `Command-L`
 - a custom `Workspace` menu
 - a custom `Pane` menu
 
@@ -461,6 +482,12 @@ The `Pane` menu currently exposes:
 - focus previous pane
 - `Split Right`
 - `Split Down`
+- `New Browser Pane Right`
+- `New Browser Pane Down`
+- `Focus Address Bar`
+- `Back`
+- `Forward`
+- `Reload`
 
 ### Current close and dismissal behavior
 
@@ -555,6 +582,7 @@ rather than trying to route commands upward.
 - workspace restore-on-launch behavior
 - recently closed workspace retention
 - auto-save closed workspaces and windows
+- the browser home URL used when a new browser pane has no restored page
 
 Settings are not currently routed through `WorkspaceStore`, focused values, or
 scene command infrastructure.

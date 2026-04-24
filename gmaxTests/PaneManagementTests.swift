@@ -20,7 +20,7 @@ struct PaneManagementTests {
         )
 
         let originalPane = try #require(workspace.root?.firstLeaf())
-        let originalSession = model.sessions.ensureSession(id: originalPane.sessionID)
+        let originalSession = model.sessions.ensureSession(id: originalPane.requiredTerminalSessionID)
         originalSession.currentDirectory = "/tmp/nested-split"
 
         let firstInsertedPaneID = try #require(model.splitPane(originalPane.id, in: workspace.id, direction: .right))
@@ -32,7 +32,7 @@ struct PaneManagementTests {
         let nestedSplit = try #require(extractRootSplit(from: outerSplit.second))
         let nestedFirstLeaf = try #require(extractRootLeaf(from: nestedSplit.first))
         let nestedSecondLeaf = try #require(extractRootLeaf(from: nestedSplit.second))
-        let newestSession = try #require(model.sessions.session(for: nestedSecondLeaf.sessionID))
+        let newestSession = try #require(model.sessions.session(for: nestedSecondLeaf.requiredTerminalSessionID))
 
         #expect(updatedWorkspace.paneCount == 3)
         #expect(outerSplit.axis == .horizontal)
@@ -53,7 +53,7 @@ struct PaneManagementTests {
         )
 
         let originalPane = try #require(workspace.root?.firstLeaf())
-        let originalSession = model.sessions.ensureSession(id: originalPane.sessionID)
+        let originalSession = model.sessions.ensureSession(id: originalPane.requiredTerminalSessionID)
         originalSession.currentDirectory = "/tmp/inherited-pane"
 
         let insertedPaneID = try #require(model.splitPane(originalPane.id, in: workspace.id, direction: .down))
@@ -63,7 +63,7 @@ struct PaneManagementTests {
         let split = try #require(extractRootSplit(from: root))
         let firstLeaf = try #require(extractRootLeaf(from: split.first))
         let secondLeaf = try #require(extractRootLeaf(from: split.second))
-        let insertedSession = try #require(model.sessions.session(for: secondLeaf.sessionID))
+        let insertedSession = try #require(model.sessions.session(for: secondLeaf.requiredTerminalSessionID))
 
         #expect(updatedWorkspace.paneCount == 2)
         #expect(split.axis == PaneSplit.Axis.vertical)
@@ -100,15 +100,15 @@ struct PaneManagementTests {
             launchContextBuilder: TestSupport.makeLaunchContextBuilder(defaultCurrentDirectory: "/tmp/gmax-tests"),
         )
 
-        _ = model.sessions.ensureSession(id: leftPane.sessionID)
-        _ = model.sessions.ensureSession(id: topRightPane.sessionID)
-        _ = model.sessions.ensureSession(id: bottomRightPane.sessionID)
+        _ = model.sessions.ensureSession(id: leftPane.requiredTerminalSessionID)
+        _ = model.sessions.ensureSession(id: topRightPane.requiredTerminalSessionID)
+        _ = model.sessions.ensureSession(id: bottomRightPane.requiredTerminalSessionID)
 
         model.closePane(topRightPane.id, in: workspace.id)
 
         let updatedWorkspace = try #require(model.workspaces.first(where: { $0.id == workspace.id }))
         #expect(updatedWorkspace.paneLeaves.map(\.id) == [leftPane.id, bottomRightPane.id])
-        #expect(model.sessions.session(for: topRightPane.sessionID) == nil)
+        #expect(model.sessions.session(for: topRightPane.requiredTerminalSessionID) == nil)
     }
 
     @Test func `close pane leaves an empty workspace when it was the last pane`() throws {
@@ -120,13 +120,13 @@ struct PaneManagementTests {
         )
 
         let pane = try #require(workspace.root?.firstLeaf())
-        _ = model.sessions.ensureSession(id: pane.sessionID)
+        _ = model.sessions.ensureSession(id: pane.requiredTerminalSessionID)
         model.closePane(pane.id, in: workspace.id)
         let updatedWorkspace = try #require(model.workspaces.first(where: { $0.id == workspace.id }))
 
         #expect(updatedWorkspace.root == nil)
         #expect(updatedWorkspace.paneCount == 0)
-        #expect(model.sessions.session(for: pane.sessionID) == nil)
+        #expect(model.sessions.session(for: pane.requiredTerminalSessionID) == nil)
     }
 
     @Test func `closing the focused pane after multiple splits preserves the surviving layout`() throws {
@@ -141,7 +141,7 @@ struct PaneManagementTests {
         let rightPaneID = try #require(model.splitPane(originalPane.id, in: workspace.id, direction: .right))
         let bottomRightPaneID = try #require(model.splitPane(rightPaneID, in: workspace.id, direction: .down))
         let bottomRightSessionID = try #require(
-            model.workspaces.first(where: { $0.id == workspace.id })?.paneLeaves.first(where: { $0.id == bottomRightPaneID })?.sessionID,
+            model.workspaces.first(where: { $0.id == workspace.id })?.paneLeaves.first(where: { $0.id == bottomRightPaneID })?.requiredTerminalSessionID,
         )
 
         model.closePane(bottomRightPaneID, in: workspace.id)

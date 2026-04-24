@@ -13,6 +13,12 @@ struct PaneID: RawRepresentable, Hashable, Codable, Identifiable {
     var id: UUID { rawValue }
 }
 
+struct BrowserSessionID: RawRepresentable, Hashable, Codable, Identifiable {
+    var rawValue = UUID()
+
+    var id: UUID { rawValue }
+}
+
 struct SplitID: RawRepresentable, Hashable, Codable, Identifiable {
     var rawValue = UUID()
 
@@ -52,9 +58,30 @@ indirect enum PaneNode: Hashable, Codable {
     case split(PaneSplit)
 }
 
+enum PaneContent: Hashable, Codable {
+    case terminal(TerminalSessionID)
+    case browser(BrowserSessionID)
+}
+
 struct PaneLeaf: Identifiable, Hashable, Codable {
     var id = PaneID()
-    var sessionID = TerminalSessionID()
+    var content: PaneContent = .terminal(TerminalSessionID())
+
+    nonisolated var terminalSessionID: TerminalSessionID? {
+        guard case let .terminal(sessionID) = content else {
+            return nil
+        }
+
+        return sessionID
+    }
+
+    nonisolated var browserSessionID: BrowserSessionID? {
+        guard case let .browser(sessionID) = content else {
+            return nil
+        }
+
+        return sessionID
+    }
 }
 
 struct PaneSplit: Hashable, Codable {

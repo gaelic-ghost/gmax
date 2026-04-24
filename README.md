@@ -20,7 +20,7 @@
 
 ### What This Project Is
 
-`gmax` is a native macOS shell workspace app for managing multiple terminal workspaces across an intentional multi-window SwiftUI scene model. The shipped repo surface already includes a data-driven `WindowGroup` shell, recursive split-pane workspaces, SwiftTerm-hosted local shell sessions, a saved-workspace library with restored terminal history, Core Data persistence for live, recent, and saved workspace state, durable per-window restoration, ordinary shell scrollback restore on relaunch, scene-local command context, and a settings window for terminal appearance plus persistence behavior.
+`gmax` is a native macOS shell workspace app for managing multiple terminal workspaces across an intentional multi-window SwiftUI scene model. The shipped repo surface already includes a data-driven `WindowGroup` shell, recursive split-pane workspaces, SwiftTerm-hosted local shell sessions, basic `WKWebView` browser panes, a saved-workspace library with restored terminal history, Core Data persistence for live, recent, and saved workspace state, durable per-window restoration, ordinary shell scrollback restore on relaunch, scene-local command context, and a settings window for terminal appearance plus workspace persistence and browser-home behavior.
 
 This repository is the app itself. It also carries the maintainer notes, release checklists, and repo-maintenance scripts that document how the current shell is supposed to behave and how maintainers validate it.
 
@@ -58,8 +58,10 @@ The command surface is intentionally keyboard-forward. The current menu and shor
 - `cmd-option-s` to close the selected workspace into the library
 - `cmd-shift-s` to close the active window into the library
 - `cmd-b` and `cmd-shift-b` to toggle the sidebar and inspector
-- `cmd-t`, `cmd-d`, and `cmd-shift-d` for pane creation and splits
+- `cmd-d` and `cmd-shift-d` for terminal pane splits
+- `cmd-option-d` and `cmd-option-shift-d` for browser-pane splits
 - `cmd-option-left/right/up/down` plus `cmd-option-[` and `cmd-option-]` for pane focus movement
+- `cmd-l`, `cmd-[`, `cmd-]`, and `cmd-r` for focused browser-pane address, back, forward, and reload
 - `cmd-w` for the context-sensitive close behavior documented in [docs/maintainers/workspace-focus-guide.md](docs/maintainers/workspace-focus-guide.md)
 - `cmd-option-w` for `Close Workspace`
 - `cmd-shift-w` for `Close Window`
@@ -141,7 +143,7 @@ Key repo surfaces:
 
 ## Release Notes
 
-The repository already has release tags through `v0.0.7`. The current release-prep checkpoint is [docs/releases/v0.0.8-release-notes.md](docs/releases/v0.0.8-release-notes.md), and the broader internal-release quality bar is tracked in [docs/releases/v0.1.0-release-checklist.md](docs/releases/v0.1.0-release-checklist.md). Both release docs assume `README.md`, `ROADMAP.md`, and the maintainer notes stay aligned with the shipped persistence, library, command, window-restoration, and terminal-history model.
+The repository already has release tags through `v0.0.8`. The current release-prep checkpoint is [docs/releases/v0.0.9-release-notes.md](docs/releases/v0.0.9-release-notes.md), and the broader internal-release quality bar is tracked in [docs/releases/v0.1.0-release-checklist.md](docs/releases/v0.1.0-release-checklist.md). Both release docs assume `README.md`, `ROADMAP.md`, and the maintainer notes stay aligned with the shipped persistence, library, command, window-restoration, terminal-history, and browser-pane model.
 
 ## License
 

@@ -29,6 +29,9 @@ struct SettingsUtilityWindow: View {
     @AppStorage(WorkspacePersistenceDefaults.backgroundSaveIntervalMinutesKey)
     private var backgroundSaveIntervalMinutes = WorkspacePersistenceDefaults.defaultBackgroundSaveIntervalMinutes
 
+    @AppStorage(WorkspacePersistenceDefaults.browserHomePageURLKey)
+    private var browserHomePageURL = ""
+
     var body: some View {
         Form {
             TerminalAppearanceSettingsSection(
@@ -48,6 +51,7 @@ struct SettingsUtilityWindow: View {
                 keepRecentlyClosedWorkspaces: $keepRecentlyClosedWorkspaces,
                 autoSaveClosedItems: $autoSaveClosedItems,
                 backgroundSaveIntervalMinutes: $backgroundSaveIntervalMinutes,
+                browserHomePageURL: $browserHomePageURL,
             )
         }
         .formStyle(.grouped)

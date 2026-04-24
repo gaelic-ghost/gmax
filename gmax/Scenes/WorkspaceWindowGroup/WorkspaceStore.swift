@@ -12,7 +12,9 @@ final class WorkspaceStore: ObservableObject {
     let persistence: WorkspacePersistenceController
     let launchContextBuilder: TerminalLaunchContextBuilder
     let sessions: TerminalSessionRegistry
+    let browserSessions: BrowserSessionRegistry
     let paneControllers: TerminalPaneControllerStore
+    let browserPaneControllers: BrowserPaneControllerStore
     var persistedSelectedWorkspaceID: WorkspaceID?
     var pendingPersistenceTask: Task<Void, Never>?
 
@@ -30,18 +32,21 @@ final class WorkspaceStore: ObservableObject {
                 WorkspacePersistenceDefaults.autoSaveClosedItemsKey: false,
                 WorkspacePersistenceDefaults.backgroundSaveIntervalMinutesKey:
                     WorkspacePersistenceDefaults.defaultBackgroundSaveIntervalMinutes,
+                WorkspacePersistenceDefaults.browserHomePageURLKey: "",
             ],
         )
         let persistence = persistence ?? .shared
         let launchContextBuilder = launchContextBuilder ?? .live()
         let resolvedWorkspaces: [Workspace]
         let resolvedPaneSnapshotsBySessionID: [TerminalSessionID: WorkspaceSessionSnapshot]
+        let resolvedBrowserSnapshotsBySessionID: [BrowserSessionID: BrowserSessionSnapshot]
         let resolvedRecentlyClosedWorkspaceCount: Int
         let resolvedWindowState: WorkspaceWindowStateSnapshot?
 
         if let workspaces {
             resolvedWorkspaces = workspaces
             resolvedPaneSnapshotsBySessionID = [:]
+            resolvedBrowserSnapshotsBySessionID = [:]
             resolvedRecentlyClosedWorkspaceCount = 0
             resolvedWindowState = nil
         } else {
@@ -59,6 +64,12 @@ final class WorkspaceStore: ObservableObject {
             resolvedPaneSnapshotsBySessionID = Dictionary(
                 persistedWorkspaceRevisions.flatMap { revision in
                     revision.paneSnapshotsBySessionID
+                },
+                uniquingKeysWith: { _, newest in newest },
+            )
+            resolvedBrowserSnapshotsBySessionID = Dictionary(
+                persistedWorkspaceRevisions.flatMap { revision in
+                    revision.browserSnapshotsBySessionID
                 },
                 uniquingKeysWith: { _, newest in newest },
             )
@@ -86,7 +97,12 @@ final class WorkspaceStore: ObservableObject {
             defaultLaunchConfiguration: launchContextBuilder.makeLaunchConfiguration(),
             restoredPaneSnapshotsBySessionID: resolvedPaneSnapshotsBySessionID,
         )
+        browserSessions = BrowserSessionRegistry(
+            workspaces: resolvedWorkspaces,
+            restoredSnapshotsBySessionID: resolvedBrowserSnapshotsBySessionID,
+        )
         paneControllers = TerminalPaneControllerStore()
+        browserPaneControllers = BrowserPaneControllerStore()
         self.workspaces = resolvedWorkspaces
         recentlyClosedWorkspaceCount = resolvedRecentlyClosedWorkspaceCount
         persistedSelectedWorkspaceID = resolvedWindowState?.selectedWorkspaceID

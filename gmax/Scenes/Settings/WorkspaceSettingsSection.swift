@@ -13,6 +13,7 @@ struct WorkspaceSettingsSection: View {
     @Binding var keepRecentlyClosedWorkspaces: Bool
     @Binding var autoSaveClosedItems: Bool
     @Binding var backgroundSaveIntervalMinutes: Int
+    @Binding var browserHomePageURL: String
 
     var body: some View {
         Section("Workspaces") {
@@ -42,7 +43,21 @@ struct WorkspaceSettingsSection: View {
                 Logger.diagnostics.notice("Updated the background workspace auto-save interval from Settings. Interval: \(normalizedInterval) minute\(normalizedInterval == 1 ? "" : "s", privacy: .public).")
             }
 
-            Text("Restore applies the next time you launch gmax. Recently closed workspaces remain window-local, and they can restore with that window when launch restoration is enabled. Auto-save writes closed workspaces and closed windows into the library automatically. When it is off, you can still archive them explicitly with the library-specific close commands. Background saves run for each workspace window on the configured interval and also flush immediately during window and app lifecycle changes.")
+            TextField(
+                "Browser home URL",
+                text: $browserHomePageURL,
+                prompt: Text("about:blank when empty"),
+            )
+            .textFieldStyle(.roundedBorder)
+            .onChange(of: browserHomePageURL) { _, newValue in
+                let normalizedValue = BrowserNavigationDefaults.normalizedNavigationURLString(from: newValue) ?? ""
+                if normalizedValue != newValue {
+                    browserHomePageURL = normalizedValue
+                }
+                Logger.diagnostics.notice("Updated the browser home page preference from Settings. Browser home URL is now \(normalizedValue.isEmpty ? "empty (about:blank)" : normalizedValue, privacy: .public).")
+            }
+
+            Text("Restore applies the next time you launch gmax. Recently closed workspaces remain window-local, and they can restore with that window when launch restoration is enabled. Auto-save writes closed workspaces and closed windows into the library automatically. When it is off, you can still archive them explicitly with the library-specific close commands. Background saves run for each workspace window on the configured interval and also flush immediately during window and app lifecycle changes. When the browser home URL is empty, new browser panes start on about:blank.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
