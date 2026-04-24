@@ -133,6 +133,7 @@ final class WorkspacePersistenceController {
                         titlesBySessionID: recentWorkspace.titlesBySessionID,
                         historyBySessionID: recentWorkspace.historyBySessionID,
                     ),
+                    browserSessionSnapshots: Array(recentWorkspace.browserSnapshotsBySessionID.values),
                     now: now,
                 )
                 try Self.upsertWindowWorkspaceMembership(
@@ -382,7 +383,9 @@ final class WorkspacePersistenceController {
         liveWorkspaces: [Workspace],
         selectedWorkspaceID: WorkspaceID?,
         sessions: TerminalSessionRegistry,
+        browserSessions: BrowserSessionRegistry,
         liveHistoryByWorkspaceID: [WorkspaceID: [TerminalSessionID: WorkspaceSessionHistorySnapshot]] = [:],
+        liveBrowserSnapshotsByWorkspaceID: [WorkspaceID: [BrowserSessionID: BrowserSessionSnapshot]] = [:],
     ) {
         let liveSessionSnapshotsByWorkspaceID = Dictionary(
             uniqueKeysWithValues: liveWorkspaces.map { workspace in
@@ -392,6 +395,18 @@ final class WorkspacePersistenceController {
                         for: workspace,
                         sessions: sessions,
                         historyBySessionID: liveHistoryByWorkspaceID[workspace.id] ?? [:],
+                    ),
+                )
+            },
+        )
+        let resolvedBrowserSnapshotsByWorkspaceID = Dictionary(
+            uniqueKeysWithValues: liveWorkspaces.map { workspace in
+                (
+                    workspace.id,
+                    Self.makeBrowserSessionSnapshots(
+                        for: workspace,
+                        browserSessions: browserSessions,
+                        browserSnapshotsBySessionID: liveBrowserSnapshotsByWorkspaceID[workspace.id] ?? [:],
                     ),
                 )
             },
@@ -413,6 +428,7 @@ final class WorkspacePersistenceController {
                         context: context,
                         existingWorkspacesByID: &existingWorkspacesByID,
                         sessionSnapshots: liveSessionSnapshotsByWorkspaceID[workspace.id] ?? [],
+                        browserSessionSnapshots: resolvedBrowserSnapshotsByWorkspaceID[workspace.id] ?? [],
                     )
                     let placement = existingPlacementsByID.removeValue(forKey: workspace.id.rawValue)
                         ?? WorkspacePlacementEntity(context: context)
@@ -509,7 +525,9 @@ final class WorkspacePersistenceController {
     func upsertWorkspaceLibraryItem(
         from workspace: Workspace,
         sessions: TerminalSessionRegistry,
+        browserSessions: BrowserSessionRegistry,
         historyBySessionID: [TerminalSessionID: WorkspaceSessionHistorySnapshot] = [:],
+        browserSnapshotsBySessionID: [BrowserSessionID: BrowserSessionSnapshot] = [:],
         notes: String? = nil,
         isPinned: Bool? = nil,
     ) -> LibraryItemListing? {
@@ -517,6 +535,11 @@ final class WorkspacePersistenceController {
             for: workspace,
             sessions: sessions,
             historyBySessionID: historyBySessionID,
+        )
+        let browserSessionSnapshots = Self.makeBrowserSessionSnapshots(
+            for: workspace,
+            browserSessions: browserSessions,
+            browserSnapshotsBySessionID: browserSnapshotsBySessionID,
         )
         let context = container.viewContext
         return context.performAndWait {
@@ -531,6 +554,7 @@ final class WorkspacePersistenceController {
                     from: workspace,
                     context: context,
                     sessionSnapshots: sessionSnapshots,
+                    browserSessionSnapshots: browserSessionSnapshots,
                     notes: notes,
                     now: now,
                 )
@@ -565,14 +589,18 @@ final class WorkspacePersistenceController {
     func saveWorkspaceToLibrary(
         from workspace: Workspace,
         sessions: TerminalSessionRegistry,
+        browserSessions: BrowserSessionRegistry,
         historyBySessionID: [TerminalSessionID: WorkspaceSessionHistorySnapshot] = [:],
+        browserSnapshotsBySessionID: [BrowserSessionID: BrowserSessionSnapshot] = [:],
         notes: String? = nil,
         isPinned: Bool? = nil,
     ) -> LibraryItemListing? {
         upsertWorkspaceLibraryItem(
             from: workspace,
             sessions: sessions,
+            browserSessions: browserSessions,
             historyBySessionID: historyBySessionID,
+            browserSnapshotsBySessionID: browserSnapshotsBySessionID,
             notes: notes,
             isPinned: isPinned,
         )
@@ -746,6 +774,7 @@ extension WorkspacePersistenceController {
         context: NSManagedObjectContext,
         existingWorkspacesByID: inout [UUID: WorkspaceEntity],
         sessionSnapshots: [WorkspaceSessionSnapshot],
+        browserSessionSnapshots: [BrowserSessionSnapshot],
         now: Date = Date(),
     ) throws -> WorkspaceEntity {
         let workspaceEntity = existingWorkspacesByID.removeValue(forKey: workspace.id.rawValue)
@@ -756,6 +785,7 @@ extension WorkspacePersistenceController {
             from: workspace,
             context: context,
             sessionSnapshots: sessionSnapshots,
+            browserSessionSnapshots: browserSessionSnapshots,
             notes: workspaceEntity.notes,
             now: now,
         )
@@ -767,6 +797,7 @@ extension WorkspacePersistenceController {
         from workspace: Workspace,
         context: NSManagedObjectContext,
         sessionSnapshots: [WorkspaceSessionSnapshot],
+        browserSessionSnapshots: [BrowserSessionSnapshot],
         notes: String?,
         now: Date,
     ) throws {
@@ -787,6 +818,9 @@ extension WorkspacePersistenceController {
         for existingSessionSnapshot in (workspaceEntity.sessionSnapshots as? Set<PaneSessionSnapshotEntity>) ?? [] {
             context.delete(existingSessionSnapshot)
         }
+        for existingBrowserSessionSnapshot in (workspaceEntity.browserSessionSnapshots as? Set<BrowserPaneSessionSnapshotEntity>) ?? [] {
+            context.delete(existingBrowserSessionSnapshot)
+        }
         workspaceEntity.rootNode = Self.makeNodeEntity(from: workspace.root, context: context)
         let sessionSnapshotEntities = sessionSnapshots.map { sessionSnapshot -> PaneSessionSnapshotEntity in
             let entity = PaneSessionSnapshotEntity(context: context)
@@ -806,13 +840,28 @@ extension WorkspacePersistenceController {
             entity.workspace = workspaceEntity
             return entity
         }
+        let browserSessionSnapshotEntities = browserSessionSnapshots.map { sessionSnapshot -> BrowserPaneSessionSnapshotEntity in
+            let entity = BrowserPaneSessionSnapshotEntity(context: context)
+            entity.id = sessionSnapshot.id.rawValue
+            entity.title = sessionSnapshot.title
+            entity.url = sessionSnapshot.url
+            entity.lastCommittedURL = sessionSnapshot.lastCommittedURL
+            entity.state = sessionSnapshot.state.rawValue
+            entity.failureDescription = sessionSnapshot.failureDescription
+            entity.previewText = sessionSnapshot.previewText
+            entity.workspace = workspaceEntity
+            return entity
+        }
         workspaceEntity.sessionSnapshots = NSSet(array: sessionSnapshotEntities)
+        workspaceEntity.browserSessionSnapshots = NSSet(array: browserSessionSnapshotEntities)
         workspaceEntity.previewText = sessionSnapshots.lazy.compactMap(\.previewText).first
+            ?? browserSessionSnapshots.lazy.compactMap(\.previewText).first
         workspaceEntity.searchText = makeSearchText(
             title: workspace.title,
             notes: notes,
             previewText: workspaceEntity.previewText,
             sessionSnapshots: sessionSnapshots,
+            browserSessionSnapshots: browserSessionSnapshots,
         )
     }
 
@@ -849,6 +898,21 @@ extension WorkspacePersistenceController {
             ),
             historyBySessionID: historyBySessionID,
         )
+    }
+
+    private static func makeBrowserSessionSnapshots(
+        for workspace: Workspace,
+        browserSessions: BrowserSessionRegistry,
+        browserSnapshotsBySessionID: [BrowserSessionID: BrowserSessionSnapshot],
+    ) -> [BrowserSessionSnapshot] {
+        (workspace.root?.leaves() ?? []).compactMap { leaf in
+            guard let sessionID = leaf.browserSessionID else {
+                return nil
+            }
+
+            return browserSnapshotsBySessionID[sessionID]
+                ?? browserSessions.session(for: sessionID)?.makeSnapshot()
+        }
     }
 
     private nonisolated static func makeSessionSnapshots(
@@ -916,6 +980,7 @@ extension WorkspacePersistenceController {
         }
 
         let sessionSnapshots = decodeSessionSnapshots(from: workspaceEntity)
+        let browserSessionSnapshots = decodeBrowserSessionSnapshots(from: workspaceEntity)
         return WorkspaceRevision(
             id: workspaceEntity.id,
             title: workspaceEntity.title,
@@ -932,6 +997,7 @@ extension WorkspacePersistenceController {
                 root: root,
             ),
             paneSnapshotsBySessionID: sessionSnapshots,
+            browserSnapshotsBySessionID: browserSessionSnapshots,
         )
     }
 
@@ -974,6 +1040,29 @@ extension WorkspacePersistenceController {
                     Logger.persistence.error("A persisted pane session payload could not be decoded. That pane payload will be skipped during restore. Session payload ID: \(sessionSnapshot.id.uuidString, privacy: .public). Error: \(String(describing: error), privacy: .public)")
                     return nil
                 }
+            },
+        )
+    }
+
+    private nonisolated static func decodeBrowserSessionSnapshots(from workspaceEntity: WorkspaceEntity) -> [BrowserSessionID: BrowserSessionSnapshot] {
+        let snapshotEntities = workspaceEntity.browserSessionSnapshots as? Set<BrowserPaneSessionSnapshotEntity> ?? []
+        return Dictionary(
+            uniqueKeysWithValues: snapshotEntities.compactMap { sessionSnapshot in
+                guard let state = BrowserSessionSnapshotState(rawValue: sessionSnapshot.state) else {
+                    Logger.persistence.error("A persisted browser pane session payload has an invalid state value. That browser payload will be skipped during restore. Browser session payload ID: \(sessionSnapshot.id.uuidString, privacy: .public)")
+                    return nil
+                }
+
+                let snapshot = BrowserSessionSnapshot(
+                    id: BrowserSessionID(rawValue: sessionSnapshot.id),
+                    title: sessionSnapshot.title,
+                    url: sessionSnapshot.url,
+                    lastCommittedURL: sessionSnapshot.lastCommittedURL,
+                    state: state,
+                    failureDescription: sessionSnapshot.failureDescription,
+                    previewText: sessionSnapshot.previewText,
+                )
+                return (snapshot.id, snapshot)
             },
         )
     }
@@ -1059,12 +1148,19 @@ extension WorkspacePersistenceController {
         notes: String?,
         previewText: String?,
         sessionSnapshots: [WorkspaceSessionSnapshot],
+        browserSessionSnapshots: [BrowserSessionSnapshot],
     ) -> String {
         let pieces = [title, notes, previewText]
             .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
         let transcriptPieces = sessionSnapshots.compactMap(\.transcript).filter { !$0.isEmpty }
-        return (pieces + transcriptPieces).joined(separator: "\n")
+        let browserPieces = browserSessionSnapshots.flatMap { snapshot in
+            [snapshot.title, snapshot.lastCommittedURL ?? snapshot.url].compactMap {
+                $0?.trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+        }
+        .filter { !$0.isEmpty }
+        return (pieces + transcriptPieces + browserPieces).joined(separator: "\n")
     }
 
     private nonisolated static func deleteOrphanedWorkspaceRecords(

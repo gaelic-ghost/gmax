@@ -38,6 +38,13 @@ struct DetailPane: View {
                     pane: pane,
                     session: session,
                 )
+            } else if let sessionID = pane.browserSessionID,
+                      let session = model.browserSessions.session(for: sessionID) {
+                BrowserPaneDetails(
+                    workspaceTitle: workspace.title,
+                    pane: pane,
+                    session: session,
+                )
             } else {
                 UnsupportedPaneDetails(
                     workspaceTitle: workspace.title,
@@ -88,6 +95,42 @@ private struct ActivePaneDetails: View {
         }
         .padding()
         .accessibilityIdentifier("detailPane.activePane")
+    }
+}
+
+private struct BrowserPaneDetails: View {
+    let workspaceTitle: String
+    let pane: PaneLeaf
+    @ObservedObject var session: BrowserSession
+
+    var body: some View {
+        let state = switch session.state {
+            case .idle: "Idle"
+            case .loading: "Loading"
+            case let .failed(message): "Failed: \(message)"
+        }
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Active Pane")
+                .font(.title2.weight(.semibold))
+
+            Group {
+                DetailValue(label: "Workspace", value: workspaceTitle)
+                    .accessibilityIdentifier("detailPane.workspaceTitleValue")
+                DetailValue(label: "Pane Type", value: "Browser")
+                DetailValue(label: "Title", value: session.title)
+                DetailValue(label: "State", value: state)
+                DetailValue(label: "URL", value: session.url ?? "Blank")
+                DetailValue(label: "Last Committed URL", value: session.lastCommittedURL ?? "Unavailable")
+                DetailValue(label: "Can Go Back", value: session.canGoBack ? "Yes" : "No")
+                DetailValue(label: "Can Go Forward", value: session.canGoForward ? "Yes" : "No")
+                DetailValue(label: "Pane ID", value: pane.id.rawValue.uuidString)
+                DetailValue(label: "Browser Session ID", value: session.id.rawValue.uuidString)
+            }
+
+            Spacer()
+        }
+        .padding()
+        .accessibilityIdentifier("detailPane.browserPane")
     }
 }
 

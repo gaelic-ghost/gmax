@@ -308,6 +308,7 @@ struct WorkspacePersistenceTests {
             workspaces: [workspace],
             defaultLaunchConfiguration: launchConfiguration,
         )
+        let browserSessions = BrowserSessionRegistry(workspaces: [workspace])
         let pane = try #require(workspace.root?.firstLeaf())
         let session = sessions.ensureSession(id: pane.sessionID)
         session.title = "History Shell"
@@ -322,6 +323,7 @@ struct WorkspacePersistenceTests {
             persistence.saveWorkspaceToLibrary(
                 from: workspace,
                 sessions: sessions,
+                browserSessions: browserSessions,
                 historyBySessionID: [pane.sessionID: history],
             ),
         )
@@ -360,6 +362,7 @@ struct WorkspacePersistenceTests {
             liveWorkspaces: [workspace],
             selectedWorkspaceID: workspace.id,
             sessions: sessions,
+            browserSessions: BrowserSessionRegistry(workspaces: [workspace]),
             liveHistoryByWorkspaceID: [
                 workspace.id: [
                     pane.sessionID: WorkspaceSessionHistorySnapshot(
@@ -387,6 +390,57 @@ struct WorkspacePersistenceTests {
         #expect(restoredHistory.transcript == "$ pwd\n/tmp/live-restore\n")
         #expect(restoredHistory.normalScrollPosition == 0.42)
         #expect(restoredHistory.wasAlternateBufferActive == false)
+    }
+
+    @Test func `live window restore seeds browser sessions from persisted browser snapshots`() throws {
+        let persistence = WorkspacePersistenceController.inMemoryForTesting()
+        let sceneIdentity = WorkspaceSceneIdentity()
+        let browserPane = PaneLeaf(content: .browser(BrowserSessionID()))
+        let workspace = Workspace(
+            title: "Workspace 1",
+            root: .leaf(browserPane),
+        )
+        let launchContextBuilder = TestSupport.makeLaunchContextBuilder(defaultCurrentDirectory: "/tmp/gmax-tests")
+        let sessions = TerminalSessionRegistry(
+            workspaces: [workspace],
+            defaultLaunchConfiguration: launchContextBuilder.makeLaunchConfiguration(),
+        )
+        let browserSessions = BrowserSessionRegistry(workspaces: [workspace])
+        let browserSessionID = try #require(browserPane.browserSessionID)
+        let browserSession = try #require(browserSessions.session(for: browserSessionID))
+        browserSession.title = "WebKit Docs"
+        browserSession.url = "https://developer.apple.com/documentation/webkit/wkwebview"
+        browserSession.lastCommittedURL = browserSession.url
+        browserSession.state = .failed("Browser navigation failed: offline")
+
+        persistence.saveSceneState(
+            for: sceneIdentity,
+            liveWorkspaces: [workspace],
+            selectedWorkspaceID: workspace.id,
+            sessions: sessions,
+            browserSessions: browserSessions,
+            liveHistoryByWorkspaceID: [:],
+            liveBrowserSnapshotsByWorkspaceID: [
+                workspace.id: [
+                    browserSessionID: browserSession.makeSnapshot(),
+                ],
+            ],
+        )
+
+        let restoredStore = WorkspaceStore(
+            sceneIdentity: sceneIdentity,
+            persistence: persistence,
+            launchContextBuilder: launchContextBuilder,
+        )
+        let restoredWorkspace = try #require(restoredStore.workspaces.first)
+        let restoredPane = try #require(restoredWorkspace.root?.firstLeaf())
+        let restoredBrowserSessionID = try #require(restoredPane.browserSessionID)
+        let restoredBrowserSession = try #require(restoredStore.browserSessions.session(for: restoredBrowserSessionID))
+
+        #expect(restoredBrowserSession.title == "WebKit Docs")
+        #expect(restoredBrowserSession.url == "https://developer.apple.com/documentation/webkit/wkwebview")
+        #expect(restoredBrowserSession.lastCommittedURL == "https://developer.apple.com/documentation/webkit/wkwebview")
+        #expect(restoredBrowserSession.state == .failed("Browser navigation failed: offline"))
     }
 
     @Test func `opening a saved workspace while it is already live reuses the same identity and does not duplicate it`() throws {
@@ -695,6 +749,7 @@ struct WorkspacePersistenceTests {
                 workspaces: [workspace],
                 defaultLaunchConfiguration: TestSupport.makeLaunchContextBuilder(defaultCurrentDirectory: "/tmp/gmax-tests").makeLaunchConfiguration(),
             ),
+            browserSessions: BrowserSessionRegistry(workspaces: [workspace]),
         )
         let context = persistence.container.viewContext
 
@@ -724,6 +779,7 @@ struct WorkspacePersistenceTests {
                 workspaces: [firstSceneWorkspace],
                 defaultLaunchConfiguration: launchConfiguration,
             ),
+            browserSessions: BrowserSessionRegistry(workspaces: [firstSceneWorkspace]),
         )
         persistence.saveSceneState(
             for: secondSceneIdentity,
@@ -733,6 +789,7 @@ struct WorkspacePersistenceTests {
                 workspaces: [secondSceneWorkspace],
                 defaultLaunchConfiguration: launchConfiguration,
             ),
+            browserSessions: BrowserSessionRegistry(workspaces: [secondSceneWorkspace]),
         )
 
         let restoredFirstSceneWorkspaces = persistence.loadWorkspaces(for: firstSceneIdentity)
@@ -757,6 +814,7 @@ struct WorkspacePersistenceTests {
                 launchConfigurationsBySessionID: [:],
                 titlesBySessionID: [:],
                 historyBySessionID: [:],
+                browserSnapshotsBySessionID: [:],
             ),
             for: firstSceneIdentity,
             limit: WorkspacePersistenceDefaults.maxRecentlyClosedWorkspaceCount,
@@ -768,6 +826,7 @@ struct WorkspacePersistenceTests {
                 launchConfigurationsBySessionID: [:],
                 titlesBySessionID: [:],
                 historyBySessionID: [:],
+                browserSnapshotsBySessionID: [:],
             ),
             for: secondSceneIdentity,
             limit: WorkspacePersistenceDefaults.maxRecentlyClosedWorkspaceCount,
@@ -795,6 +854,7 @@ struct WorkspacePersistenceTests {
                 launchConfigurationsBySessionID: [:],
                 titlesBySessionID: [:],
                 historyBySessionID: [:],
+                browserSnapshotsBySessionID: [:],
             ),
             for: sceneIdentity,
             limit: WorkspacePersistenceDefaults.maxRecentlyClosedWorkspaceCount,
@@ -835,6 +895,7 @@ struct WorkspacePersistenceTests {
             liveWorkspaces: [recentWorkspace],
             selectedWorkspaceID: recentWorkspace.id,
             sessions: sessions,
+            browserSessions: BrowserSessionRegistry(workspaces: [recentWorkspace]),
         )
 
         try context.performAndWait {
@@ -894,6 +955,7 @@ struct WorkspacePersistenceTests {
             liveWorkspaces: [workspace],
             selectedWorkspaceID: workspace.id,
             sessions: sessions,
+            browserSessions: BrowserSessionRegistry(workspaces: [workspace]),
         )
 
         try context.performAndWait {

@@ -166,6 +166,10 @@ extension WorkspacePersistenceController {
         paneSessionSnapshotEntity.name = "PaneSessionSnapshotEntity"
         paneSessionSnapshotEntity.managedObjectClassName = NSStringFromClass(PaneSessionSnapshotEntity.self)
 
+        let browserPaneSessionSnapshotEntity = NSEntityDescription()
+        browserPaneSessionSnapshotEntity.name = "BrowserPaneSessionSnapshotEntity"
+        browserPaneSessionSnapshotEntity.managedObjectClassName = NSStringFromClass(BrowserPaneSessionSnapshotEntity.self)
+
         let workspaceID = attribute(name: "id", type: .UUIDAttributeType)
         let workspaceTitle = attribute(name: "title", type: .stringAttributeType)
         let migrationDefaultDate = Date()
@@ -314,6 +318,14 @@ extension WorkspacePersistenceController {
         let paneSessionSnapshotTranscriptLineCount = attribute(name: "transcriptLineCount", type: .integer64AttributeType)
         let paneSessionSnapshotPreviewText = attribute(name: "previewText", type: .stringAttributeType, isOptional: true)
 
+        let browserPaneSessionSnapshotID = attribute(name: "id", type: .UUIDAttributeType)
+        let browserPaneSessionSnapshotTitle = attribute(name: "title", type: .stringAttributeType)
+        let browserPaneSessionSnapshotURL = attribute(name: "url", type: .stringAttributeType, isOptional: true)
+        let browserPaneSessionSnapshotLastCommittedURL = attribute(name: "lastCommittedURL", type: .stringAttributeType, isOptional: true)
+        let browserPaneSessionSnapshotState = attribute(name: "state", type: .stringAttributeType)
+        let browserPaneSessionSnapshotFailureDescription = attribute(name: "failureDescription", type: .stringAttributeType, isOptional: true)
+        let browserPaneSessionSnapshotPreviewText = attribute(name: "previewText", type: .stringAttributeType, isOptional: true)
+
         let workspaceRootNode = NSRelationshipDescription()
         workspaceRootNode.name = "rootNode"
         workspaceRootNode.destinationEntity = paneNodeEntity
@@ -403,6 +415,25 @@ extension WorkspacePersistenceController {
         workspaceSessionSnapshots.inverseRelationship = paneSessionSnapshotWorkspace
         paneSessionSnapshotWorkspace.inverseRelationship = workspaceSessionSnapshots
 
+        let workspaceBrowserSessionSnapshots = NSRelationshipDescription()
+        workspaceBrowserSessionSnapshots.name = "browserSessionSnapshots"
+        workspaceBrowserSessionSnapshots.destinationEntity = browserPaneSessionSnapshotEntity
+        workspaceBrowserSessionSnapshots.minCount = 0
+        workspaceBrowserSessionSnapshots.maxCount = 0
+        workspaceBrowserSessionSnapshots.isOptional = true
+        workspaceBrowserSessionSnapshots.isOrdered = false
+        workspaceBrowserSessionSnapshots.deleteRule = .cascadeDeleteRule
+
+        let browserPaneSessionSnapshotWorkspace = NSRelationshipDescription()
+        browserPaneSessionSnapshotWorkspace.name = "workspace"
+        browserPaneSessionSnapshotWorkspace.destinationEntity = workspaceEntity
+        browserPaneSessionSnapshotWorkspace.minCount = 0
+        browserPaneSessionSnapshotWorkspace.maxCount = 1
+        browserPaneSessionSnapshotWorkspace.deleteRule = .nullifyDeleteRule
+
+        workspaceBrowserSessionSnapshots.inverseRelationship = browserPaneSessionSnapshotWorkspace
+        browserPaneSessionSnapshotWorkspace.inverseRelationship = workspaceBrowserSessionSnapshots
+
         workspaceEntity.properties = [
             workspaceID,
             workspaceTitle,
@@ -418,6 +449,7 @@ extension WorkspacePersistenceController {
             workspaceRootNode,
             workspacePlacements,
             workspaceSessionSnapshots,
+            workspaceBrowserSessionSnapshots,
         ]
         paneNodeEntity.properties = [
             nodeID,
@@ -508,6 +540,16 @@ extension WorkspacePersistenceController {
             paneSessionSnapshotPreviewText,
             paneSessionSnapshotWorkspace,
         ]
+        browserPaneSessionSnapshotEntity.properties = [
+            browserPaneSessionSnapshotID,
+            browserPaneSessionSnapshotTitle,
+            browserPaneSessionSnapshotURL,
+            browserPaneSessionSnapshotLastCommittedURL,
+            browserPaneSessionSnapshotState,
+            browserPaneSessionSnapshotFailureDescription,
+            browserPaneSessionSnapshotPreviewText,
+            browserPaneSessionSnapshotWorkspace,
+        ]
 
         model.entities = [
             workspaceEntity,
@@ -518,6 +560,7 @@ extension WorkspacePersistenceController {
             windowWorkspaceMembershipEntity,
             workspaceWindowStateEntity,
             paneSessionSnapshotEntity,
+            browserPaneSessionSnapshotEntity,
         ]
         return model
     }

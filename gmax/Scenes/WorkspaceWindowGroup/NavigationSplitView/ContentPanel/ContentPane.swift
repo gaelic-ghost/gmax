@@ -99,6 +99,26 @@ private struct ContentPaneNodeView: View {
                                 onClosePane(leaf.id)
                             },
                         )
+                    } else if let sessionID = leaf.browserSessionID {
+                        let controller = model.browserPaneControllers.controller(
+                            for: leaf,
+                            session: model.browserSessions.ensureSession(id: sessionID),
+                        )
+                        BrowserPaneLeafView(
+                            pane: leaf,
+                            controller: controller,
+                            session: controller.session,
+                            focusedTarget: focusedTarget,
+                            onSplitRight: {
+                                onSplitPane(leaf.id, .right)
+                            },
+                            onSplitDown: {
+                                onSplitPane(leaf.id, .down)
+                            },
+                            onClose: {
+                                onClosePane(leaf.id)
+                            },
+                        )
                     } else {
                         ContentPaneUnsupportedLeafView(
                             pane: leaf,
@@ -133,6 +153,69 @@ private struct ContentPaneNodeView: View {
                         onClosePane: onClosePane,
                     )
                 }
+        }
+    }
+}
+
+private struct BrowserPaneLeafView: View {
+    let pane: PaneLeaf
+    let controller: BrowserPaneController
+    @ObservedObject var session: BrowserSession
+
+    let focusedTarget: FocusState<WorkspaceFocusTarget?>.Binding
+    let onSplitRight: () -> Void
+    let onSplitDown: () -> Void
+    let onClose: () -> Void
+
+    var body: some View {
+        let isFocused = focusedTarget.wrappedValue == .pane(pane.id)
+        let title = session.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let state = switch session.state {
+            case .idle: "Browser ready"
+            case .loading: "Browser loading"
+            case let .failed(message): message
+        }
+        let accessibilityLabel = title.isEmpty || title == "Browser" ? "Browser pane" : "\(title) browser pane"
+        let accessibilityValue = [
+            isFocused ? "Focused" : nil,
+            state,
+            session.url.flatMap { $0.isEmpty ? nil : "URL \($0)" },
+        ]
+        .compactMap(\.self)
+        .joined(separator: ". ")
+        let focusBackgroundStyle = isFocused ? AnyShapeStyle(.tint.opacity(0.18)) : AnyShapeStyle(.quaternary.opacity(0.35))
+        BrowserPaneView(
+            controller: controller,
+            session: session,
+            onSplitRight: onSplitRight,
+            onSplitDown: onSplitDown,
+            onClose: onClose,
+        )
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background {
+            GeometryReader { geometry in
+                Color.clear.preference(
+                    key: ContentPaneFramePreferenceKey.self,
+                    value: [pane.id: geometry.frame(in: .named("workspace-pane-tree"))],
+                )
+            }
+        }
+        .background(focusBackgroundStyle)
+        .contentShape(Rectangle())
+        .focusable(interactions: .edit)
+        .focused(focusedTarget, equals: .pane(pane.id))
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(accessibilityLabel)
+        .accessibilityValue(accessibilityValue)
+        .accessibilityIdentifier("contentPane.browserLeaf.\(pane.id.rawValue.uuidString)")
+        .accessibilityAction(named: Text("Split Right")) {
+            onSplitRight()
+        }
+        .accessibilityAction(named: Text("Split Down")) {
+            onSplitDown()
+        }
+        .accessibilityAction(named: Text("Close Pane")) {
+            onClose()
         }
     }
 }

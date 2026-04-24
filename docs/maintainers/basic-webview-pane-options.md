@@ -69,21 +69,26 @@ What is true now:
 
 - the pane tree can already encode terminal versus browser leaf identity
 - persistence can already encode and decode browser leaf payloads honestly
-- terminal-only runtime surfaces now skip non-terminal leaves instead of
-  assuming every leaf has a terminal session
-- the content and inspector surfaces have a temporary unsupported-pane
-  placeholder for non-terminal leaves
+- browser panes now have real runtime ownership through
+  `BrowserSessionRegistry` and `BrowserPaneControllerStore`
+- browser leaves now render through the active `WKWebView` host path instead of
+  the earlier unsupported-pane placeholder
+- browser session metadata now persists and restores basic pane state including
+  title, URL, last committed URL, and loading or failure text
 
 What is still terminal-specific:
 
-- `TerminalSessionRegistry` is the only leaf-session registry
-- `TerminalPaneControllerStore` is the only leaf-controller cache
+- `TerminalSessionRegistry` remains the terminal-session registry
+- `TerminalPaneControllerStore` remains the terminal-controller cache
 - `ContentPaneLeafView` is still terminal-only
-- there is no `BrowserSessionRegistry`, `BrowserPaneController`, or WebKit host
-  yet
+- browser history-stack persistence is still deferred
+- there are not yet user-facing browser pane creation commands or browser
+  settings surfaces
 
-So the current shell is no longer lying about leaf content, but it is still
-terminal-only at the runtime and rendering level.
+So the current shell is no longer lying about leaf content, and it now has a
+real browser runtime and rendering path. The remaining work is mostly about the
+user-facing creation surface, browser settings, and any deeper persistence we
+choose to add later.
 
 ## Apple Framework Behavior This Plan Relies On
 
@@ -393,9 +398,10 @@ Primary source edits:
   - clone, restore, recent-history capture, and library reopen paths only for
     terminal leaves where terminal session state actually exists
 - `gmax/Scenes/WorkspaceWindowGroup/NavigationSplitView/ContentPanel/ContentPane.swift`
-  - render a temporary unsupported-pane placeholder for non-terminal leaves
+  - render a temporary browser placeholder for browser leaves and an
+    unsupported-pane fallback for anything else
 - `gmax/Scenes/WorkspaceWindowGroup/NavigationSplitView/DetailPanel/DetailPane.swift`
-  - show temporary inspector metadata for unsupported non-terminal panes
+  - show temporary browser inspector metadata and an unsupported-pane fallback
 
 Important rule:
 
@@ -426,13 +432,24 @@ Primary goal:
 - give browser leaves a real runtime model without disturbing the existing
   terminal runtime
 
-Suggested new types:
+Primary source edits:
 
 - `gmax/Browser/Sessions/BrowserSession.swift`
 - `gmax/Browser/Sessions/BrowserSessionRegistry.swift`
 - `gmax/Browser/Panes/BrowserPaneController.swift`
 - `gmax/Browser/Panes/BrowserPaneControllerStore.swift`
-- `gmax/Browser/Model/BrowserSessionSnapshot.swift`
+- `gmax/Scenes/WorkspaceWindowGroup/WorkspaceStore.swift`
+  - own browser session and controller stores alongside the terminal ones
+- `gmax/Scenes/WorkspaceWindowGroup/WorkspaceStore+PaneActions.swift`
+  - trim browser runtime state when browser leaves disappear
+- `gmax/Scenes/WorkspaceWindowGroup/NavigationSplitView/ContentPanel/ContentPane.swift`
+  - resolve `.browser(sessionID)` into a browser-aware placeholder view backed
+    by a real browser session
+- `gmax/Scenes/WorkspaceWindowGroup/NavigationSplitView/DetailPanel/DetailPane.swift`
+  - inspect browser session metadata instead of falling back to generic
+    unsupported-pane copy
+- `gmaxTests/WorkspaceLifecycleTests.swift`
+  - cover browser-session bootstrap and cleanup
 
 Suggested first browser-session fields:
 
@@ -457,6 +474,17 @@ What this slice buys us:
 - a browser leaf can exist as a real runtime thing
 - `ContentPane` will have somewhere honest to go when it sees
   `.browser(sessionID)`
+
+Current status:
+
+- Slice 2 runtime groundwork is landed and build-verified
+- focused persistence and lifecycle tests are green with browser-session
+  bootstrap and cleanup coverage
+- browser panes now have real session and controller ownership
+- browser duplication now remints `BrowserSessionID` and seeds the new session
+  from the source pane's last committed URL
+- browser persistence now carries basic browser-session metadata instead of
+  stopping at leaf identity alone
 
 ### Slice 3: Add The WebView Host
 
@@ -497,6 +525,21 @@ What this slice buys us:
 - a browser pane becomes a real pane-sized interactive surface
 - we can validate focus, resize, and close behavior against the current shell
 
+Current status:
+
+- Slice 3 WebKit hosting is landed and build-verified
+- `BrowserPaneView`, its coordinator, and the shared WebKit factory are now the
+  active browser-pane path
+- browser leaves render a real `WKWebView` instead of the earlier placeholder
+  card
+- ordinary `http`, `https`, `about`, and `file` navigation stays in-pane
+- special URL schemes hand off through the system instead of being forced into
+  the embedded browser
+- browser session restore now reloads basic browser metadata and the last
+  committed URL across live restore, saved-workspace reopen, and recent-history
+  reopen paths
+- browser history-stack persistence is still deferred
+
 ### Slice 4: Connect `ContentPane` To Mixed Leaves
 
 This is the shell integration slice.
@@ -515,6 +558,14 @@ Primary source edits:
     chrome around it
 - `gmax/Scenes/WorkspaceWindowGroup/WorkspaceStore.swift`
   - instantiate and retain browser registries and browser controller stores
+
+Current status:
+
+- the active content tree already switches on `PaneLeaf.content`
+- terminal leaves still use the existing terminal-pane path
+- browser leaves now resolve into the real WebKit-backed browser pane path
+- later browser work can focus on commands, persistence, and settings instead of
+  basic mixed-leaf rendering
 
 Recommended direction:
 

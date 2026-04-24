@@ -113,7 +113,7 @@ extension WorkspaceStore {
         }
 
         workspaces[workspaceIndex].root = root.removingPane(id: paneID)
-        removeUnreferencedSessions()
+        removeUnreferencedPaneRuntime()
         schedulePersistenceSave(reason: .paneClosed)
     }
 
@@ -134,12 +134,15 @@ extension WorkspaceStore {
 }
 
 extension WorkspaceStore {
-    func removeUnreferencedSessions() {
+    func removeUnreferencedPaneRuntime() {
         let activeLeaves = workspaces.flatMap { workspace in
             (workspace.root?.leaves() ?? []).map { (workspace.id, $0) }
         }
-        let activeSessionIDs = Set(activeLeaves.compactMap(\.1.terminalSessionID))
-        sessions.removeSessions(notIn: activeSessionIDs)
+        let activeTerminalSessionIDs = Set(activeLeaves.compactMap(\.1.terminalSessionID))
+        let activeBrowserSessionIDs = Set(activeLeaves.compactMap(\.1.browserSessionID))
+        sessions.removeSessions(notIn: activeTerminalSessionIDs)
+        browserSessions.removeSessions(notIn: activeBrowserSessionIDs)
         paneControllers.removeControllers(notIn: Set(activeLeaves.map(\.1.id)))
+        browserPaneControllers.removeControllers(notIn: Set(activeLeaves.map(\.1.id)))
     }
 }

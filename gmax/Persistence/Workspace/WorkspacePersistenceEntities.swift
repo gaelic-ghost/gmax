@@ -34,6 +34,7 @@ final class WorkspaceEntity: NSManagedObject {
     @NSManaged var rootNode: PaneNodeEntity?
     @NSManaged var placements: NSSet?
     @NSManaged var sessionSnapshots: NSSet?
+    @NSManaged var browserSessionSnapshots: NSSet?
 }
 
 @objc(PaneNodeEntity)
@@ -130,6 +131,18 @@ final class PaneSessionSnapshotEntity: NSManagedObject {
     @NSManaged var wasAlternateBufferActive: Bool
     @NSManaged var transcriptByteCount: Int64
     @NSManaged var transcriptLineCount: Int64
+    @NSManaged var previewText: String?
+    @NSManaged var workspace: WorkspaceEntity?
+}
+
+@objc(BrowserPaneSessionSnapshotEntity)
+final class BrowserPaneSessionSnapshotEntity: NSManagedObject {
+    @NSManaged var id: UUID
+    @NSManaged var title: String
+    @NSManaged var url: String?
+    @NSManaged var lastCommittedURL: String?
+    @NSManaged var state: String
+    @NSManaged var failureDescription: String?
     @NSManaged var previewText: String?
     @NSManaged var workspace: WorkspaceEntity?
 }

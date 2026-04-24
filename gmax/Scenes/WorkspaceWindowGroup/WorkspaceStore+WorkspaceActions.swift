@@ -125,6 +125,10 @@ extension WorkspaceStore {
 
         for leaf in closedWorkspace.revision.workspace.root?.leaves() ?? [] {
             guard let sessionID = leaf.terminalSessionID else {
+                if let browserSessionID = leaf.browserSessionID,
+                   let snapshot = closedWorkspace.revision.browserSnapshotsBySessionID[browserSessionID] {
+                    _ = browserSessions.ensureSession(id: browserSessionID, snapshot: snapshot)
+                }
                 continue
             }
             let paneSnapshot = closedWorkspace.revision.paneSnapshotsBySessionID[sessionID]
@@ -162,11 +166,14 @@ extension WorkspaceStore {
             for: workspace,
             explicitTranscriptsBySessionID: transcriptsBySessionID,
         )
+        let browserSnapshots = captureBrowserSnapshots(for: workspace)
 
         let summary = persistence.saveWorkspaceToLibrary(
             from: workspace,
             sessions: sessions,
+            browserSessions: browserSessions,
             historyBySessionID: resolvedHistory,
+            browserSnapshotsBySessionID: browserSnapshots,
         )
         if let summary {
             objectWillChange.send()
@@ -237,6 +244,7 @@ extension WorkspaceStore {
         let liveWorkspaces: [Workspace]
         let selectedWorkspaceID: WorkspaceID?
         let liveHistoryByWorkspaceID: [WorkspaceID: [TerminalSessionID: WorkspaceSessionHistorySnapshot]]
+        let liveBrowserSnapshotsByWorkspaceID: [WorkspaceID: [BrowserSessionID: BrowserSessionSnapshot]]
     }
 
     private func uniqueWorkspaceTitle(startingWith baseTitle: String) -> String {
@@ -272,6 +280,7 @@ extension WorkspaceStore {
         var launchConfigurationsBySessionID: [TerminalSessionID: TerminalLaunchConfiguration] = [:]
         var historyBySessionID: [TerminalSessionID: WorkspaceSessionHistorySnapshot] = [:]
         var titlesBySessionID: [TerminalSessionID: String] = [:]
+        var restoredBrowserSnapshotsBySessionID: [BrowserSessionID: BrowserSessionSnapshot] = [:]
         let restoredWorkspace = Workspace(
             id: WorkspaceID(rawValue: savedWorkspace.id),
             title: {
@@ -286,6 +295,8 @@ extension WorkspaceStore {
                     launchConfigurationsBySessionID: &launchConfigurationsBySessionID,
                     historyBySessionID: &historyBySessionID,
                     titlesBySessionID: &titlesBySessionID,
+                    sourceBrowserSnapshotsBySessionID: savedWorkspace.browserSnapshotsBySessionID,
+                    restoredBrowserSnapshotsBySessionID: &restoredBrowserSnapshotsBySessionID,
                 )
             },
         )
@@ -297,6 +308,9 @@ extension WorkspaceStore {
             session.currentDirectory = launchConfiguration.currentDirectory
             session.setRestoredHistory(historyBySessionID[sessionID])
         }
+        for (sessionID, snapshot) in restoredBrowserSnapshotsBySessionID {
+            _ = browserSessions.ensureSession(id: sessionID, snapshot: snapshot)
+        }
 
         persistence.markLibraryItemOpened(libraryItemID)
         Logger.workspace.notice("Opened a workspace from a library item. Workspace title: \(savedWorkspace.title, privacy: .public). Library item ID: \(libraryItemID.uuidString, privacy: .public). Workspace ID: \(restoredWorkspace.id.rawValue.uuidString, privacy: .public). Restored pane count: \((restoredWorkspace.root?.leaves().count ?? 0))")
@@ -307,22 +321,39 @@ extension WorkspaceStore {
     private func duplicateNode(_ node: PaneNode) -> PaneNode {
         switch node {
             case let .leaf(leaf):
-                guard let sourceSessionID = leaf.terminalSessionID else {
-                    return .leaf(PaneLeaf(content: leaf.content))
+                if let sourceSessionID = leaf.terminalSessionID {
+                    let sourceSession = sessions.ensureSession(id: sourceSessionID)
+                    let inheritedCurrentDirectory = sourceSession.currentDirectory
+                        ?? sourceSession.launchConfiguration.currentDirectory
+                    let clonedLeaf = PaneLeaf()
+                    if let sessionID = clonedLeaf.terminalSessionID {
+                        _ = sessions.ensureSession(
+                            id: sessionID,
+                            launchConfiguration: launchContextBuilder.makeLaunchConfiguration(
+                                currentDirectory: inheritedCurrentDirectory,
+                            ),
+                        )
+                    }
+                    return .leaf(clonedLeaf)
                 }
-                let sourceSession = sessions.ensureSession(id: sourceSessionID)
-                let inheritedCurrentDirectory = sourceSession.currentDirectory
-                    ?? sourceSession.launchConfiguration.currentDirectory
-                let clonedLeaf = PaneLeaf()
-                if let sessionID = clonedLeaf.terminalSessionID {
-                    _ = sessions.ensureSession(
-                        id: sessionID,
-                        launchConfiguration: launchContextBuilder.makeLaunchConfiguration(
-                            currentDirectory: inheritedCurrentDirectory,
-                        ),
-                    )
+
+                if let sourceSessionID = leaf.browserSessionID {
+                    let clonedLeaf = PaneLeaf(content: .browser(BrowserSessionID()))
+                    if let clonedSessionID = clonedLeaf.browserSessionID {
+                        let sourceSession = browserSessions.session(for: sourceSessionID)
+                        let clonedSession = browserSessions.ensureSession(id: clonedSessionID)
+                        let restoredURL = sourceSession?.lastCommittedURL ?? sourceSession?.url
+                        clonedSession.title = sourceSession?.title ?? "Browser"
+                        clonedSession.lastCommittedURL = restoredURL
+                        clonedSession.url = restoredURL
+                        clonedSession.state = .idle
+                        clonedSession.canGoBack = false
+                        clonedSession.canGoForward = false
+                    }
+                    return .leaf(clonedLeaf)
                 }
-                return .leaf(clonedLeaf)
+
+                return .leaf(PaneLeaf(content: leaf.content))
 
             case let .split(split):
                 return .split(
@@ -349,11 +380,20 @@ extension WorkspaceStore {
                 )
             },
         )
+        let browserSnapshotsByWorkspaceID = Dictionary(
+            uniqueKeysWithValues: workspacesSnapshot.map { workspace in
+                (
+                    workspace.id,
+                    captureBrowserSnapshots(for: workspace),
+                )
+            },
+        )
 
         return PersistenceSnapshot(
             liveWorkspaces: workspacesSnapshot,
             selectedWorkspaceID: persistedSelectedWorkspaceID,
             liveHistoryByWorkspaceID: historyByWorkspaceID,
+            liveBrowserSnapshotsByWorkspaceID: browserSnapshotsByWorkspaceID,
         )
     }
 
@@ -372,7 +412,9 @@ extension WorkspaceStore {
             liveWorkspaces: snapshot.liveWorkspaces,
             selectedWorkspaceID: snapshot.selectedWorkspaceID,
             sessions: sessions,
+            browserSessions: browserSessions,
             liveHistoryByWorkspaceID: snapshot.liveHistoryByWorkspaceID,
+            liveBrowserSnapshotsByWorkspaceID: snapshot.liveBrowserSnapshotsByWorkspaceID,
         )
     }
 
@@ -420,10 +462,13 @@ extension WorkspaceStore {
                 for: workspace,
                 explicitTranscriptsBySessionID: explicitTranscriptsBySessionID,
             )
+            let browserSnapshots = captureBrowserSnapshots(for: workspace)
             _ = persistence.saveWorkspaceToLibrary(
                 from: workspace,
                 sessions: sessions,
+                browserSessions: browserSessions,
                 historyBySessionID: resolvedHistory,
+                browserSnapshotsBySessionID: browserSnapshots,
             )
         }
 
@@ -435,7 +480,7 @@ extension WorkspaceStore {
         }
 
         workspaces.remove(at: workspaceIndex)
-        removeUnreferencedSessions()
+        removeUnreferencedPaneRuntime()
 
         let nextSelectedWorkspaceID = workspaces.isEmpty ? nil : workspaces[min(workspaceIndex, workspaces.count - 1)].id
 
@@ -474,6 +519,7 @@ extension WorkspaceStore {
             for: workspace,
             explicitTranscriptsBySessionID: [:],
         )
+        let browserSnapshotsBySessionID = captureBrowserSnapshots(for: workspace)
 
         persistence.recordWorkspaceInRecentHistory(
             WindowWorkspaceHistoryInput(
@@ -482,6 +528,7 @@ extension WorkspaceStore {
                 launchConfigurationsBySessionID: launchConfigurationsBySessionID,
                 titlesBySessionID: titlesBySessionID,
                 historyBySessionID: historyBySessionID,
+                browserSnapshotsBySessionID: browserSnapshotsBySessionID,
             ),
             for: sceneIdentity,
             limit: WorkspacePersistenceDefaults.maxRecentlyClosedWorkspaceCount,
@@ -524,20 +571,47 @@ extension WorkspaceStore {
         return resolvedHistory
     }
 
+    private func captureBrowserSnapshots(
+        for workspace: Workspace,
+    ) -> [BrowserSessionID: BrowserSessionSnapshot] {
+        Dictionary(
+            uniqueKeysWithValues: (workspace.root?.leaves() ?? []).compactMap { leaf in
+                guard let sessionID = leaf.browserSessionID,
+                      let session = browserSessions.session(for: sessionID)
+                else {
+                    return nil
+                }
+
+                return (sessionID, session.makeSnapshot())
+            },
+        )
+    }
+
     private func restoreNode(
         _ node: PaneNode,
         paneSnapshotsBySessionID: [TerminalSessionID: WorkspaceSessionSnapshot],
         launchConfigurationsBySessionID: inout [TerminalSessionID: TerminalLaunchConfiguration],
         historyBySessionID: inout [TerminalSessionID: WorkspaceSessionHistorySnapshot],
         titlesBySessionID: inout [TerminalSessionID: String],
+        sourceBrowserSnapshotsBySessionID: [BrowserSessionID: BrowserSessionSnapshot],
+        restoredBrowserSnapshotsBySessionID: inout [BrowserSessionID: BrowserSessionSnapshot],
     ) -> PaneNode {
         switch node {
             case let .leaf(leaf):
                 let restoredLeaf = switch leaf.content {
                     case .terminal:
                         PaneLeaf()
-                    case let .browser(sessionID):
-                        PaneLeaf(content: .browser(sessionID))
+                    case .browser:
+                        PaneLeaf(content: .browser(BrowserSessionID()))
+                }
+                if let sourceBrowserSessionID = leaf.browserSessionID,
+                   let restoredBrowserSessionID = restoredLeaf.browserSessionID {
+                    if let snapshot = sourceBrowserSnapshotsBySessionID[sourceBrowserSessionID] {
+                        var restoredSnapshot = snapshot
+                        restoredSnapshot.id = restoredBrowserSessionID
+                        restoredBrowserSnapshotsBySessionID[restoredBrowserSessionID] = restoredSnapshot
+                    }
+                    return .leaf(restoredLeaf)
                 }
                 guard let sourceSessionID = leaf.terminalSessionID,
                       let restoredSessionID = restoredLeaf.terminalSessionID
@@ -567,6 +641,8 @@ extension WorkspaceStore {
                             launchConfigurationsBySessionID: &launchConfigurationsBySessionID,
                             historyBySessionID: &historyBySessionID,
                             titlesBySessionID: &titlesBySessionID,
+                            sourceBrowserSnapshotsBySessionID: sourceBrowserSnapshotsBySessionID,
+                            restoredBrowserSnapshotsBySessionID: &restoredBrowserSnapshotsBySessionID,
                         ),
                         second: restoreNode(
                             split.second,
@@ -574,6 +650,8 @@ extension WorkspaceStore {
                             launchConfigurationsBySessionID: &launchConfigurationsBySessionID,
                             historyBySessionID: &historyBySessionID,
                             titlesBySessionID: &titlesBySessionID,
+                            sourceBrowserSnapshotsBySessionID: sourceBrowserSnapshotsBySessionID,
+                            restoredBrowserSnapshotsBySessionID: &restoredBrowserSnapshotsBySessionID,
                         ),
                     ),
                 )
