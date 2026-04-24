@@ -42,6 +42,7 @@ struct ZshShellIntegrationTests {
         )
 
         let zshrc = try String(contentsOf: wrapperDirectory.appendingPathComponent(".zshrc"))
+        let zshenv = try String(contentsOf: wrapperDirectory.appendingPathComponent(".zshenv"))
         let integrationScript = try String(
             contentsOf: wrapperDirectory.appendingPathComponent("gmax-shell-integration.zsh"),
         )
@@ -49,6 +50,8 @@ struct ZshShellIntegrationTests {
         #expect(fileManager.fileExists(atPath: wrapperDirectory.appendingPathComponent(".zshenv").path))
         #expect(fileManager.fileExists(atPath: wrapperDirectory.appendingPathComponent(".zprofile").path))
         #expect(fileManager.fileExists(atPath: wrapperDirectory.appendingPathComponent(".zlogin").path))
+        #expect(zshenv.contains("typeset -g GMAX_SHELL_INTEGRATION_WRAPPER_ZDOTDIR=\"${ZDOTDIR:-}\""))
+        #expect(zshenv.contains("export ZDOTDIR=\"${GMAX_SHELL_INTEGRATION_WRAPPER_ZDOTDIR}\""))
         #expect(zshrc.contains("typeset -g GMAX_SHELL_INTEGRATION_WRAPPER_ZDOTDIR=\"${ZDOTDIR:-}\""))
         #expect(zshrc.contains("source \"${GMAX_SHELL_INTEGRATION_WRAPPER_ZDOTDIR}/gmax-shell-integration.zsh\""))
         #expect(integrationScript.contains("gmax_emit_osc '133;A'"))
@@ -73,6 +76,24 @@ struct ZshShellIntegrationTests {
 
         #expect(!zshrc.contains("source \"${ZDOTDIR}/gmax-shell-integration.zsh\""))
         #expect(zshrc.contains("GMAX_SHELL_INTEGRATION_WRAPPER_ZDOTDIR"))
+    }
+
+    @Test func `wrapper zshenv restores wrapper zdotdir after sourcing user zshenv`() throws {
+        let fileManager = FileManager.default
+        let rootDirectory = fileManager.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? fileManager.removeItem(at: rootDirectory) }
+
+        let wrapperDirectory = try ZshShellIntegration.install(
+            originalZdotdir: "/tmp/original-zdotdir",
+            fileManager: fileManager,
+            rootDirectory: rootDirectory,
+        )
+
+        let zshenv = try String(contentsOf: wrapperDirectory.appendingPathComponent(".zshenv"))
+
+        #expect(zshenv.contains("typeset -g GMAX_SHELL_INTEGRATION_WRAPPER_ZDOTDIR"))
+        #expect(zshenv.contains("export ZDOTDIR=\"${GMAX_SHELL_INTEGRATION_WRAPPER_ZDOTDIR}\""))
     }
 
     @Test func `environment overlay stays empty for non-zsh shells`() {

@@ -52,38 +52,50 @@ struct TerminalHostEventParser {
 
         bufferedBytes.append(contentsOf: bytes)
         var events: [TerminalHostEvent] = []
+        var searchIndex = 0
 
-        while let event = nextEvent() {
+        while true {
+            guard let event = nextEvent(searchIndex: &searchIndex) else {
+                break
+            }
+
             events.append(event)
+        }
+
+        if searchIndex >= bufferedBytes.count {
+            bufferedBytes.removeAll(keepingCapacity: true)
+        } else if searchIndex > 0 {
+            bufferedBytes.removeFirst(searchIndex)
         }
 
         return events
     }
 
-    private mutating func nextEvent() -> TerminalHostEvent? {
+    private func nextEvent(searchIndex: inout Int) -> TerminalHostEvent? {
         while true {
-            guard !bufferedBytes.isEmpty else {
+            guard searchIndex < bufferedBytes.count else {
+                return nil
+            }
+            guard let escapeIndex = bufferedBytes[searchIndex...].firstIndex(of: Self.escape) else {
+                searchIndex = bufferedBytes.count
                 return nil
             }
 
-            if bufferedBytes[0] != Self.escape {
-                bufferedBytes.removeFirst()
+            searchIndex = escapeIndex
+
+            guard searchIndex + 1 < bufferedBytes.count else {
+                return nil
+            }
+            guard bufferedBytes[searchIndex + 1] == Self.osc else {
+                searchIndex += 1
                 continue
             }
-
-            guard bufferedBytes.count >= 2 else {
-                return nil
-            }
-            guard bufferedBytes[1] == Self.osc else {
-                bufferedBytes.removeFirst()
-                continue
-            }
-            guard let terminatorRange = oscTerminatorRange(in: bufferedBytes) else {
+            guard let terminatorRange = oscTerminatorRange(in: bufferedBytes, startingAt: searchIndex + 2) else {
                 return nil
             }
 
-            let payload = Array(bufferedBytes[2..<terminatorRange.lowerBound])
-            bufferedBytes.removeFirst(terminatorRange.upperBound)
+            let payload = Array(bufferedBytes[(searchIndex + 2)..<terminatorRange.lowerBound])
+            searchIndex = terminatorRange.upperBound
             guard let payloadString = String(bytes: payload, encoding: .utf8) else {
                 continue
             }
@@ -124,8 +136,8 @@ struct TerminalHostEventParser {
         }
     }
 
-    private func oscTerminatorRange(in bytes: [UInt8]) -> Range<Int>? {
-        var index = 2
+    private func oscTerminatorRange(in bytes: [UInt8], startingAt startIndex: Int) -> Range<Int>? {
+        var index = startIndex
         while index < bytes.count {
             let byte = bytes[index]
             if byte == Self.bel {
