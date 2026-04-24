@@ -8,6 +8,8 @@
 import SwiftUI
 
 struct ContentPaneLeafView: View {
+    @State private var chromeRevealID = 0
+
     let pane: PaneLeaf
     let controller: TerminalPaneController
     @ObservedObject var session: TerminalSession
@@ -42,6 +44,13 @@ struct ContentPaneLeafView: View {
             .focused(focusedTarget, equals: .pane(pane.id))
             .background(ContentPaneFrameReporter(paneID: pane.id))
             .background(focusBackgroundStyle)
+            .onChange(of: isFocused) { _, newValue in
+                guard newValue else {
+                    return
+                }
+
+                chromeRevealID += 1
+            }
             .contentShape(Rectangle())
             .accessibilityElement(children: .contain)
             .accessibilityLabel(accessibilityLabel)
@@ -65,30 +74,41 @@ struct ContentPaneLeafView: View {
     }
 
     private func paneSurface(isFocused: Bool, paneHostIdentity: String) -> some View {
-        ZStack(alignment: .topLeading) {
-            TerminalPaneView(
-                controller: controller,
-                session: session,
-                onRestart: restartShell,
-                onSplitRight: onSplitRight,
-                onSplitDown: onSplitDown,
-                onClose: onClose,
-            )
-            // The pane host must stay keyed to the actual pane leaf, not just relaunches,
-            // or SwiftUI can reuse a surviving sibling's coordinator after split collapse.
-            .id(paneHostIdentity)
-            .background(.black)
-
+        TerminalPaneView(
+            controller: controller,
+            session: session,
+            onRestart: restartShell,
+            onSplitRight: onSplitRight,
+            onSplitDown: onSplitDown,
+            onClose: onClose,
+        )
+        // The pane host must stay keyed to the actual pane leaf, not just relaunches,
+        // or SwiftUI can reuse a surviving sibling's coordinator after split collapse.
+        .id(paneHostIdentity)
+        .background(.black)
+        .overlay(alignment: .top) {
+            ContentPaneLeafHeader(title: session.title, revealID: chromeRevealID)
+                .padding(.top, 12)
+        }
+        .overlay(alignment: .topTrailing) {
+            if isFocused {
+                ContentPaneLeafFocusIndicator()
+                    .padding([.top, .trailing], 12)
+            }
+        }
+        .overlay(alignment: .bottomLeading) {
+            if let currentDirectory = session.currentDirectory, !currentDirectory.isEmpty {
+                ContentPaneLeafFooter(
+                    currentDirectory: currentDirectory,
+                    revealID: chromeRevealID,
+                )
+                .padding([.leading, .bottom], 12)
+            }
+        }
+        .overlay {
             if case let .exited(exitCode) = session.state {
                 exitedSessionOverlay(exitCode: exitCode)
             }
-
-            ContentPaneLeafHeader(
-                title: session.title,
-                currentDirectory: session.currentDirectory,
-                isFocused: isFocused,
-            )
-            .padding(12)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -123,30 +143,100 @@ struct ContentPaneLeafView: View {
 
 private struct ContentPaneLeafHeader: View {
     let title: String
-    let currentDirectory: String?
-    let isFocused: Bool
+    let revealID: Int
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 8) {
-                Text(title)
-                    .font(.headline)
+        ContentPaneLeafChromeBadge(
+            text: title,
+            revealID: revealID,
+            font: .headline,
+        )
+    }
+}
+
+private struct ContentPaneLeafFocusIndicator: View {
+    var body: some View {
+        Circle()
+            .fill(.green)
+            .frame(width: 10, height: 10)
+            .padding(8)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
+    }
+}
+
+private struct ContentPaneLeafFooter: View {
+    let currentDirectory: String
+    let revealID: Int
+
+    var body: some View {
+        ContentPaneLeafChromeBadge(
+            text: currentDirectory,
+            revealID: revealID,
+            font: .caption,
+            foregroundStyle: AnyShapeStyle(.secondary),
+            truncationMode: .middle,
+        )
+    }
+}
+
+private struct ContentPaneLeafChromeBadge: View {
+    @State private var isHovered = false
+    @State private var isFocusRevealed = false
+    @State private var collapseTask: Task<Void, Never>?
+
+    let text: String
+    let revealID: Int
+    let font: Font
+    var foregroundStyle: AnyShapeStyle = .init(.primary)
+    var truncationMode: Text.TruncationMode = .tail
+
+    private var isExpanded: Bool {
+        isHovered || isFocusRevealed
+    }
+
+    var body: some View {
+        Group {
+            if isExpanded {
+                Text(text)
+                    .font(font)
+                    .foregroundStyle(foregroundStyle)
                     .lineLimit(1)
-                if let currentDirectory {
-                    Text(currentDirectory)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
-                if isFocused {
-                    Text("Focused")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.green)
-                }
+                    .truncationMode(truncationMode)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 10)
+                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
+            } else {
+                Circle()
+                    .fill(.regularMaterial)
+                    .frame(width: 12, height: 12)
+                    .opacity(0.5)
             }
         }
-        .padding(12)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
+        .contentShape(RoundedRectangle(cornerRadius: 10))
+        .onHover { hovering in
+            isHovered = hovering
+        }
+        .onChange(of: revealID) { _, _ in
+            isFocusRevealed = true
+            scheduleFocusCollapse()
+        }
+        .animation(.easeInOut(duration: 0.18), value: isExpanded)
+        .onDisappear {
+            collapseTask?.cancel()
+            collapseTask = nil
+        }
+    }
+
+    private func scheduleFocusCollapse() {
+        collapseTask?.cancel()
+        collapseTask = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(2))
+            guard !Task.isCancelled else {
+                return
+            }
+
+            isFocusRevealed = false
+        }
     }
 }
 

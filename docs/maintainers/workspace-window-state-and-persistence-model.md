@@ -1088,12 +1088,13 @@ PaneSessionSnapshotEntity
 The important point is that the app no longer has one payload shape for "live
 workspaces" and another payload shape for "saved workspaces."
 
-### Recommended follow-through for terminal history restore
+### Current terminal history restore model
 
 The current pane session snapshot persists readable transcript history, not a
 fully replayable terminal emulator state.
 
-The first improved-history slice is now partially landed.
+The first improved-history slice is now landed enough for ordinary shell
+relaunch and library reopen behavior.
 
 What is persisted now:
 
@@ -1106,7 +1107,8 @@ What is persisted now:
 
 What is restored now:
 
-- transcript-backed readable history
+- transcript-backed readable history for ordinary live relaunch and library
+  reopen
 - a saved scroll position for ordinary normal-buffer history
 
 What still remains outside the current implementation:
@@ -1115,6 +1117,11 @@ What still remains outside the current implementation:
 - exact full-screen TUI presentation
 - cursor and attribute state
 - a richer visible-range model than one normalized scroll position
+
+The current implementation now prefers raw host-output capture for transcript
+history and keeps buffer-derived text as a fallback path. That makes the saved
+history materially closer to the original shell stream than the older
+screen-shaped text export path.
 
 The recommended next persistence slice is to keep improving that model rather
 than jumping straight to full emulator-state serialization:

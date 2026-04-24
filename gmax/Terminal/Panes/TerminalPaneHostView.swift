@@ -17,6 +17,7 @@ struct TerminalAccessibilitySnapshot {
 final class TerminalPaneHostView: NSView {
     let terminalView: LocalProcessTerminalView
     var onEffectiveAppearanceChange: ((NSAppearance) -> Void)?
+    var onTerminalViewportReady: ((LocalProcessTerminalView) -> Void)?
 
     private var accessibilitySnapshot = TerminalAccessibilitySnapshot(label: "Shell terminal", value: "", help: "")
     private var onAccessibilityRestart: (() -> Void)?
@@ -38,6 +39,15 @@ final class TerminalPaneHostView: NSView {
     override func viewDidChangeEffectiveAppearance() {
         super.viewDidChangeEffectiveAppearance()
         onEffectiveAppearanceChange?(effectiveAppearance)
+    }
+
+    override func layout() {
+        super.layout()
+        guard !terminalView.bounds.isEmpty else {
+            return
+        }
+
+        onTerminalViewportReady?(terminalView)
     }
 
     func updateAccessibility(

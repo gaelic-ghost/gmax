@@ -343,6 +343,10 @@ struct WorkspaceWindowSceneView: View {
                 model: workspaceStore,
                 selection: $selectedWorkspaceID,
                 focusedTarget: $focusedTarget,
+                openLibrary: openLibrary,
+                createWorkspace: {
+                    selectedWorkspaceID = workspaceStore.createWorkspace()
+                },
                 requestRenameWorkspace: presentWorkspaceRename,
                 requestDeleteWorkspace: presentWorkspaceDeletion,
             )
@@ -509,22 +513,6 @@ struct WorkspaceWindowSceneView: View {
             },
         ))
         .toolbar {
-            ToolbarItem(placement: .navigation) {
-                Button("Open Library", systemImage: "folder", action: openLibrary)
-                    .labelStyle(.iconOnly)
-                    .help("Open the library (\u{2318}O)")
-                    .accessibilityIdentifier("workspaceWindow.openLibraryButton")
-            }
-
-            ToolbarItem(placement: .navigation) {
-                Button("New Workspace", systemImage: "plus.rectangle.on.rectangle") {
-                    selectedWorkspaceID = workspaceStore.createWorkspace()
-                }
-                .labelStyle(.iconOnly)
-                .help("Create a new workspace (\u{2318}N)")
-                .accessibilityIdentifier("workspaceWindow.newWorkspaceButton")
-            }
-
             ToolbarItemGroup(placement: .primaryAction) {
                 Button("Split Right", systemImage: "uiwindow.split.2x1") {
                     splitFocusedPane(.right)

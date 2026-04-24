@@ -161,12 +161,12 @@ class GmaxUITestCase: XCTestCase {
         let button = openLibraryButton(in: app)
         XCTAssertTrue(
             button.waitForExistence(timeout: 5),
-            "The active workspace window toolbar should expose the library button.",
+            "The active workspace window should expose the library action in the sidebar toolbar group.",
         )
         button.click()
         XCTAssertTrue(
             libraryCancelButton(in: app).waitForExistence(timeout: 5),
-            "The library sheet should appear after invoking the toolbar button.",
+            "The library sheet should appear after invoking the sidebar toolbar button.",
         )
     }
 
@@ -297,6 +297,10 @@ class GmaxUITestCase: XCTestCase {
 
     func openLibraryButton(in app: XCUIApplication) -> XCUIElement {
         let activeWindow = activeWorkspaceWindow(in: app)
+        let sidebarButton = activeWindow.buttons["sidebar.openLibraryButton"]
+        if sidebarButton.exists {
+            return sidebarButton
+        }
         let currentButton = activeWindow.buttons["workspaceWindow.openLibraryButton"]
         if currentButton.exists {
             return currentButton
@@ -305,7 +309,12 @@ class GmaxUITestCase: XCTestCase {
     }
 
     func newWorkspaceButton(in app: XCUIApplication) -> XCUIElement {
-        activeWorkspaceWindow(in: app).buttons["workspaceWindow.newWorkspaceButton"]
+        let activeWindow = activeWorkspaceWindow(in: app)
+        let sidebarButton = activeWindow.buttons["sidebar.newWorkspaceButton"]
+        if sidebarButton.exists {
+            return sidebarButton
+        }
+        return activeWindow.buttons["workspaceWindow.newWorkspaceButton"]
     }
 
     func focusFirstVisiblePane(in app: XCUIApplication) {

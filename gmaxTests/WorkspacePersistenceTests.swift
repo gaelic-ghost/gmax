@@ -335,6 +335,60 @@ struct WorkspacePersistenceTests {
         #expect(restoredPaneSnapshot.transcriptLineCount == 3)
     }
 
+    @Test func `live window restore seeds terminal sessions from persisted pane snapshots`() throws {
+        let persistence = WorkspacePersistenceController.inMemoryForTesting()
+        let sceneIdentity = WorkspaceSceneIdentity()
+        let workspace = TestSupport.makeWorkspace(title: "Workspace 1")
+        let pane = try #require(workspace.root?.firstLeaf())
+        let launchContextBuilder = TestSupport.makeLaunchContextBuilder(defaultCurrentDirectory: "/tmp/gmax-tests")
+        let launchConfiguration = TerminalLaunchConfiguration(
+            executable: "/bin/zsh",
+            arguments: ["-l"],
+            environment: nil,
+            currentDirectory: "/tmp/live-restore",
+        )
+        let sessions = TerminalSessionRegistry(
+            workspaces: [workspace],
+            defaultLaunchConfiguration: launchContextBuilder.makeLaunchConfiguration(),
+        )
+        let session = sessions.ensureSession(id: pane.sessionID, launchConfiguration: launchConfiguration)
+        session.title = "Live Restore Shell"
+        session.currentDirectory = "/tmp/live-restore"
+
+        persistence.saveSceneState(
+            for: sceneIdentity,
+            liveWorkspaces: [workspace],
+            selectedWorkspaceID: workspace.id,
+            sessions: sessions,
+            liveHistoryByWorkspaceID: [
+                workspace.id: [
+                    pane.sessionID: WorkspaceSessionHistorySnapshot(
+                        transcript: "$ pwd\n/tmp/live-restore\n",
+                        normalScrollPosition: 0.42,
+                        wasAlternateBufferActive: false,
+                    ),
+                ],
+            ],
+        )
+
+        let restoredStore = WorkspaceStore(
+            sceneIdentity: sceneIdentity,
+            persistence: persistence,
+            launchContextBuilder: launchContextBuilder,
+        )
+        let restoredWorkspace = try #require(restoredStore.workspaces.first)
+        let restoredPane = try #require(restoredWorkspace.root?.firstLeaf())
+        let restoredSession = try #require(restoredStore.sessions.session(for: restoredPane.sessionID))
+        let restoredHistory = try #require(restoredSession.consumeRestoredHistory())
+
+        #expect(restoredSession.title == "Live Restore Shell")
+        #expect(restoredSession.currentDirectory == "/tmp/live-restore")
+        #expect(restoredSession.launchConfiguration.currentDirectory == "/tmp/live-restore")
+        #expect(restoredHistory.transcript == "$ pwd\n/tmp/live-restore\n")
+        #expect(restoredHistory.normalScrollPosition == 0.42)
+        #expect(restoredHistory.wasAlternateBufferActive == false)
+    }
+
     @Test func `opening a saved workspace while it is already live reuses the same identity and does not duplicate it`() throws {
         let leftPane = PaneLeaf()
         let topRightPane = PaneLeaf()

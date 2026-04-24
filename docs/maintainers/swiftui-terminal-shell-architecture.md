@@ -472,20 +472,20 @@ This gives us a clean path to:
 
 ## Transcript-Backed Scrollback Persistence
 
-The current saved-workspace implementation preserves scrollback as transcript text rather than as a fully serialized terminal emulator state.
+The current saved-workspace implementation preserves scrollback as restored terminal history rather than as a fully serialized terminal emulator state.
 
 This distinction is important:
 
 - transcript-backed persistence preserves readable shell history and command output
 - full terminal-state persistence would try to preserve emulator details such as alternate-screen state, cursor state, or TUI presentation exactly
 
-SwiftTerm already gives us a strong path for transcript-backed persistence
-through its scrollback and buffer inspection APIs, and that path is now what
-the app uses for both live recent-close restore and library saves.
+SwiftTerm already gives us a strong path for transcript-backed persistence, and
+the app now uses a mix of host-output capture plus lightweight buffer-derived
+metadata for live relaunch, recent-close restore, and library saves.
 
 The current restore model is:
 
-1. capture transcript text from each pane up to a configured retention limit
+1. capture host output for each pane as the primary restored-history source
 2. save the pane launch context alongside that transcript
 3. also persist a small history-restore payload:
    - normalized normal-buffer scroll position when available
@@ -503,10 +503,12 @@ If a more faithful restoration is needed later, that should be treated as a seco
 ### Current implementation details
 
 The current implementation is intentionally still modest, but it is no longer
-transcript-only:
+just "dump the visible buffer as text":
 
-- `TerminalPaneController.captureHistory()` reads SwiftTerm's normal buffer as
-  UTF-8 text
+- `TerminalPaneController.captureHistory()` now prefers raw host output
+  captured from the live `LocalProcessTerminalView`
+- that same capture path still keeps buffer-derived text fallbacks available
+  when needed
 - the same capture step also records a normalized scroll position and whether
   SwiftTerm was currently showing the alternate buffer
 - `WorkspaceStore` persists that restored-history payload into each pane
@@ -518,8 +520,8 @@ transcript-only:
   launch when the pane was not captured from the alternate buffer
 - the shell process is then launched again from the saved launch context
 
-That gives `gmax` a materially better readable-history restore, but it still
-does **not** yet restore:
+That gives `gmax` a materially better readable-history restore for ordinary
+shell use, but it still does **not** yet restore:
 
 - what portion of the history the user was actively reading
 - alternate-screen contents or full-screen TUI state
@@ -527,14 +529,17 @@ does **not** yet restore:
 
 ### Recommended next scope: improved restored terminal history
 
-The first `1 + 2` slice is now partially landed. The next follow-through should
-keep improving it rather than jumping straight to full emulator-state
-serialization.
+The first `1 + 2` slice is now landed enough to support ordinary relaunch
+history restore. The next follow-through should keep improving it rather than
+jumping straight to full emulator-state serialization.
 
 What is already in place:
 
 - transcript capture no longer trims away whitespace and newline-only history
   just to decide whether it is worth restoring
+- host-output capture is now the preferred transcript source for ordinary shell
+  history, which avoids some of the formatting lossiness of screen-shaped text
+  export
 - pane session snapshots now persist:
   - transcript text
   - transcript byte and line counts

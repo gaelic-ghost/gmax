@@ -45,22 +45,22 @@ final class WorkspacePersistenceController {
         return WorkspacePersistenceController(container: container, profile: .inMemory)
     }
 
-    func loadWorkspaces(for sceneIdentity: WorkspaceSceneIdentity) -> [Workspace] {
+    func loadWorkspaceRevisions(for sceneIdentity: WorkspaceSceneIdentity) -> [WorkspaceRevision] {
         let context = container.viewContext
         return context.performAndWait {
             Self.loadPlacements(role: .live, sceneIdentity: sceneIdentity, in: context)
                 .compactMap { placement in
-                    guard let revision = Self.workspaceRevision(
+                    Self.workspaceRevision(
                         for: placement.workspace,
                         lastOpenedAt: placement.lastOpenedAt,
                         isPinned: placement.isPinned,
-                    ) else {
-                        return nil
-                    }
-
-                    return revision.workspace
+                    )
                 }
         }
+    }
+
+    func loadWorkspaces(for sceneIdentity: WorkspaceSceneIdentity) -> [Workspace] {
+        loadWorkspaceRevisions(for: sceneIdentity).map(\.workspace)
     }
 
     func loadRecentWorkspaceHistory(for sceneIdentity: WorkspaceSceneIdentity) -> [WindowWorkspaceHistoryRecord] {
