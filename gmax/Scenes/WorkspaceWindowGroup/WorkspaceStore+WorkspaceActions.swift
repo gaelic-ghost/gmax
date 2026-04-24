@@ -27,6 +27,11 @@ enum WorkspacePersistenceSaveReason: String {
     var logName: String { rawValue }
 }
 
+enum LibraryOpenResult: Equatable {
+    case workspace(WorkspaceID)
+    case window(WorkspaceSceneIdentity)
+}
+
 // MARK: - Workspace Lifecycle
 
 // MARK: Workspace creation, duplication, close, restore, and library persistence flows.
@@ -142,7 +147,7 @@ extension WorkspaceStore {
     func saveWorkspaceToLibrary(
         _ workspaceID: WorkspaceID,
         transcriptsBySessionID: [TerminalSessionID: String] = [:],
-    ) -> SavedWorkspaceListing? {
+    ) -> LibraryItemListing? {
         guard let workspace = workspaces.first(where: { $0.id == workspaceID }) else {
             Logger.workspace.error("The app was asked to save a workspace to the library, but that workspace no longer exists in the current shell model. Workspace ID: \(workspaceID.rawValue.uuidString, privacy: .public)")
             return nil
@@ -160,14 +165,13 @@ extension WorkspaceStore {
         )
         if let summary {
             objectWillChange.send()
-            Logger.workspace.notice("Saved a workspace to the library. Workspace title: \(workspace.title, privacy: .public). Workspace ID: \(workspace.id.rawValue.uuidString, privacy: .public). Library entry ID: \(summary.id.rawValue.uuidString, privacy: .public)")
+            Logger.workspace.notice("Saved a workspace to the library. Workspace title: \(workspace.title, privacy: .public). Workspace ID: \(workspace.id.rawValue.uuidString, privacy: .public). Library item ID: \(summary.id.uuidString, privacy: .public)")
         }
         return summary
     }
 
-    func listSavedWorkspaces(matching query: String? = nil) -> [SavedWorkspaceListing] {
-        let liveWorkspaceIDs = Set(workspaces.map(\.id))
-        return persistence.listSavedWorkspaces(matching: query).filter { !liveWorkspaceIDs.contains($0.id) }
+    func listLibraryItems(matching query: String? = nil) -> [LibraryItemListing] {
+        persistence.listLibraryItems(matching: query)
     }
 
     @discardableResult
@@ -186,16 +190,78 @@ extension WorkspaceStore {
     }
 
     @discardableResult
-    func openSavedWorkspace(_ savedWorkspaceID: WorkspaceID) -> WorkspaceID? {
-        if workspaces.contains(where: { $0.id == savedWorkspaceID }) {
-            persistence.markSavedWorkspaceOpened(savedWorkspaceID)
-            Logger.workspace.notice("Requested a workspace from the saved-workspace library, but that workspace is already live in the current shell model. Reusing the existing workspace identity. Workspace ID: \(savedWorkspaceID.rawValue.uuidString, privacy: .public)")
-            return savedWorkspaceID
+    func openLibraryItem(_ libraryItemID: UUID) -> LibraryOpenResult? {
+        guard let libraryItem = persistence.loadLibraryItemListing(id: libraryItemID) else {
+            Logger.workspace.error("The app could not reopen a library item because the requested entry was missing or unreadable. Check the persistence logs for the exact load failure. Library item ID: \(libraryItemID.uuidString, privacy: .public)")
+            return nil
         }
 
-        guard let savedWorkspace = persistence.loadSavedWorkspace(id: savedWorkspaceID) else {
-            Logger.workspace.error("The app could not reopen a saved workspace because the requested library entry was missing or unreadable. Check the persistence logs for the exact load failure. Workspace ID: \(savedWorkspaceID.rawValue.uuidString, privacy: .public)")
+        switch libraryItem.kind {
+            case .workspace:
+                return openWorkspaceLibraryItem(libraryItemID)
+                    .map(LibraryOpenResult.workspace)
+            case .window:
+                guard let sceneIdentity = libraryItem.windowID else {
+                    Logger.workspace.error("The app could not reopen a saved window because the library item was missing its durable window identity. Library item ID: \(libraryItemID.uuidString, privacy: .public)")
+                    return nil
+                }
+
+                persistence.markLibraryItemOpened(libraryItemID)
+                Logger.workspace.notice("Opened a saved window from the library. Library item ID: \(libraryItemID.uuidString, privacy: .public). Window ID: \(sceneIdentity.windowID.uuidString, privacy: .public)")
+                return .window(sceneIdentity)
+        }
+    }
+
+    func deleteLibraryItem(_ libraryItemID: UUID) {
+        guard persistence.deleteLibraryItem(id: libraryItemID) else {
+            Logger.workspace.error("The app could not delete a library item because persistence did not confirm the deletion. Check the persistence logs for the exact failure. Library item ID: \(libraryItemID.uuidString, privacy: .public)")
+            return
+        }
+
+        objectWillChange.send()
+        Logger.workspace.notice("Deleted a library item. Library item ID: \(libraryItemID.uuidString, privacy: .public)")
+    }
+}
+
+// MARK: - Workspace Helpers
+
+// MARK: Internal helpers that support workspace cloning, restore, close, and persistence workflows.
+
+extension WorkspaceStore {
+    private struct PersistenceSnapshot {
+        let liveWorkspaces: [Workspace]
+        let selectedWorkspaceID: WorkspaceID?
+        let liveTranscriptsByWorkspaceID: [WorkspaceID: [TerminalSessionID: String]]
+    }
+
+    private func uniqueWorkspaceTitle(startingWith baseTitle: String) -> String {
+        let normalizedBaseTitle = baseTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        let resolvedBaseTitle = normalizedBaseTitle.isEmpty ? "Workspace" : normalizedBaseTitle
+        let existingTitles = Set(workspaces.map(\.title))
+        guard existingTitles.contains(resolvedBaseTitle) else {
+            return resolvedBaseTitle
+        }
+
+        var suffix = 2
+        while true {
+            let candidate = "\(resolvedBaseTitle) \(suffix)"
+            if !existingTitles.contains(candidate) {
+                return candidate
+            }
+            suffix += 1
+        }
+    }
+
+    private func openWorkspaceLibraryItem(_ libraryItemID: UUID) -> WorkspaceID? {
+        guard let savedWorkspace = persistence.loadWorkspaceLibraryItem(id: libraryItemID) else {
+            Logger.workspace.error("The app could not reopen a workspace from the library because the requested library item was missing or unreadable. Check the persistence logs for the exact load failure. Library item ID: \(libraryItemID.uuidString, privacy: .public)")
             return nil
+        }
+
+        if workspaces.contains(where: { $0.id == savedWorkspace.workspace.id }) {
+            persistence.markLibraryItemOpened(libraryItemID)
+            Logger.workspace.notice("Requested a workspace library item, but that workspace is already live in the current shell model. Reusing the existing workspace identity. Library item ID: \(libraryItemID.uuidString, privacy: .public). Workspace ID: \(savedWorkspace.workspace.id.rawValue.uuidString, privacy: .public)")
+            return savedWorkspace.workspace.id
         }
 
         var launchConfigurationsBySessionID: [TerminalSessionID: TerminalLaunchConfiguration] = [:]
@@ -227,50 +293,10 @@ extension WorkspaceStore {
             session.setRestoredTranscript(transcriptsBySessionID[sessionID])
         }
 
-        persistence.markSavedWorkspaceOpened(savedWorkspaceID)
-        Logger.workspace.notice("Opened a workspace from the saved-workspace library. Workspace title: \(savedWorkspace.title, privacy: .public). Workspace ID: \(savedWorkspaceID.rawValue.uuidString, privacy: .public). Restored pane count: \((restoredWorkspace.root?.leaves().count ?? 0))")
+        persistence.markLibraryItemOpened(libraryItemID)
+        Logger.workspace.notice("Opened a workspace from a library item. Workspace title: \(savedWorkspace.title, privacy: .public). Library item ID: \(libraryItemID.uuidString, privacy: .public). Workspace ID: \(restoredWorkspace.id.rawValue.uuidString, privacy: .public). Restored pane count: \((restoredWorkspace.root?.leaves().count ?? 0))")
         schedulePersistenceSave(reason: .workspaceOpenedFromLibrary)
         return restoredWorkspace.id
-    }
-
-    func deleteSavedWorkspace(_ savedWorkspaceID: WorkspaceID) {
-        guard persistence.deleteSavedWorkspace(id: savedWorkspaceID) else {
-            Logger.workspace.error("The app could not delete a saved workspace from the library because persistence did not confirm the deletion. Check the persistence logs for the exact failure. Workspace ID: \(savedWorkspaceID.rawValue.uuidString, privacy: .public)")
-            return
-        }
-
-        objectWillChange.send()
-        Logger.workspace.notice("Deleted a saved workspace from the library. Workspace ID: \(savedWorkspaceID.rawValue.uuidString, privacy: .public)")
-    }
-}
-
-// MARK: - Workspace Helpers
-
-// MARK: Internal helpers that support workspace cloning, restore, close, and persistence workflows.
-
-extension WorkspaceStore {
-    private struct PersistenceSnapshot {
-        let liveWorkspaces: [Workspace]
-        let selectedWorkspaceID: WorkspaceID?
-        let liveTranscriptsByWorkspaceID: [WorkspaceID: [TerminalSessionID: String]]
-    }
-
-    private func uniqueWorkspaceTitle(startingWith baseTitle: String) -> String {
-        let normalizedBaseTitle = baseTitle.trimmingCharacters(in: .whitespacesAndNewlines)
-        let resolvedBaseTitle = normalizedBaseTitle.isEmpty ? "Workspace" : normalizedBaseTitle
-        let existingTitles = Set(workspaces.map(\.title))
-        guard existingTitles.contains(resolvedBaseTitle) else {
-            return resolvedBaseTitle
-        }
-
-        var suffix = 2
-        while true {
-            let candidate = "\(resolvedBaseTitle) \(suffix)"
-            if !existingTitles.contains(candidate) {
-                return candidate
-            }
-            suffix += 1
-        }
     }
 
     private func duplicateNode(_ node: PaneNode) -> PaneNode {
@@ -326,8 +352,10 @@ extension WorkspaceStore {
         reason: WorkspacePersistenceSaveReason,
         delivery: String,
     ) {
+        let windowID = sceneIdentity.windowID.uuidString
+        let recentlyClosedCount = recentlyClosedWorkspaceCount
         Logger.persistence.notice(
-            "Persisting the current window-scoped live workspace state. Delivery: \(delivery, privacy: .public). Reason: \(reason.logName, privacy: .public). Window ID: \(sceneIdentity.windowID.uuidString, privacy: .public). Live workspace count: \(snapshot.liveWorkspaces.count). Recently closed count: \(recentlyClosedWorkspaceCount).",
+            "Persisting the current window-scoped live workspace state. Delivery: \(delivery, privacy: .public). Reason: \(reason.logName, privacy: .public). Window ID: \(windowID, privacy: .public). Live workspace count: \(snapshot.liveWorkspaces.count). Recently closed count: \(recentlyClosedCount).",
         )
         persistence.saveSceneState(
             for: sceneIdentity,

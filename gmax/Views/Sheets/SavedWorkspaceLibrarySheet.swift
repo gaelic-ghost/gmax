@@ -7,68 +7,88 @@
 
 import SwiftUI
 
-struct SavedWorkspaceLibrarySheet: View {
+struct LibrarySheet: View {
     @ObservedObject var model: WorkspaceStore
     @Binding var selectedWorkspaceID: WorkspaceID?
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.openWindow) private var openWindow
     @State private var searchText = ""
-    @State private var selectedSavedWorkspaceID: WorkspaceID?
+    @State private var selectedLibraryItemID: UUID?
     @State private var libraryRefreshToken = 0
 
     var body: some View {
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        let savedWorkspaces = {
+        let libraryItems = {
             _ = libraryRefreshToken
-            return model.listSavedWorkspaces(matching: query.isEmpty ? nil : query)
+            return model.listLibraryItems(matching: query.isEmpty ? nil : query)
         }()
         let normalizeSelection = {
-            if !savedWorkspaces.contains(where: { $0.id == selectedSavedWorkspaceID }) {
-                selectedSavedWorkspaceID = savedWorkspaces.first?.id
+            if !libraryItems.contains(where: { $0.id == selectedLibraryItemID }) {
+                selectedLibraryItemID = libraryItems.first?.id
             }
         }
-        let open: (WorkspaceID) -> Void = { savedWorkspaceID in
-            guard let workspaceID = model.openSavedWorkspace(savedWorkspaceID) else { return }
+        let open: (UUID) -> Void = { libraryItemID in
+            guard let openResult = model.openLibraryItem(libraryItemID) else {
+                return
+            }
 
-            selectedWorkspaceID = workspaceID
-            dismiss()
+            switch openResult {
+                case let .workspace(workspaceID):
+                    selectedWorkspaceID = workspaceID
+                    dismiss()
+                case let .window(sceneIdentity):
+                    openWindow(value: sceneIdentity)
+                    dismiss()
+            }
         }
-        let delete: (WorkspaceID) -> Void = { savedWorkspaceID in
-            model.deleteSavedWorkspace(savedWorkspaceID)
-            selectedSavedWorkspaceID = savedWorkspaces.first { $0.id != savedWorkspaceID }?.id
+        let delete: (UUID) -> Void = { libraryItemID in
+            model.deleteLibraryItem(libraryItemID)
+            selectedLibraryItemID = libraryItems.first { $0.id != libraryItemID }?.id
             libraryRefreshToken += 1
         }
 
         VStack(spacing: 0) {
             Group {
-                if savedWorkspaces.isEmpty {
+                if libraryItems.isEmpty {
                     ContentUnavailableView {
-                        Label("No Saved Workspaces", systemImage: "externaldrive.badge.timemachine")
+                        Label("No Saved Library Items", systemImage: "externaldrive.badge.timemachine")
                     } description: {
                         Text(
                             query.isEmpty
-                                ? "Save a workspace to the library to reopen its pane layout and shell history later."
-                                : "No saved workspaces matched that search. Try a different title, pane count, or transcript text.",
+                                ? "Saved workspaces and closed windows will appear here so they can be reopened later."
+                                : "No saved workspaces or windows matched that search. Try a different title, pane count, workspace count, or transcript text.",
                         )
                     }
-                    .accessibilityIdentifier("savedWorkspaceLibrary.emptyState")
+                    .accessibilityIdentifier("library.emptyState")
                 } else {
-                    List(selection: $selectedSavedWorkspaceID) {
-                        ForEach(savedWorkspaces) { savedWorkspace in
-                            let paneCountText = savedWorkspace.paneCount == 1 ? "1 pane" : "\(savedWorkspace.paneCount) panes"
-                            let timestampText = if let lastOpenedAt = savedWorkspace.lastOpenedAt {
+                    List(selection: $selectedLibraryItemID) {
+                        ForEach(libraryItems) { libraryItem in
+                            let paneCountText = libraryItem.paneCount == 1 ? "1 pane" : "\(libraryItem.paneCount) panes"
+                            let workspaceCountText = libraryItem.workspaceCount == 1 ? "1 workspace" : "\(libraryItem.workspaceCount) workspaces"
+                            let timestampText = if let lastOpenedAt = libraryItem.lastOpenedAt {
                                 "Opened \(lastOpenedAt.formatted(.relative(presentation: .named)))"
                             } else {
-                                "Saved \(savedWorkspace.updatedAt.formatted(.relative(presentation: .named)))"
+                                "\(libraryItem.kind == .window ? "Closed" : "Saved") \(libraryItem.updatedAt.formatted(.relative(presentation: .named)))"
                             }
+                            let detailText = if libraryItem.kind == .workspace {
+                                paneCountText
+                            } else {
+                                "\(workspaceCountText), \(paneCountText)"
+                            }
+                            let openLabel = libraryItem.kind == .window ? "Open Window" : "Open Workspace"
+                            let deleteLabel = libraryItem.kind == .window ? "Delete Saved Window" : "Delete Saved Workspace"
                             VStack(alignment: .leading, spacing: 6) {
                                 HStack(alignment: .firstTextBaseline, spacing: 8) {
-                                    Text(savedWorkspace.title)
+                                    Image(systemName: libraryItem.kind == .window ? "macwindow" : "rectangle.split.3x1")
+                                        .foregroundStyle(.secondary)
+
+                                    Text(libraryItem.title)
                                         .font(.headline)
                                         .lineLimit(1)
-                                        .accessibilityIdentifier("savedWorkspaceLibrary.title.\(savedWorkspace.title)")
+                                        .accessibilityIdentifier("library.title.\(libraryItem.title)")
 
-                                    if savedWorkspace.isPinned {
+                                    if libraryItem.isPinned {
                                         Image(systemName: "pin.fill")
                                             .font(.caption)
                                             .foregroundStyle(.secondary)
@@ -76,13 +96,13 @@ struct SavedWorkspaceLibrarySheet: View {
                                 }
 
                                 HStack(spacing: 10) {
-                                    Label(paneCountText, systemImage: "rectangle.split.3x1")
+                                    Label(detailText, systemImage: "square.stack.3d.up")
                                     Text(timestampText)
                                 }
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
 
-                                if let previewText = savedWorkspace.previewText {
+                                if let previewText = libraryItem.previewText {
                                     Text(previewText)
                                         .font(.callout)
                                         .foregroundStyle(.secondary)
@@ -90,25 +110,25 @@ struct SavedWorkspaceLibrarySheet: View {
                                 }
                             }
                             .padding(.vertical, 4)
-                            .accessibilityIdentifier("savedWorkspaceLibrary.row.\(savedWorkspace.title)")
+                            .accessibilityIdentifier("library.row.\(libraryItem.title)")
                             .simultaneousGesture(
                                 TapGesture(count: 2).onEnded {
-                                    open(savedWorkspace.id)
+                                    open(libraryItem.id)
                                 },
                             )
-                            .tag(savedWorkspace.id)
+                            .tag(libraryItem.id)
                             .contextMenu {
-                                Button("Open Workspace") {
-                                    open(savedWorkspace.id)
+                                Button(openLabel) {
+                                    open(libraryItem.id)
                                 }
 
-                                Button("Delete Saved Workspace", role: .destructive) {
-                                    delete(savedWorkspace.id)
+                                Button(deleteLabel, role: .destructive) {
+                                    delete(libraryItem.id)
                                 }
                             }
                         }
                     }
-                    .accessibilityIdentifier("savedWorkspaceLibrary.list")
+                    .accessibilityIdentifier("library.list")
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -119,30 +139,30 @@ struct SavedWorkspaceLibrarySheet: View {
                 Button("Cancel") {
                     dismiss()
                 }
-                .accessibilityIdentifier("savedWorkspaceLibrary.cancelButton")
+                .accessibilityIdentifier("library.cancelButton")
 
                 Spacer()
 
                 Button("Delete") {
-                    guard let savedWorkspaceID = selectedSavedWorkspaceID ?? savedWorkspaces.first?.id else {
+                    guard let libraryItemID = selectedLibraryItemID ?? libraryItems.first?.id else {
                         return
                     }
 
-                    delete(savedWorkspaceID)
+                    delete(libraryItemID)
                 }
-                .disabled(savedWorkspaces.isEmpty)
-                .accessibilityIdentifier("savedWorkspaceLibrary.deleteButton")
+                .disabled(libraryItems.isEmpty)
+                .accessibilityIdentifier("library.deleteButton")
 
                 Button("Open") {
-                    guard let savedWorkspaceID = selectedSavedWorkspaceID ?? savedWorkspaces.first?.id else {
+                    guard let libraryItemID = selectedLibraryItemID ?? libraryItems.first?.id else {
                         return
                     }
 
-                    open(savedWorkspaceID)
+                    open(libraryItemID)
                 }
                 .keyboardShortcut(.defaultAction)
-                .disabled(savedWorkspaces.isEmpty)
-                .accessibilityIdentifier("savedWorkspaceLibrary.openButton")
+                .disabled(libraryItems.isEmpty)
+                .accessibilityIdentifier("library.openButton")
             }
             .padding(16)
         }
@@ -158,7 +178,7 @@ struct SavedWorkspaceLibrarySheet: View {
 }
 
 #Preview {
-    SavedWorkspaceLibrarySheet(
+    LibrarySheet(
         model: WorkspaceStore(),
         selectedWorkspaceID: .constant(nil),
     )

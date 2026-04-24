@@ -83,6 +83,23 @@ struct WorkspaceWindowRestorationControllerTests {
         #expect(controller.consumePendingLaunchRestoreSceneIdentities() == [second])
     }
 
+    @Test func `new default windows get a fresh identity after the restored initial window`() {
+        let first = WorkspaceSceneIdentity()
+        let controller = WorkspaceWindowRestorationController(
+            initialSceneIdentity: first,
+            pendingLaunchRestoreSceneIdentities: [],
+        )
+
+        #expect(controller.nextDefaultSceneIdentity() == first)
+
+        let secondDefault = controller.nextDefaultSceneIdentity()
+        #expect(secondDefault != first)
+
+        let thirdDefault = controller.nextDefaultSceneIdentity()
+        #expect(thirdDefault != first)
+        #expect(thirdDefault != secondDefault)
+    }
+
     @Test func `marking a restored window open removes it from the pending launch restore queue`() {
         let first = WorkspaceSceneIdentity()
         let second = WorkspaceSceneIdentity()

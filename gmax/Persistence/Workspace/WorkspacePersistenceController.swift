@@ -428,7 +428,7 @@ final class WorkspacePersistenceController {
                     placement.lastOpenedAt = nil
                     placement.isPinned = false
                     placement.workspace = workspaceEntity
-                    Self.refreshListingMetadata(on: placement, from: workspaceEntity)
+                    Self.refreshLivePlacementMetadata(on: placement, from: workspaceEntity)
                     retainedPlacementIDs.insert(placement.id)
                     try Self.upsertWindowWorkspaceMembership(
                         windowID: sceneIdentity.windowID,
@@ -474,13 +474,44 @@ final class WorkspacePersistenceController {
         }
     }
 
-    func saveWorkspaceToLibrary(
+    func listLibraryItems(matching query: String? = nil) -> [LibraryItemListing] {
+        let context = container.viewContext
+        let trimmedQuery = query?.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        return context.performAndWait {
+            do {
+                try Self.migrateLegacyLibraryItems(in: context)
+                return try Self.loadLibraryItems(matching: trimmedQuery, in: context)
+                    .filter { item in
+                        switch item.kind {
+                            case .workspace:
+                                guard let workspaceID = item.workspaceID else {
+                                    return false
+                                }
+
+                                return !Self.isWorkspaceLive(workspaceID: workspaceID.rawValue, in: context)
+                            case .window:
+                                guard let sceneIdentity = item.windowID else {
+                                    return false
+                                }
+
+                                return !Self.isWindowOpen(windowID: sceneIdentity.windowID, in: context)
+                        }
+                    }
+            } catch {
+                Logger.persistence.error("Core Data failed to list library items. The app will continue, but the library index could not be read. Error: \(String(describing: error), privacy: .public)")
+                return []
+            }
+        }
+    }
+
+    func upsertWorkspaceLibraryItem(
         from workspace: Workspace,
         sessions: TerminalSessionRegistry,
         transcriptsBySessionID: [TerminalSessionID: String] = [:],
         notes: String? = nil,
         isPinned: Bool? = nil,
-    ) -> SavedWorkspaceListing? {
+    ) -> LibraryItemListing? {
         let sessionSnapshots = Self.makeSessionSnapshots(
             for: workspace,
             sessions: sessions,
@@ -502,35 +533,26 @@ final class WorkspacePersistenceController {
                     notes: notes,
                     now: now,
                 )
-
-                let request = NSFetchRequest<WorkspacePlacementEntity>(entityName: "WorkspacePlacementEntity")
-                request.fetchLimit = 1
-                request.predicate = NSCompoundPredicate(
-                    andPredicateWithSubpredicates: [
-                        NSPredicate(format: "id == %@", workspace.id.rawValue as CVarArg),
-                        NSPredicate(format: "role == %@", WorkspacePlacementRole.library.rawValue),
-                    ],
+                let libraryItem = try Self.requireOrCreateLibraryItem(
+                    kind: .workspace,
+                    workspaceID: workspace.id.rawValue,
+                    context: context,
                 )
-                let placement = try context.fetch(request).first ?? WorkspacePlacementEntity(context: context)
-                if placement.objectID.isTemporaryID {
-                    placement.id = workspace.id.rawValue
-                    placement.createdAt = now
+                if libraryItem.objectID.isTemporaryID {
+                    libraryItem.createdAt = now
                 }
-                placement.role = WorkspacePlacementRole.library.rawValue
-                placement.windowID = nil
-                placement.sortOrder = 0
-                placement.restoreSortOrder = 0
-                placement.updatedAt = now
-                placement.lastOpenedAt = placement.lastOpenedAt
-                placement.isPinned = isPinned ?? placement.isPinned
-                placement.workspace = workspaceEntity
-                Self.refreshListingMetadata(on: placement, from: workspaceEntity)
+                libraryItem.kind = LibraryItemKind.workspace.rawValue
+                libraryItem.workspaceID = workspace.id.rawValue
+                libraryItem.windowID = nil
+                libraryItem.updatedAt = now
+                libraryItem.isPinned = isPinned ?? libraryItem.isPinned
+                Self.refreshListingMetadata(on: libraryItem, from: workspaceEntity)
 
                 if context.hasChanges {
                     try context.save()
                 }
 
-                return Self.makeSavedWorkspaceListing(from: placement)
+                return Self.makeLibraryItemListing(from: libraryItem)
             } catch {
                 Logger.persistence.error("Core Data failed to save a workspace revision into the library. The live workspace remains available, but the saved copy was not written. Workspace title: \(workspace.title, privacy: .public). Error: \(String(describing: error), privacy: .public)")
                 context.rollback()
@@ -539,99 +561,82 @@ final class WorkspacePersistenceController {
         }
     }
 
-    func listSavedWorkspaces(matching query: String? = nil) -> [SavedWorkspaceListing] {
-        let context = container.viewContext
-        let trimmedQuery = query?.trimmingCharacters(in: .whitespacesAndNewlines)
+    func saveWorkspaceToLibrary(
+        from workspace: Workspace,
+        sessions: TerminalSessionRegistry,
+        transcriptsBySessionID: [TerminalSessionID: String] = [:],
+        notes: String? = nil,
+        isPinned: Bool? = nil,
+    ) -> LibraryItemListing? {
+        upsertWorkspaceLibraryItem(
+            from: workspace,
+            sessions: sessions,
+            transcriptsBySessionID: transcriptsBySessionID,
+            notes: notes,
+            isPinned: isPinned,
+        )
+    }
 
+    func loadWorkspaceLibraryItem(id: UUID) -> WorkspaceRevision? {
+        let context = container.viewContext
         return context.performAndWait {
             do {
-                let request = NSFetchRequest<WorkspacePlacementEntity>(entityName: "WorkspacePlacementEntity")
-                request.sortDescriptors = [
-                    NSSortDescriptor(key: #keyPath(WorkspacePlacementEntity.isPinned), ascending: false),
-                    NSSortDescriptor(key: #keyPath(WorkspacePlacementEntity.updatedAt), ascending: false),
-                ]
-                request.predicate = NSPredicate(format: "role == %@", WorkspacePlacementRole.library.rawValue)
-
-                if let trimmedQuery, !trimmedQuery.isEmpty {
-                    request.predicate = NSCompoundPredicate(
-                        andPredicateWithSubpredicates: [
-                            NSPredicate(format: "role == %@", WorkspacePlacementRole.library.rawValue),
-                            NSPredicate(format: "searchText CONTAINS[cd] %@", trimmedQuery),
-                        ],
-                    )
+                try Self.migrateLegacyLibraryItems(in: context)
+                guard let libraryItem = try Self.loadLibraryItem(id: id, in: context) else {
+                    Logger.persistence.error("The library could not find the requested entry during workspace reopen. The entry may have been deleted, or the selection may be stale. Library item ID: \(id.uuidString, privacy: .public)")
+                    return nil
+                }
+                guard libraryItem.kind == LibraryItemKind.workspace.rawValue,
+                      let workspaceID = libraryItem.workspaceID
+                else {
+                    Logger.persistence.error("The library entry requested for workspace reopen did not point at a workspace payload. Library item ID: \(id.uuidString, privacy: .public). Kind: \(libraryItem.kind, privacy: .public)")
+                    return nil
                 }
 
-                return try context.fetch(request)
-                    .filter { placement in
-                        let siblingPlacements = (placement.workspace?.placements as? Set<WorkspacePlacementEntity>) ?? []
-                        return !siblingPlacements.contains { siblingPlacement in
-                            siblingPlacement.objectID != placement.objectID
-                                && !siblingPlacement.isDeleted
-                                && siblingPlacement.role == WorkspacePlacementRole.live.rawValue
-                        }
-                    }
-                    .map(Self.makeSavedWorkspaceListing(from:))
+                return try Self.workspaceRevision(
+                    for: Self.loadWorkspaceEntity(id: workspaceID, in: context),
+                    lastOpenedAt: libraryItem.lastOpenedAt,
+                    isPinned: libraryItem.isPinned,
+                )
             } catch {
-                Logger.persistence.error("Core Data failed to list saved workspaces from the library. The app will continue, but the library index could not be read. Error: \(String(describing: error), privacy: .public)")
-                return []
+                Logger.persistence.error("Core Data failed while reading a workspace library item. The requested entry could not be loaded. Library item ID: \(id.uuidString, privacy: .public). Error: \(String(describing: error), privacy: .public)")
+                return nil
             }
         }
     }
 
-    func loadSavedWorkspace(id: WorkspaceID) -> WorkspaceRevision? {
+    func loadLibraryItemListing(id: UUID) -> LibraryItemListing? {
         let context = container.viewContext
         return context.performAndWait {
             do {
-                let request = NSFetchRequest<WorkspacePlacementEntity>(entityName: "WorkspacePlacementEntity")
-                request.fetchLimit = 1
-                request.predicate = NSPredicate(
-                    format: "id == %@ AND role == %@",
-                    id.rawValue as CVarArg,
-                    WorkspacePlacementRole.library.rawValue,
-                )
-                guard let placement = try context.fetch(request).first else {
-                    Logger.persistence.error("The saved-workspace library could not find the requested workspace during reopen. The entry may have been deleted, still be live in another window, or the library selection may be stale. Workspace ID: \(id.rawValue.uuidString, privacy: .public)")
-                    return nil
-                }
-
-                return Self.workspaceRevision(
-                    for: placement.workspace,
-                    lastOpenedAt: placement.lastOpenedAt,
-                    isPinned: placement.isPinned,
-                )
+                try Self.migrateLegacyLibraryItems(in: context)
+                return try Self.loadLibraryItem(id: id, in: context)
+                    .flatMap(Self.makeLibraryItemListing(from:))
             } catch {
-                Logger.persistence.error("Core Data failed while reading a saved workspace from the library. The live session remains available, but the requested workspace could not be loaded. Workspace ID: \(id.rawValue.uuidString, privacy: .public). Error: \(String(describing: error), privacy: .public)")
+                Logger.persistence.error("Core Data failed while reading a library item listing. The requested entry could not be loaded. Library item ID: \(id.uuidString, privacy: .public). Error: \(String(describing: error), privacy: .public)")
                 return nil
             }
         }
     }
 
     @discardableResult
-    func deleteSavedWorkspace(id: WorkspaceID) -> Bool {
+    func deleteLibraryItem(id: UUID) -> Bool {
         let context = container.viewContext
         return context.performAndWait {
             do {
-                let request = NSFetchRequest<WorkspacePlacementEntity>(entityName: "WorkspacePlacementEntity")
-                request.predicate = NSPredicate(
-                    format: "id == %@ AND role == %@",
-                    id.rawValue as CVarArg,
-                    WorkspacePlacementRole.library.rawValue,
-                )
-                let placements = try context.fetch(request)
-                guard !placements.isEmpty else {
-                    Logger.persistence.error("The saved-workspace library could not find the workspace entry requested for deletion. The library may already be up to date, or the selection may have gone stale. Workspace ID: \(id.rawValue.uuidString, privacy: .public)")
+                try Self.migrateLegacyLibraryItems(in: context)
+                guard let libraryItem = try Self.loadLibraryItem(id: id, in: context) else {
+                    Logger.persistence.error("The library could not find the entry requested for deletion. The library may already be up to date, or the selection may have gone stale. Library item ID: \(id.uuidString, privacy: .public)")
                     return false
                 }
 
-                let libraryWorkspaceIDs = Set(placements.compactMap(\.workspace?.id))
-                for placement in placements {
-                    context.delete(placement)
-                }
+                let libraryWorkspaceID = libraryItem.workspaceID
+                context.delete(libraryItem)
 
-                for libraryWorkspaceID in libraryWorkspaceIDs {
+                if let libraryWorkspaceID {
                     try Self.deleteOrphanedWorkspaceRecords(
                         existingWorkspacesByID: [libraryWorkspaceID: Self.requireWorkspaceEntity(id: libraryWorkspaceID, context: context)],
-                        retainedWorkspaceIDs: [],
+                        retainedWorkspaceIDs: Self.retainedWorkspaceIDs(in: context),
                         context: context,
                     )
                 }
@@ -641,36 +646,30 @@ final class WorkspacePersistenceController {
                 }
                 return true
             } catch {
-                Logger.persistence.error("Core Data failed to delete a saved workspace from the library. The entry remains available. Workspace ID: \(id.rawValue.uuidString, privacy: .public). Error: \(String(describing: error), privacy: .public)")
+                Logger.persistence.error("Core Data failed to delete a library item. The entry remains available. Library item ID: \(id.uuidString, privacy: .public). Error: \(String(describing: error), privacy: .public)")
                 context.rollback()
                 return false
             }
         }
     }
 
-    func markSavedWorkspaceOpened(_ id: WorkspaceID) {
+    func markLibraryItemOpened(_ id: UUID) {
         let context = container.viewContext
         context.performAndWait {
             do {
-                let request = NSFetchRequest<WorkspacePlacementEntity>(entityName: "WorkspacePlacementEntity")
-                request.fetchLimit = 1
-                request.predicate = NSPredicate(
-                    format: "id == %@ AND role == %@",
-                    id.rawValue as CVarArg,
-                    WorkspacePlacementRole.library.rawValue,
-                )
-                guard let placement = try context.fetch(request).first else {
+                try Self.migrateLegacyLibraryItems(in: context)
+                guard let libraryItem = try Self.loadLibraryItem(id: id, in: context) else {
                     return
                 }
 
                 let now = Date()
-                placement.lastOpenedAt = now
-                placement.updatedAt = now
+                libraryItem.lastOpenedAt = now
+                libraryItem.updatedAt = now
                 if context.hasChanges {
                     try context.save()
                 }
             } catch {
-                Logger.persistence.error("Core Data failed to update the recency metadata for a saved workspace. The entry remains usable, but its last-opened date is stale. Workspace ID: \(id.rawValue.uuidString, privacy: .public). Error: \(String(describing: error), privacy: .public)")
+                Logger.persistence.error("Core Data failed to update the recency metadata for a library item. The entry remains usable, but its last-opened date is stale. Library item ID: \(id.uuidString, privacy: .public). Error: \(String(describing: error), privacy: .public)")
                 context.rollback()
             }
         }
@@ -703,6 +702,9 @@ extension WorkspacePersistenceController {
                     window.title = title
                 }
                 window.isOpen = isOpen
+                if !isOpen {
+                    _ = try Self.upsertWindowLibraryItem(for: sceneIdentity, in: context, now: now)
+                }
                 if context.hasChanges {
                     try context.save()
                 }
@@ -722,17 +724,12 @@ extension WorkspacePersistenceController {
     ) -> [WorkspacePlacementEntity] {
         let request = NSFetchRequest<WorkspacePlacementEntity>(entityName: "WorkspacePlacementEntity")
         request.sortDescriptors = [NSSortDescriptor(key: #keyPath(WorkspacePlacementEntity.sortOrder), ascending: true)]
-        switch role {
-            case .library:
-                request.predicate = NSPredicate(format: "role == %@", role.rawValue)
-            case .live:
-                request.predicate = NSCompoundPredicate(
-                    andPredicateWithSubpredicates: [
-                        NSPredicate(format: "role == %@", role.rawValue),
-                        NSPredicate(format: "windowID == %@", sceneIdentity.windowID as CVarArg),
-                    ],
-                )
-        }
+        request.predicate = NSCompoundPredicate(
+            andPredicateWithSubpredicates: [
+                NSPredicate(format: "role == %@", role.rawValue),
+                NSPredicate(format: "windowID == %@", sceneIdentity.windowID as CVarArg),
+            ],
+        )
 
         do {
             return try context.fetch(request)
@@ -956,23 +953,79 @@ extension WorkspacePersistenceController {
         )
     }
 
-    private nonisolated static func refreshListingMetadata(on placement: WorkspacePlacementEntity, from workspaceEntity: WorkspaceEntity) {
+    private nonisolated static func refreshLivePlacementMetadata(on placement: WorkspacePlacementEntity, from workspaceEntity: WorkspaceEntity) {
         placement.title = workspaceEntity.title
         placement.previewText = workspaceEntity.previewText
         placement.searchText = workspaceEntity.searchText
         placement.paneCount = Int64(decodeNode(workspaceEntity.rootNode)?.leaves().count ?? 0)
     }
 
-    private nonisolated static func makeSavedWorkspaceListing(from placement: WorkspacePlacementEntity) -> SavedWorkspaceListing {
-        SavedWorkspaceListing(
-            id: WorkspaceID(rawValue: placement.id),
-            title: placement.title,
-            createdAt: placement.createdAt,
-            updatedAt: placement.updatedAt,
-            lastOpenedAt: placement.lastOpenedAt,
-            isPinned: placement.isPinned,
-            previewText: placement.previewText,
-            paneCount: Int(placement.paneCount),
+    private nonisolated static func refreshListingMetadata(on libraryItem: LibraryItemEntity, from workspaceEntity: WorkspaceEntity) {
+        libraryItem.title = workspaceEntity.title
+        libraryItem.previewText = workspaceEntity.previewText
+        libraryItem.searchText = workspaceEntity.searchText
+        libraryItem.paneCount = Int64(decodeNode(workspaceEntity.rootNode)?.leaves().count ?? 0)
+        libraryItem.workspaceCount = 1
+    }
+
+    private nonisolated static func refreshListingMetadata(
+        on libraryItem: LibraryItemEntity,
+        from windowEntity: WorkspaceWindowEntity,
+        livePlacements: [WorkspacePlacementEntity],
+    ) {
+        let orderedWorkspaceEntities = livePlacements.compactMap(\.workspace)
+        let selectedWorkspaceEntity = windowEntity.selectedWorkspaceID.flatMap { selectedWorkspaceID in
+            orderedWorkspaceEntities.first { $0.id == selectedWorkspaceID }
+        }
+        let representativeWorkspaceEntity = selectedWorkspaceEntity ?? orderedWorkspaceEntities.first
+        let trimmedWindowTitle = windowEntity.title?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let resolvedTitle = if let trimmedWindowTitle, !trimmedWindowTitle.isEmpty {
+            trimmedWindowTitle
+        } else if let selectedWorkspaceEntity {
+            selectedWorkspaceEntity.title
+        } else if let representativeWorkspaceEntity {
+            representativeWorkspaceEntity.title
+        } else {
+            "Window"
+        }
+        let paneCount = orderedWorkspaceEntities.reduce(into: 0) { count, workspaceEntity in
+            count += decodeNode(workspaceEntity.rootNode)?.leaves().count ?? 0
+        }
+        let previewText = representativeWorkspaceEntity?.previewText
+        let searchText = (
+            [resolvedTitle, previewText, representativeWorkspaceEntity?.searchText]
+                + orderedWorkspaceEntities.map(\.title).map(Optional.some)
+                + orderedWorkspaceEntities.compactMap(\.previewText).map(Optional.some),
+        )
+        .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+        .filter { !$0.isEmpty }
+        .joined(separator: "\n")
+
+        libraryItem.title = resolvedTitle
+        libraryItem.previewText = previewText
+        libraryItem.searchText = searchText
+        libraryItem.paneCount = Int64(paneCount)
+        libraryItem.workspaceCount = Int64(orderedWorkspaceEntities.count)
+    }
+
+    private nonisolated static func makeLibraryItemListing(from libraryItem: LibraryItemEntity) -> LibraryItemListing? {
+        guard let kind = LibraryItemKind(rawValue: libraryItem.kind) else {
+            return nil
+        }
+
+        return LibraryItemListing(
+            id: libraryItem.id,
+            kind: kind,
+            workspaceID: libraryItem.workspaceID.map { WorkspaceID(rawValue: $0) },
+            windowID: libraryItem.windowID.map { WorkspaceSceneIdentity(windowID: $0) },
+            title: libraryItem.title,
+            createdAt: libraryItem.createdAt,
+            updatedAt: libraryItem.updatedAt,
+            lastOpenedAt: libraryItem.lastOpenedAt,
+            isPinned: libraryItem.isPinned,
+            previewText: libraryItem.previewText,
+            paneCount: Int(libraryItem.paneCount),
+            workspaceCount: Int(libraryItem.workspaceCount),
         )
     }
 
@@ -1005,7 +1058,7 @@ extension WorkspacePersistenceController {
                     return false
                 }
 
-                return role == .live || role == .library
+                return role == .live
             }
             let hasWindowMembership = try !loadWindowWorkspaceMemberships(
                 workspaceID: workspaceEntity.id,
@@ -1098,6 +1151,227 @@ extension WorkspacePersistenceController {
         if context.hasChanges {
             try context.save()
         }
+    }
+
+    private nonisolated static func loadLibraryItems(
+        matching query: String? = nil,
+        in context: NSManagedObjectContext,
+    ) throws -> [LibraryItemListing] {
+        let request = NSFetchRequest<LibraryItemEntity>(entityName: "LibraryItemEntity")
+        request.sortDescriptors = [
+            NSSortDescriptor(key: #keyPath(LibraryItemEntity.isPinned), ascending: false),
+            NSSortDescriptor(key: #keyPath(LibraryItemEntity.updatedAt), ascending: false),
+        ]
+        if let query, !query.isEmpty {
+            request.predicate = NSPredicate(format: "searchText CONTAINS[cd] %@", query)
+        }
+
+        return try context.fetch(request).compactMap(makeLibraryItemListing(from:))
+    }
+
+    private nonisolated static func loadLibraryItems(
+        kind: LibraryItemKind,
+        matching query: String? = nil,
+        in context: NSManagedObjectContext,
+    ) throws -> [LibraryItemEntity] {
+        let request = NSFetchRequest<LibraryItemEntity>(entityName: "LibraryItemEntity")
+        request.sortDescriptors = [
+            NSSortDescriptor(key: #keyPath(LibraryItemEntity.isPinned), ascending: false),
+            NSSortDescriptor(key: #keyPath(LibraryItemEntity.updatedAt), ascending: false),
+        ]
+        var predicates = [NSPredicate(format: "kind == %@", kind.rawValue)]
+        if let query, !query.isEmpty {
+            predicates.append(NSPredicate(format: "searchText CONTAINS[cd] %@", query))
+        }
+        request.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: predicates)
+        return try context.fetch(request)
+    }
+
+    private nonisolated static func loadLibraryItems(
+        kind: LibraryItemKind,
+        workspaceID: UUID,
+        in context: NSManagedObjectContext,
+    ) throws -> [LibraryItemEntity] {
+        let request = NSFetchRequest<LibraryItemEntity>(entityName: "LibraryItemEntity")
+        request.predicate = NSCompoundPredicate(
+            andPredicateWithSubpredicates: [
+                NSPredicate(format: "kind == %@", kind.rawValue),
+                NSPredicate(format: "workspaceID == %@", workspaceID as CVarArg),
+            ],
+        )
+        return try context.fetch(request)
+    }
+
+    private nonisolated static func loadLibraryItems(
+        kind: LibraryItemKind,
+        windowID: UUID,
+        in context: NSManagedObjectContext,
+    ) throws -> [LibraryItemEntity] {
+        let request = NSFetchRequest<LibraryItemEntity>(entityName: "LibraryItemEntity")
+        request.predicate = NSCompoundPredicate(
+            andPredicateWithSubpredicates: [
+                NSPredicate(format: "kind == %@", kind.rawValue),
+                NSPredicate(format: "windowID == %@", windowID as CVarArg),
+            ],
+        )
+        return try context.fetch(request)
+    }
+
+    private nonisolated static func loadLibraryItem(
+        id: UUID,
+        in context: NSManagedObjectContext,
+    ) throws -> LibraryItemEntity? {
+        let request = NSFetchRequest<LibraryItemEntity>(entityName: "LibraryItemEntity")
+        request.fetchLimit = 1
+        request.predicate = NSPredicate(format: "id == %@", id as CVarArg)
+        return try context.fetch(request).first
+    }
+
+    private nonisolated static func loadLibraryItem(
+        kind: LibraryItemKind,
+        workspaceID: UUID,
+        in context: NSManagedObjectContext,
+    ) throws -> LibraryItemEntity? {
+        try loadLibraryItems(kind: kind, workspaceID: workspaceID, in: context).first
+    }
+
+    private nonisolated static func loadLibraryItem(
+        kind: LibraryItemKind,
+        windowID: UUID,
+        in context: NSManagedObjectContext,
+    ) throws -> LibraryItemEntity? {
+        try loadLibraryItems(kind: kind, windowID: windowID, in: context).first
+    }
+
+    private nonisolated static func requireOrCreateLibraryItem(
+        kind: LibraryItemKind,
+        workspaceID: UUID,
+        context: NSManagedObjectContext,
+    ) throws -> LibraryItemEntity {
+        if let libraryItem = try loadLibraryItem(kind: kind, workspaceID: workspaceID, in: context) {
+            return libraryItem
+        }
+
+        let entity = LibraryItemEntity(context: context)
+        entity.id = UUID()
+        entity.kind = kind.rawValue
+        entity.workspaceID = workspaceID
+        return entity
+    }
+
+    private nonisolated static func requireOrCreateLibraryItem(
+        kind: LibraryItemKind,
+        windowID: UUID,
+        context: NSManagedObjectContext,
+    ) throws -> LibraryItemEntity {
+        if let libraryItem = try loadLibraryItem(kind: kind, windowID: windowID, in: context) {
+            return libraryItem
+        }
+
+        let entity = LibraryItemEntity(context: context)
+        entity.id = UUID()
+        entity.kind = kind.rawValue
+        entity.windowID = windowID
+        return entity
+    }
+
+    private nonisolated static func isWorkspaceLive(workspaceID: UUID, in context: NSManagedObjectContext) -> Bool {
+        let request = NSFetchRequest<WorkspacePlacementEntity>(entityName: "WorkspacePlacementEntity")
+        request.fetchLimit = 1
+        request.predicate = NSCompoundPredicate(
+            andPredicateWithSubpredicates: [
+                NSPredicate(format: "role == %@", WorkspacePlacementRole.live.rawValue),
+                NSPredicate(format: "workspace.id == %@", workspaceID as CVarArg),
+            ],
+        )
+
+        do {
+            return try !context.fetch(request).isEmpty
+        } catch {
+            Logger.persistence.error("Core Data failed to determine whether a workspace is currently live while listing library items. The app will continue, but the library may briefly show a stale row. Workspace ID: \(workspaceID.uuidString, privacy: .public). Error: \(String(describing: error), privacy: .public)")
+            return false
+        }
+    }
+
+    private nonisolated static func isWindowOpen(windowID: UUID, in context: NSManagedObjectContext) -> Bool {
+        do {
+            return try loadWindowEntity(id: windowID, in: context)?.isOpen ?? false
+        } catch {
+            Logger.persistence.error("Core Data failed to determine whether a window is currently live while listing library items. The app will continue, but the library may briefly show a stale row. Window ID: \(windowID.uuidString, privacy: .public). Error: \(String(describing: error), privacy: .public)")
+            return false
+        }
+    }
+
+    private nonisolated static func migrateLegacyLibraryItems(in context: NSManagedObjectContext) throws {
+        let request = NSFetchRequest<WorkspacePlacementEntity>(entityName: "WorkspacePlacementEntity")
+        request.predicate = NSPredicate(format: "role == %@", WorkspacePersistenceLegacy.libraryPlacementRoleRawValue)
+        let legacyPlacements = try context.fetch(request)
+        guard !legacyPlacements.isEmpty else {
+            return
+        }
+
+        for placement in legacyPlacements {
+            guard let workspaceEntity = placement.workspace else {
+                context.delete(placement)
+                continue
+            }
+
+            let libraryItem = try requireOrCreateLibraryItem(
+                kind: .workspace,
+                workspaceID: workspaceEntity.id,
+                context: context,
+            )
+            if libraryItem.objectID.isTemporaryID {
+                libraryItem.createdAt = placement.createdAt
+            }
+            libraryItem.kind = LibraryItemKind.workspace.rawValue
+            libraryItem.workspaceID = workspaceEntity.id
+            libraryItem.windowID = nil
+            libraryItem.updatedAt = placement.updatedAt
+            libraryItem.lastOpenedAt = placement.lastOpenedAt
+            libraryItem.isPinned = placement.isPinned
+            libraryItem.title = placement.title
+            libraryItem.previewText = placement.previewText
+            libraryItem.searchText = placement.searchText
+            libraryItem.paneCount = placement.paneCount
+            libraryItem.workspaceCount = 1
+            context.delete(placement)
+        }
+
+        if context.hasChanges {
+            try context.save()
+        }
+    }
+
+    @discardableResult
+    private nonisolated static func upsertWindowLibraryItem(
+        for sceneIdentity: WorkspaceSceneIdentity,
+        in context: NSManagedObjectContext,
+        now: Date,
+    ) throws -> LibraryItemEntity? {
+        guard let windowEntity = try loadWindowEntity(id: sceneIdentity.windowID, in: context) else {
+            return nil
+        }
+
+        let livePlacements = loadPlacements(role: .live, sceneIdentity: sceneIdentity, in: context)
+        guard !livePlacements.isEmpty else {
+            return nil
+        }
+
+        let libraryItem = try requireOrCreateLibraryItem(
+            kind: .window,
+            windowID: sceneIdentity.windowID,
+            context: context,
+        )
+        if libraryItem.objectID.isTemporaryID {
+            libraryItem.createdAt = windowEntity.createdAt
+        }
+        libraryItem.kind = LibraryItemKind.window.rawValue
+        libraryItem.workspaceID = nil
+        libraryItem.windowID = sceneIdentity.windowID
+        libraryItem.updatedAt = now
+        refreshListingMetadata(on: libraryItem, from: windowEntity, livePlacements: livePlacements)
+        return libraryItem
     }
 
     private nonisolated static func loadWindowWorkspaceMemberships(
@@ -1265,6 +1539,7 @@ extension WorkspacePersistenceController {
 
     private nonisolated static func retainedWorkspaceIDs(in context: NSManagedObjectContext) throws -> Set<UUID> {
         let placementRequest = NSFetchRequest<WorkspacePlacementEntity>(entityName: "WorkspacePlacementEntity")
+        let libraryItemRequest = NSFetchRequest<LibraryItemEntity>(entityName: "LibraryItemEntity")
         let membershipRequest = NSFetchRequest<WindowWorkspaceMembershipEntity>(entityName: "WindowWorkspaceMembershipEntity")
         let placementWorkspaceIDs: [UUID] = try context.fetch(placementRequest).compactMap { placement in
             guard !placement.isDeleted else {
@@ -1273,6 +1548,13 @@ extension WorkspacePersistenceController {
 
             return placement.workspace?.id
         }
+        let libraryWorkspaceIDs: [UUID] = try context.fetch(libraryItemRequest).compactMap { libraryItem in
+            guard !libraryItem.isDeleted else {
+                return nil
+            }
+
+            return libraryItem.workspaceID
+        }
         let membershipWorkspaceIDs: [UUID] = try context.fetch(membershipRequest).compactMap { membership in
             guard !membership.isDeleted else {
                 return nil
@@ -1280,7 +1562,7 @@ extension WorkspacePersistenceController {
 
             return membership.workspaceID
         }
-        return Set(placementWorkspaceIDs + membershipWorkspaceIDs)
+        return Set(placementWorkspaceIDs + libraryWorkspaceIDs + membershipWorkspaceIDs)
     }
 
     private nonisolated static func loadWorkspaceEntity(id: UUID, in context: NSManagedObjectContext) throws -> WorkspaceEntity? {

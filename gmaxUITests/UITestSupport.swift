@@ -34,7 +34,13 @@ class GmaxUITestCase: XCTestCase {
     }
 
     func activeWorkspaceWindow(in app: XCUIApplication) -> XCUIElement {
-        app.windows
+        let windows = app.windows
+            .matching(
+                NSPredicate(format: "identifier BEGINSWITH %@", UIProbe.workspaceWindowIdentifierPrefix),
+            )
+            .allElementsBoundByIndex
+
+        return windows.last(where: \.exists) ?? app.windows
             .matching(
                 NSPredicate(format: "identifier BEGINSWITH %@", UIProbe.workspaceWindowIdentifierPrefix),
             )
@@ -74,7 +80,7 @@ class GmaxUITestCase: XCTestCase {
     }
 
     func assertWorkspaceExists(_ title: String, in app: XCUIApplication) {
-        let workspaceRow = sidebarWorkspaceRow(titled: title, in: app)
+        let workspaceRow = sidebarWorkspaceRow(titled: title, in: activeWorkspaceWindow(in: app))
         XCTAssertTrue(
             workspaceRow.waitForExistence(timeout: 5),
             "The workspace titled \(title) should be visible in the sidebar.",
@@ -84,14 +90,14 @@ class GmaxUITestCase: XCTestCase {
     func assertWorkspaceDoesNotExist(_ title: String, in app: XCUIApplication) {
         XCTAssertTrue(
             waitForNonExistence(timeout: 2) {
-                self.sidebarWorkspaceRow(titled: title, in: app)
+                self.sidebarWorkspaceRow(titled: title, in: self.activeWorkspaceWindow(in: app))
             },
             "The workspace titled \(title) should not remain visible in the sidebar.",
         )
     }
 
     func selectWorkspace(_ title: String, in app: XCUIApplication) {
-        let workspaceLabel = sidebarWorkspaceRow(titled: title, in: app)
+        let workspaceLabel = sidebarWorkspaceRow(titled: title, in: activeWorkspaceWindow(in: app))
         XCTAssertTrue(
             workspaceLabel.waitForExistence(timeout: 5),
             "The workspace titled \(title) must exist before it can be selected.",
@@ -123,58 +129,94 @@ class GmaxUITestCase: XCTestCase {
         menuItem.click()
     }
 
-    func openSavedWorkspaceLibrary(in app: XCUIApplication) {
+    func menuBarAction(
+        menuBarItem title: String,
+        action actionTitle: String,
+        in app: XCUIApplication,
+    ) -> XCUIElement {
+        let menuBarItem = app.menuBars.menuBarItems[title]
+        XCTAssertTrue(
+            menuBarItem.waitForExistence(timeout: 5),
+            "The app menu bar should contain the menu titled \(title).",
+        )
+        menuBarItem.click()
+
+        let menuItem = app.menuBars.menuItems[actionTitle]
+        XCTAssertTrue(
+            menuItem.waitForExistence(timeout: 5),
+            "The \(title) menu should contain the action titled \(actionTitle).",
+        )
+        return menuItem
+    }
+
+    func openLibrary(in app: XCUIApplication) {
         app.typeKey("o", modifierFlags: .command)
         XCTAssertTrue(
-            savedWorkspaceLibraryOpenButton(in: app).waitForExistence(timeout: 5),
-            "The saved-workspace library sheet should appear after requesting it.",
+            libraryOpenButton(in: app).waitForExistence(timeout: 5),
+            "The library sheet should appear after requesting it.",
         )
     }
 
-    func openSavedWorkspaceLibraryFromToolbar(in app: XCUIApplication) {
-        let button = openSavedWorkspacesButton(in: app)
+    func openLibraryFromToolbar(in app: XCUIApplication) {
+        let button = openLibraryButton(in: app)
         XCTAssertTrue(
             button.waitForExistence(timeout: 5),
-            "The active workspace window toolbar should expose the saved-workspace library button.",
+            "The active workspace window toolbar should expose the library button.",
         )
         button.click()
         XCTAssertTrue(
-            savedWorkspaceLibraryCancelButton(in: app).waitForExistence(timeout: 5),
-            "The saved-workspace library sheet should appear after invoking the toolbar button.",
+            libraryCancelButton(in: app).waitForExistence(timeout: 5),
+            "The library sheet should appear after invoking the toolbar button.",
         )
     }
 
-    func savedWorkspaceLibraryOpenButton(in app: XCUIApplication) -> XCUIElement {
-        let identifiedButton = app.buttons["savedWorkspaceLibrary.openButton"]
+    func libraryOpenButton(in app: XCUIApplication) -> XCUIElement {
+        let identifiedButton = app.buttons["library.openButton"]
         if identifiedButton.exists {
             return identifiedButton
+        }
+        let legacyButton = app.buttons["savedWorkspaceLibrary.openButton"]
+        if legacyButton.exists {
+            return legacyButton
         }
         return app.buttons["Open"]
     }
 
-    func savedWorkspaceLibraryCancelButton(in app: XCUIApplication) -> XCUIElement {
-        let identifiedButton = app.buttons["savedWorkspaceLibrary.cancelButton"]
+    func libraryCancelButton(in app: XCUIApplication) -> XCUIElement {
+        let identifiedButton = app.buttons["library.cancelButton"]
         if identifiedButton.exists {
             return identifiedButton
+        }
+        let legacyButton = app.buttons["savedWorkspaceLibrary.cancelButton"]
+        if legacyButton.exists {
+            return legacyButton
         }
         return app.buttons["Cancel"]
     }
 
-    func savedWorkspaceLibraryDeleteButton(in app: XCUIApplication) -> XCUIElement {
-        let identifiedButton = app.buttons["savedWorkspaceLibrary.deleteButton"]
+    func libraryDeleteButton(in app: XCUIApplication) -> XCUIElement {
+        let identifiedButton = app.buttons["library.deleteButton"]
         if identifiedButton.exists {
             return identifiedButton
+        }
+        let legacyButton = app.buttons["savedWorkspaceLibrary.deleteButton"]
+        if legacyButton.exists {
+            return legacyButton
         }
         return app.buttons["Delete"]
     }
 
-    func savedWorkspaceLibraryEmptyState(in app: XCUIApplication) -> XCUIElement {
-        let identifiedElement = app.descendants(matching: .any)["savedWorkspaceLibrary.emptyState"]
+    func libraryEmptyState(in app: XCUIApplication) -> XCUIElement {
+        let identifiedElement = app.descendants(matching: .any)["library.emptyState"]
         if identifiedElement.exists {
             return identifiedElement
         }
+        let legacyElement = app.descendants(matching: .any)["savedWorkspaceLibrary.emptyState"]
+        if legacyElement.exists {
+            return legacyElement
+        }
 
-        let titledElement = app.staticTexts["No Saved Workspaces"]
+        let titledElement = app.staticTexts["No Saved Library Items"]
         if titledElement.exists {
             return titledElement
         }
@@ -204,11 +246,32 @@ class GmaxUITestCase: XCTestCase {
         sidebarWorkspaceRow(titled: title, in: scope).label
     }
 
-    func savedWorkspaceLibraryRow(titled title: String, in app: XCUIApplication) -> XCUIElement {
-        let libraryList = app.descendants(matching: .any)["savedWorkspaceLibrary.list"]
-        let identifiedTitle = libraryList.staticTexts["savedWorkspaceLibrary.title.\(title)"]
+    func waitForSidebarWorkspaceRowLabel(
+        titled title: String,
+        toEqual expectedLabel: String,
+        in scope: XCUIElement,
+        timeout: TimeInterval = 5,
+    ) -> Bool {
+        let row = sidebarWorkspaceRow(titled: title, in: scope)
+        let predicate = NSPredicate(format: "label == %@", expectedLabel)
+        let expectation = XCTNSPredicateExpectation(predicate: predicate, object: row)
+        return XCTWaiter.wait(for: [expectation], timeout: timeout) == .completed
+    }
+
+    func libraryRow(titled title: String, in app: XCUIApplication) -> XCUIElement {
+        let currentList = app.descendants(matching: .any)["library.list"]
+        let libraryList = if currentList.exists {
+            currentList
+        } else {
+            app.descendants(matching: .any)["savedWorkspaceLibrary.list"]
+        }
+        let identifiedTitle = libraryList.staticTexts["library.title.\(title)"]
         if identifiedTitle.exists {
             return identifiedTitle
+        }
+        let legacyTitle = libraryList.staticTexts["savedWorkspaceLibrary.title.\(title)"]
+        if legacyTitle.exists {
+            return legacyTitle
         }
 
         let visibleTitle = libraryList.staticTexts[title]
@@ -216,9 +279,13 @@ class GmaxUITestCase: XCTestCase {
             return visibleTitle
         }
 
-        let identifiedRow = libraryList.outlines.cells.containing(.staticText, identifier: "savedWorkspaceLibrary.title.\(title)").firstMatch
+        let identifiedRow = libraryList.outlines.cells.containing(.staticText, identifier: "library.title.\(title)").firstMatch
         if identifiedRow.exists {
             return identifiedRow
+        }
+        let legacyRow = libraryList.outlines.cells.containing(.staticText, identifier: "savedWorkspaceLibrary.title.\(title)").firstMatch
+        if legacyRow.exists {
+            return legacyRow
         }
 
         return libraryList.staticTexts[title]
@@ -228,8 +295,13 @@ class GmaxUITestCase: XCTestCase {
         activeWorkspaceWindow(in: app).buttons["workspaceWindow.toggleInspectorButton"]
     }
 
-    func openSavedWorkspacesButton(in app: XCUIApplication) -> XCUIElement {
-        activeWorkspaceWindow(in: app).buttons["workspaceWindow.openSavedWorkspacesButton"]
+    func openLibraryButton(in app: XCUIApplication) -> XCUIElement {
+        let activeWindow = activeWorkspaceWindow(in: app)
+        let currentButton = activeWindow.buttons["workspaceWindow.openLibraryButton"]
+        if currentButton.exists {
+            return currentButton
+        }
+        return activeWindow.buttons["workspaceWindow.openSavedWorkspacesButton"]
     }
 
     func newWorkspaceButton(in app: XCUIApplication) -> XCUIElement {

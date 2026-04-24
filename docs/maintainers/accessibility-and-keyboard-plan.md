@@ -338,7 +338,7 @@ For each release candidate:
 4. Run a multi-window command-routing pass:
    - open a second shell window
    - select different workspaces in each window
-   - confirm `New Pane`, `Save Workspace`, `Open Workspace…`, `Close Workspace`, and `Delete Workspace` follow the frontmost window
+   - confirm `New Pane`, `Save Workspace`, `Open Library…`, `Close Workspace`, and `Delete Workspace` follow the frontmost window
    - confirm keyboard focus and spoken focus do not leave the wrong window appearing active
 5. Record whether the terminal surface itself is:
    - meaningfully accessible

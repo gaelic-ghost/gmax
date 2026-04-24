@@ -85,6 +85,7 @@ struct WorkspacePersistenceProfileTests {
         let windowEntity = try #require(model.entitiesByName["WorkspaceWindowEntity"])
         let membershipEntity = try #require(model.entitiesByName["WindowWorkspaceMembershipEntity"])
         let placementEntity = try #require(model.entitiesByName["WorkspacePlacementEntity"])
+        let libraryItemEntity = try #require(model.entitiesByName["LibraryItemEntity"])
 
         let workspaceCreatedAt = workspaceEntity.attributesByName["createdAt"]
         let workspaceUpdatedAt = workspaceEntity.attributesByName["updatedAt"]
@@ -101,6 +102,11 @@ struct WorkspacePersistenceProfileTests {
         let membershipSortOrder = membershipEntity.attributesByName["sortOrder"]
         let placementCreatedAt = placementEntity.attributesByName["createdAt"]
         let placementUpdatedAt = placementEntity.attributesByName["updatedAt"]
+        let libraryItemCreatedAt = libraryItemEntity.attributesByName["createdAt"]
+        let libraryItemUpdatedAt = libraryItemEntity.attributesByName["updatedAt"]
+        let libraryItemIsPinned = libraryItemEntity.attributesByName["isPinned"]
+        let libraryItemPaneCount = libraryItemEntity.attributesByName["paneCount"]
+        let libraryItemWorkspaceCount = libraryItemEntity.attributesByName["workspaceCount"]
 
         #expect(workspaceCreatedAt?.defaultValue is Date)
         #expect(workspaceUpdatedAt?.defaultValue is Date)
@@ -117,6 +123,11 @@ struct WorkspacePersistenceProfileTests {
         #expect(membershipSortOrder?.defaultValue as? Int64 == 0)
         #expect(placementCreatedAt?.defaultValue is Date)
         #expect(placementUpdatedAt?.defaultValue is Date)
+        #expect(libraryItemCreatedAt?.defaultValue is Date)
+        #expect(libraryItemUpdatedAt?.defaultValue is Date)
+        #expect(libraryItemIsPinned?.defaultValue as? Bool == false)
+        #expect(libraryItemPaneCount?.defaultValue as? Int64 == 0)
+        #expect(libraryItemWorkspaceCount?.defaultValue as? Int64 == 0)
         #expect(workspaceEntity.attributesByName["savedWorkspaceID"] == nil)
     }
 }

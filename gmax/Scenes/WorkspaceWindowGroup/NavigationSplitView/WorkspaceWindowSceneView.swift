@@ -18,6 +18,7 @@ struct WorkspaceWindowSceneView: View {
     @AppStorage(WorkspacePersistenceDefaults.backgroundSaveIntervalMinutesKey)
     private var backgroundSaveIntervalMinutes = WorkspacePersistenceDefaults.defaultBackgroundSaveIntervalMinutes
     @Environment(\.appearsActive) private var appearsActive
+    @Environment(\.dismiss) private var dismissWindow
     @Environment(\.openWindow) private var openWindow
     @Environment(\.scenePhase) private var scenePhase
     @FocusState private var focusedTarget: WorkspaceFocusTarget?
@@ -28,7 +29,7 @@ struct WorkspaceWindowSceneView: View {
     @State private var workspacePendingDeletionID: WorkspaceID?
     @State private var workspacePendingRenameID: WorkspaceID?
     @State private var workspaceRenameTitleDraft = ""
-    @State private var isSavedWorkspaceLibraryPresented = false
+    @State private var isLibraryPresented = false
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
     @State private var isInspectorVisible = true
     @State private var hasAppliedSceneState = false
@@ -53,8 +54,11 @@ struct WorkspaceWindowSceneView: View {
     }
 
     var body: some View {
-        let openSavedWorkspaceLibrary = {
-            isSavedWorkspaceLibraryPresented = true
+        let openLibrary = {
+            isLibraryPresented = true
+        }
+        let closeWindow = {
+            dismissWindow()
         }
         let normalizeSelection = {
             selectedWorkspaceID = if let selectedWorkspaceID, workspaceStore.workspaces.contains(where: { $0.id == selectedWorkspaceID }) {
@@ -110,12 +114,12 @@ struct WorkspaceWindowSceneView: View {
         let pendingDeletionWorkspace = workspacePendingDeletionID.flatMap { workspaceID in workspaceStore.workspaces.first { $0.id == workspaceID } }
         let pendingRenameWorkspace = workspacePendingRenameID.flatMap { workspaceID in workspaceStore.workspaces.first { $0.id == workspaceID } }
         let dismissPresentedWorkspaceModal: (() -> Void)? = {
-            if isSavedWorkspaceLibraryPresented {
+            if isLibraryPresented {
                 return {
                     Logger.diagnostics.notice(
-                        "Dismissed the saved-workspace library sheet from the active shell window without reopening a workspace.",
+                        "Dismissed the library sheet from the active shell window without reopening a workspace or window.",
                     )
-                    isSavedWorkspaceLibraryPresented = false
+                    isLibraryPresented = false
                 }
             }
             if pendingRenameWorkspace != nil {
@@ -349,7 +353,7 @@ struct WorkspaceWindowSceneView: View {
         .modifier(WorkspaceWindowPresentationModifier(
             workspaceStore: workspaceStore,
             selectedWorkspaceID: $selectedWorkspaceID,
-            isSavedWorkspaceLibraryPresented: $isSavedWorkspaceLibraryPresented,
+            isLibraryPresented: $isLibraryPresented,
             deleteAlertIsPresented: Binding(
                 get: { workspacePendingDeletionID != nil },
                 set: { isPresented in
@@ -380,7 +384,8 @@ struct WorkspaceWindowSceneView: View {
         .focusedSceneValue(\.activeWorkspaceSceneIdentity, sceneIdentity)
         .focusedSceneValue(\.selectedWorkspaceSelection, $selectedWorkspaceID)
         .focusedSceneValue(\.dismissPresentedWorkspaceModal, dismissPresentedWorkspaceModal)
-        .focusedSceneValue(\.openSavedWorkspaceLibrary, openSavedWorkspaceLibrary)
+        .focusedSceneValue(\.closeWorkspaceWindow, closeWindow)
+        .focusedSceneValue(\.openLibrary, openLibrary)
         .focusedSceneValue(\.presentWorkspaceRename, presentWorkspaceRename)
         .focusedSceneValue(\.presentWorkspaceDeletion, presentWorkspaceDeletion)
         .focusedSceneValue(\.moveFocusedPaneFocus, moveFocusedPaneFocusAction)
@@ -466,18 +471,18 @@ struct WorkspaceWindowSceneView: View {
                 )
             },
             onDisappear: {
-                windowRestoration.recordWindowClosed(sceneIdentity)
                 workspaceStore.persistSceneStateNow(
                     reason: WorkspacePersistenceSaveReason.windowDisappeared,
                 )
+                windowRestoration.recordWindowClosed(sceneIdentity)
             },
         ))
         .toolbar {
             ToolbarItem(placement: .navigation) {
-                Button("Open Saved Workspaces", systemImage: "folder", action: openSavedWorkspaceLibrary)
+                Button("Open Library", systemImage: "folder", action: openLibrary)
                     .labelStyle(.iconOnly)
-                    .help("Open saved workspaces (\u{2318}O)")
-                    .accessibilityIdentifier("workspaceWindow.openSavedWorkspacesButton")
+                    .help("Open the library (\u{2318}O)")
+                    .accessibilityIdentifier("workspaceWindow.openLibraryButton")
             }
 
             ToolbarItem(placement: .navigation) {
@@ -1013,7 +1018,7 @@ func paneFocusTargetAfterClosingPane(
 private struct WorkspaceWindowPresentationModifier: ViewModifier {
     let workspaceStore: WorkspaceStore
     @Binding var selectedWorkspaceID: WorkspaceID?
-    @Binding var isSavedWorkspaceLibraryPresented: Bool
+    @Binding var isLibraryPresented: Bool
     let deleteAlertIsPresented: Binding<Bool>
     let deleteWorkspaceTitle: String?
     let confirmDelete: () -> Void
@@ -1026,8 +1031,8 @@ private struct WorkspaceWindowPresentationModifier: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .sheet(isPresented: $isSavedWorkspaceLibraryPresented) {
-                SavedWorkspaceLibrarySheet(
+            .sheet(isPresented: $isLibraryPresented) {
+                LibrarySheet(
                     model: workspaceStore,
                     selectedWorkspaceID: $selectedWorkspaceID,
                 )

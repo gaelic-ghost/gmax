@@ -6,11 +6,16 @@ struct WorkspaceSceneIdentity: Codable, Hashable {
 
 enum WorkspacePlacementRole: String, Codable, Hashable {
     case live
-    case library
+}
+
+enum LibraryItemKind: String, Codable, Hashable {
+    case workspace
+    case window
 }
 
 enum WorkspacePersistenceLegacy {
     nonisolated static let recentPlacementRoleRawValue = "recent"
+    nonisolated static let libraryPlacementRoleRawValue = "library"
 }
 
 struct WorkspaceSessionSnapshot: Hashable, Codable, Identifiable {
@@ -32,8 +37,11 @@ struct WorkspaceListing: Hashable, Codable {
     var isPinned: Bool
 }
 
-struct SavedWorkspaceListing: Identifiable, Hashable, Codable {
-    var id: WorkspaceID
+struct LibraryItemListing: Identifiable, Hashable, Codable {
+    var id: UUID
+    var kind: LibraryItemKind
+    var workspaceID: WorkspaceID?
+    var windowID: WorkspaceSceneIdentity?
     var title: String
     var createdAt: Date
     var updatedAt: Date
@@ -41,6 +49,7 @@ struct SavedWorkspaceListing: Identifiable, Hashable, Codable {
     var isPinned: Bool
     var previewText: String?
     var paneCount: Int
+    var workspaceCount: Int
 }
 
 struct WorkspaceRevision: Identifiable, Hashable, Codable {

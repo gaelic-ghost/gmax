@@ -11,6 +11,7 @@ final class WorkspaceWindowRestorationController: ObservableObject {
     private var openSceneIdentities: Set<WorkspaceSceneIdentity> = []
     private var launchRestoreSceneIdentities: [WorkspaceSceneIdentity]
     private var hasConsumedPendingLaunchRestoreSceneIdentities = false
+    private var hasIssuedInitialDefaultSceneIdentity = false
     private var isApplicationTerminating = false
 
     init(
@@ -63,6 +64,15 @@ final class WorkspaceWindowRestorationController: ObservableObject {
         }
         persistence.markWindowOpen(sceneIdentity)
         recentlyClosedWindowSceneIdentities = persistence.loadRecentlyClosedWindowSceneIdentities()
+    }
+
+    func nextDefaultSceneIdentity() -> WorkspaceSceneIdentity {
+        if !hasIssuedInitialDefaultSceneIdentity {
+            hasIssuedInitialDefaultSceneIdentity = true
+            return initialSceneIdentity
+        }
+
+        return WorkspaceSceneIdentity()
     }
 
     func recordWindowClosed(_ sceneIdentity: WorkspaceSceneIdentity) {

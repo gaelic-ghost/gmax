@@ -63,6 +63,23 @@ final class WorkspacePlacementEntity: NSManagedObject {
     @NSManaged var workspace: WorkspaceEntity?
 }
 
+@objc(LibraryItemEntity)
+final class LibraryItemEntity: NSManagedObject {
+    @NSManaged var id: UUID
+    @NSManaged var kind: String
+    @NSManaged var workspaceID: UUID?
+    @NSManaged var windowID: UUID?
+    @NSManaged var createdAt: Date
+    @NSManaged var updatedAt: Date
+    @NSManaged var lastOpenedAt: Date?
+    @NSManaged var isPinned: Bool
+    @NSManaged var title: String
+    @NSManaged var previewText: String?
+    @NSManaged var searchText: String?
+    @NSManaged var paneCount: Int64
+    @NSManaged var workspaceCount: Int64
+}
+
 @objc(WorkspaceWindowEntity)
 final class WorkspaceWindowEntity: NSManagedObject {
     @NSManaged var id: UUID

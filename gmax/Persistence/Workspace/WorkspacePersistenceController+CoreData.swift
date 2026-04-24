@@ -146,6 +146,10 @@ extension WorkspacePersistenceController {
         workspacePlacementEntity.name = "WorkspacePlacementEntity"
         workspacePlacementEntity.managedObjectClassName = NSStringFromClass(WorkspacePlacementEntity.self)
 
+        let libraryItemEntity = NSEntityDescription()
+        libraryItemEntity.name = "LibraryItemEntity"
+        libraryItemEntity.managedObjectClassName = NSStringFromClass(LibraryItemEntity.self)
+
         let workspaceWindowEntity = NSEntityDescription()
         workspaceWindowEntity.name = "WorkspaceWindowEntity"
         workspaceWindowEntity.managedObjectClassName = NSStringFromClass(WorkspaceWindowEntity.self)
@@ -223,6 +227,28 @@ extension WorkspacePersistenceController {
         let placementPreviewText = attribute(name: "previewText", type: .stringAttributeType, isOptional: true)
         let placementSearchText = attribute(name: "searchText", type: .stringAttributeType, isOptional: true)
         let placementPaneCount = attribute(name: "paneCount", type: .integer64AttributeType, defaultValue: 0)
+
+        let libraryItemID = attribute(name: "id", type: .UUIDAttributeType)
+        let libraryItemKind = attribute(name: "kind", type: .stringAttributeType)
+        let libraryItemWorkspaceID = attribute(name: "workspaceID", type: .UUIDAttributeType, isOptional: true)
+        let libraryItemWindowID = attribute(name: "windowID", type: .UUIDAttributeType, isOptional: true)
+        let libraryItemCreatedAt = attribute(
+            name: "createdAt",
+            type: .dateAttributeType,
+            defaultValue: migrationDefaultDate,
+        )
+        let libraryItemUpdatedAt = attribute(
+            name: "updatedAt",
+            type: .dateAttributeType,
+            defaultValue: migrationDefaultDate,
+        )
+        let libraryItemLastOpenedAt = attribute(name: "lastOpenedAt", type: .dateAttributeType, isOptional: true)
+        let libraryItemIsPinned = attribute(name: "isPinned", type: .booleanAttributeType, defaultValue: false)
+        let libraryItemTitle = attribute(name: "title", type: .stringAttributeType)
+        let libraryItemPreviewText = attribute(name: "previewText", type: .stringAttributeType, isOptional: true)
+        let libraryItemSearchText = attribute(name: "searchText", type: .stringAttributeType, isOptional: true)
+        let libraryItemPaneCount = attribute(name: "paneCount", type: .integer64AttributeType, defaultValue: 0)
+        let libraryItemWorkspaceCount = attribute(name: "workspaceCount", type: .integer64AttributeType, defaultValue: 0)
 
         let windowID = attribute(name: "id", type: .UUIDAttributeType)
         let windowCreatedAt = attribute(
@@ -427,6 +453,22 @@ extension WorkspacePersistenceController {
             windowIsOpen,
         ]
 
+        libraryItemEntity.properties = [
+            libraryItemID,
+            libraryItemKind,
+            libraryItemWorkspaceID,
+            libraryItemWindowID,
+            libraryItemCreatedAt,
+            libraryItemUpdatedAt,
+            libraryItemLastOpenedAt,
+            libraryItemIsPinned,
+            libraryItemTitle,
+            libraryItemPreviewText,
+            libraryItemSearchText,
+            libraryItemPaneCount,
+            libraryItemWorkspaceCount,
+        ]
+
         windowWorkspaceMembershipEntity.properties = [
             membershipID,
             membershipWindowID,
@@ -461,6 +503,7 @@ extension WorkspacePersistenceController {
             workspaceEntity,
             paneNodeEntity,
             workspacePlacementEntity,
+            libraryItemEntity,
             workspaceWindowEntity,
             windowWorkspaceMembershipEntity,
             workspaceWindowStateEntity,
