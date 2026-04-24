@@ -22,10 +22,20 @@ struct WorkspaceSessionSnapshot: Hashable, Codable, Identifiable {
     var id: TerminalSessionID
     var title: String
     var launchConfiguration: TerminalLaunchConfiguration
-    var transcript: String?
+    var history: WorkspaceSessionHistorySnapshot
     var transcriptByteCount: Int
     var transcriptLineCount: Int
     var previewText: String?
+
+    nonisolated var transcript: String? { history.transcript }
+    nonisolated var normalScrollPosition: Double? { history.normalScrollPosition }
+    nonisolated var wasAlternateBufferActive: Bool { history.wasAlternateBufferActive }
+}
+
+struct WorkspaceSessionHistorySnapshot: Hashable, Codable {
+    var transcript: String?
+    var normalScrollPosition: Double?
+    var wasAlternateBufferActive: Bool
 }
 
 struct WorkspaceListing: Hashable, Codable {
@@ -88,5 +98,5 @@ struct WindowWorkspaceHistoryInput {
     var formerIndex: Int
     var launchConfigurationsBySessionID: [TerminalSessionID: TerminalLaunchConfiguration]
     var titlesBySessionID: [TerminalSessionID: String]
-    var transcriptsBySessionID: [TerminalSessionID: String]
+    var historyBySessionID: [TerminalSessionID: WorkspaceSessionHistorySnapshot]
 }

@@ -128,7 +128,7 @@ extension WorkspaceStore {
             let session = sessions.ensureSession(id: leaf.sessionID, launchConfiguration: launchConfiguration)
             session.title = paneSnapshot?.title ?? session.title
             session.currentDirectory = launchConfiguration.currentDirectory
-            session.setRestoredTranscript(paneSnapshot?.transcript)
+            session.setRestoredHistory(paneSnapshot?.history)
         }
 
         refreshRecentlyClosedWorkspaceCount()
@@ -153,7 +153,7 @@ extension WorkspaceStore {
             return nil
         }
 
-        let resolvedTranscripts = captureWorkspaceTranscripts(
+        let resolvedHistory = captureWorkspaceHistory(
             for: workspace,
             explicitTranscriptsBySessionID: transcriptsBySessionID,
         )
@@ -161,7 +161,7 @@ extension WorkspaceStore {
         let summary = persistence.saveWorkspaceToLibrary(
             from: workspace,
             sessions: sessions,
-            transcriptsBySessionID: resolvedTranscripts,
+            historyBySessionID: resolvedHistory,
         )
         if let summary {
             objectWillChange.send()
@@ -231,7 +231,7 @@ extension WorkspaceStore {
     private struct PersistenceSnapshot {
         let liveWorkspaces: [Workspace]
         let selectedWorkspaceID: WorkspaceID?
-        let liveTranscriptsByWorkspaceID: [WorkspaceID: [TerminalSessionID: String]]
+        let liveHistoryByWorkspaceID: [WorkspaceID: [TerminalSessionID: WorkspaceSessionHistorySnapshot]]
     }
 
     private func uniqueWorkspaceTitle(startingWith baseTitle: String) -> String {
@@ -265,7 +265,7 @@ extension WorkspaceStore {
         }
 
         var launchConfigurationsBySessionID: [TerminalSessionID: TerminalLaunchConfiguration] = [:]
-        var transcriptsBySessionID: [TerminalSessionID: String] = [:]
+        var historyBySessionID: [TerminalSessionID: WorkspaceSessionHistorySnapshot] = [:]
         var titlesBySessionID: [TerminalSessionID: String] = [:]
         let restoredWorkspace = Workspace(
             id: WorkspaceID(rawValue: savedWorkspace.id),
@@ -279,7 +279,7 @@ extension WorkspaceStore {
                     $0,
                     paneSnapshotsBySessionID: savedWorkspace.paneSnapshotsBySessionID,
                     launchConfigurationsBySessionID: &launchConfigurationsBySessionID,
-                    transcriptsBySessionID: &transcriptsBySessionID,
+                    historyBySessionID: &historyBySessionID,
                     titlesBySessionID: &titlesBySessionID,
                 )
             },
@@ -290,7 +290,7 @@ extension WorkspaceStore {
             let session = sessions.ensureSession(id: sessionID, launchConfiguration: launchConfiguration)
             session.title = titlesBySessionID[sessionID] ?? "Shell"
             session.currentDirectory = launchConfiguration.currentDirectory
-            session.setRestoredTranscript(transcriptsBySessionID[sessionID])
+            session.setRestoredHistory(historyBySessionID[sessionID])
         }
 
         persistence.markLibraryItemOpened(libraryItemID)
@@ -328,11 +328,11 @@ extension WorkspaceStore {
 
     private func makePersistenceSnapshot() -> PersistenceSnapshot {
         let workspacesSnapshot = workspaces
-        let transcriptsByWorkspaceID = Dictionary(
+        let historyByWorkspaceID = Dictionary(
             uniqueKeysWithValues: workspacesSnapshot.map { workspace in
                 (
                     workspace.id,
-                    captureWorkspaceTranscripts(
+                    captureWorkspaceHistory(
                         for: workspace,
                         explicitTranscriptsBySessionID: [:],
                     ),
@@ -343,7 +343,7 @@ extension WorkspaceStore {
         return PersistenceSnapshot(
             liveWorkspaces: workspacesSnapshot,
             selectedWorkspaceID: persistedSelectedWorkspaceID,
-            liveTranscriptsByWorkspaceID: transcriptsByWorkspaceID,
+            liveHistoryByWorkspaceID: historyByWorkspaceID,
         )
     }
 
@@ -362,7 +362,7 @@ extension WorkspaceStore {
             liveWorkspaces: snapshot.liveWorkspaces,
             selectedWorkspaceID: snapshot.selectedWorkspaceID,
             sessions: sessions,
-            liveTranscriptsByWorkspaceID: snapshot.liveTranscriptsByWorkspaceID,
+            liveHistoryByWorkspaceID: snapshot.liveHistoryByWorkspaceID,
         )
     }
 
@@ -406,14 +406,14 @@ extension WorkspaceStore {
 
         let workspace = workspaces[workspaceIndex]
         if saveToLibrary {
-            let resolvedTranscripts = captureWorkspaceTranscripts(
+            let resolvedHistory = captureWorkspaceHistory(
                 for: workspace,
                 explicitTranscriptsBySessionID: explicitTranscriptsBySessionID,
             )
             _ = persistence.saveWorkspaceToLibrary(
                 from: workspace,
                 sessions: sessions,
-                transcriptsBySessionID: resolvedTranscripts,
+                historyBySessionID: resolvedHistory,
             )
         }
 
@@ -454,7 +454,7 @@ extension WorkspaceStore {
             let session = sessions.ensureSession(id: leaf.sessionID)
             return (leaf.sessionID, session.title)
         })
-        let transcriptsBySessionID = captureWorkspaceTranscripts(
+        let historyBySessionID = captureWorkspaceHistory(
             for: workspace,
             explicitTranscriptsBySessionID: [:],
         )
@@ -465,7 +465,7 @@ extension WorkspaceStore {
                 formerIndex: formerIndex,
                 launchConfigurationsBySessionID: launchConfigurationsBySessionID,
                 titlesBySessionID: titlesBySessionID,
-                transcriptsBySessionID: transcriptsBySessionID,
+                historyBySessionID: historyBySessionID,
             ),
             for: sceneIdentity,
             limit: WorkspacePersistenceDefaults.maxRecentlyClosedWorkspaceCount,
@@ -477,28 +477,39 @@ extension WorkspaceStore {
         recentlyClosedWorkspaceCount = persistence.countRecentWorkspaceHistory(for: sceneIdentity)
     }
 
-    private func captureWorkspaceTranscripts(
+    private func captureWorkspaceHistory(
         for workspace: Workspace,
         explicitTranscriptsBySessionID: [TerminalSessionID: String],
-    ) -> [TerminalSessionID: String] {
-        var resolvedTranscripts = explicitTranscriptsBySessionID
+    ) -> [TerminalSessionID: WorkspaceSessionHistorySnapshot] {
+        var resolvedHistory = Dictionary(
+            uniqueKeysWithValues: explicitTranscriptsBySessionID.map { sessionID, transcript in
+                (
+                    sessionID,
+                    WorkspaceSessionHistorySnapshot(
+                        transcript: transcript,
+                        normalScrollPosition: nil,
+                        wasAlternateBufferActive: false,
+                    ),
+                )
+            },
+        )
 
-        for leaf in workspace.root?.leaves() ?? [] where resolvedTranscripts[leaf.sessionID] == nil {
-            guard let transcript = paneControllers.existingController(for: leaf.id)?.captureTranscript() else {
+        for leaf in workspace.root?.leaves() ?? [] where resolvedHistory[leaf.sessionID] == nil {
+            guard let history = paneControllers.existingController(for: leaf.id)?.captureHistory() else {
                 continue
             }
 
-            resolvedTranscripts[leaf.sessionID] = transcript
+            resolvedHistory[leaf.sessionID] = history
         }
 
-        return resolvedTranscripts
+        return resolvedHistory
     }
 
     private func restoreNode(
         _ node: PaneNode,
         paneSnapshotsBySessionID: [TerminalSessionID: WorkspaceSessionSnapshot],
         launchConfigurationsBySessionID: inout [TerminalSessionID: TerminalLaunchConfiguration],
-        transcriptsBySessionID: inout [TerminalSessionID: String],
+        historyBySessionID: inout [TerminalSessionID: WorkspaceSessionHistorySnapshot],
         titlesBySessionID: inout [TerminalSessionID: String],
     ) -> PaneNode {
         switch node {
@@ -508,8 +519,8 @@ extension WorkspaceStore {
                 let launchConfiguration = paneSnapshot?.launchConfiguration
                     ?? launchContextBuilder.makeLaunchConfiguration()
                 launchConfigurationsBySessionID[restoredLeaf.sessionID] = launchConfiguration
-                if let transcript = paneSnapshot?.transcript {
-                    transcriptsBySessionID[restoredLeaf.sessionID] = transcript
+                if let history = paneSnapshot?.history {
+                    historyBySessionID[restoredLeaf.sessionID] = history
                 }
                 if let title = paneSnapshot?.title {
                     titlesBySessionID[restoredLeaf.sessionID] = title
@@ -525,14 +536,14 @@ extension WorkspaceStore {
                             split.first,
                             paneSnapshotsBySessionID: paneSnapshotsBySessionID,
                             launchConfigurationsBySessionID: &launchConfigurationsBySessionID,
-                            transcriptsBySessionID: &transcriptsBySessionID,
+                            historyBySessionID: &historyBySessionID,
                             titlesBySessionID: &titlesBySessionID,
                         ),
                         second: restoreNode(
                             split.second,
                             paneSnapshotsBySessionID: paneSnapshotsBySessionID,
                             launchConfigurationsBySessionID: &launchConfigurationsBySessionID,
-                            transcriptsBySessionID: &transcriptsBySessionID,
+                            historyBySessionID: &historyBySessionID,
                             titlesBySessionID: &titlesBySessionID,
                         ),
                     ),

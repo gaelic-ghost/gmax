@@ -177,7 +177,7 @@ struct WorkspacePersistenceTests {
             let metadata = try #require(metadataBySessionID[originalLeaf.sessionID])
             #expect(restoredSession.title == metadata.title)
             #expect(restoredSession.currentDirectory == metadata.directory)
-            #expect(restoredSession.consumeRestoredTranscript() == metadata.transcript)
+            #expect(restoredSession.consumeRestoredHistory()?.transcript == metadata.transcript)
         }
     }
 
@@ -256,7 +256,7 @@ struct WorkspacePersistenceTests {
             let metadata = try #require(metadataBySessionID[originalLeaf.sessionID])
             #expect(restoredSession.title == metadata.title)
             #expect(restoredSession.currentDirectory == metadata.directory)
-            #expect(restoredSession.consumeRestoredTranscript() == metadata.transcript)
+            #expect(restoredSession.consumeRestoredHistory()?.transcript == metadata.transcript)
         }
     }
 
@@ -296,7 +296,43 @@ struct WorkspacePersistenceTests {
         #expect(reopenedWorkspace.title.starts(with: "Workspace 1"))
         #expect(reopenedSession.title == "Build Shell")
         #expect(reopenedSession.currentDirectory == "/tmp/workspace-library")
-        #expect(reopenedSession.consumeRestoredTranscript() == "$ pwd\n/tmp/workspace-library\n")
+        #expect(reopenedSession.consumeRestoredHistory()?.transcript == "$ pwd\n/tmp/workspace-library\n")
+    }
+
+    @Test func `workspace library persistence round-trips restored history metadata`() throws {
+        let workspace = TestSupport.makeWorkspace(title: "Workspace 1")
+        let persistence = WorkspacePersistenceController.inMemoryForTesting()
+        let launchConfiguration = TestSupport.makeLaunchContextBuilder(defaultCurrentDirectory: "/tmp/gmax-tests")
+            .makeLaunchConfiguration()
+        let sessions = TerminalSessionRegistry(
+            workspaces: [workspace],
+            defaultLaunchConfiguration: launchConfiguration,
+        )
+        let pane = try #require(workspace.root?.firstLeaf())
+        let session = sessions.ensureSession(id: pane.sessionID)
+        session.title = "History Shell"
+        session.currentDirectory = "/tmp/history-restore"
+
+        let history = WorkspaceSessionHistorySnapshot(
+            transcript: "$ pwd\n/tmp/history-restore\n",
+            normalScrollPosition: 0.68,
+            wasAlternateBufferActive: true,
+        )
+        let summary = try #require(
+            persistence.saveWorkspaceToLibrary(
+                from: workspace,
+                sessions: sessions,
+                historyBySessionID: [pane.sessionID: history],
+            ),
+        )
+        let restoredRevision = try #require(persistence.loadWorkspaceLibraryItem(id: summary.id))
+        let restoredPaneSnapshot = try #require(restoredRevision.paneSnapshotsBySessionID[pane.sessionID])
+
+        #expect(restoredPaneSnapshot.title == "History Shell")
+        #expect(restoredPaneSnapshot.launchConfiguration.currentDirectory == "/tmp/history-restore")
+        #expect(restoredPaneSnapshot.history == history)
+        #expect(restoredPaneSnapshot.transcriptByteCount == (history.transcript?.utf8.count ?? 0))
+        #expect(restoredPaneSnapshot.transcriptLineCount == 3)
     }
 
     @Test func `opening a saved workspace while it is already live reuses the same identity and does not duplicate it`() throws {
@@ -546,12 +582,12 @@ struct WorkspacePersistenceTests {
         let unaffectedSession = try #require(model.sessions.session(for: reopenedLeaves[0].sessionID))
         #expect(unaffectedSession.title == "Left Shell")
         #expect(unaffectedSession.currentDirectory == "/tmp/layout/left")
-        #expect(unaffectedSession.consumeRestoredTranscript() == "printf left\n")
+        #expect(unaffectedSession.consumeRestoredHistory()?.transcript == "printf left\n")
 
         let fallbackSession = try #require(model.sessions.session(for: reopenedLeaves[1].sessionID))
         #expect(fallbackSession.title == "Shell")
         #expect(fallbackSession.currentDirectory == "/tmp/default-fallback")
-        #expect(fallbackSession.consumeRestoredTranscript() == nil)
+        #expect(fallbackSession.consumeRestoredHistory()?.transcript == nil)
     }
 
     @Test func `close workspace to library creates A reusable saved workspace and selects the neighbor`() throws {
@@ -666,7 +702,7 @@ struct WorkspacePersistenceTests {
                 formerIndex: 2,
                 launchConfigurationsBySessionID: [:],
                 titlesBySessionID: [:],
-                transcriptsBySessionID: [:],
+                historyBySessionID: [:],
             ),
             for: firstSceneIdentity,
             limit: WorkspacePersistenceDefaults.maxRecentlyClosedWorkspaceCount,
@@ -677,7 +713,7 @@ struct WorkspacePersistenceTests {
                 formerIndex: 5,
                 launchConfigurationsBySessionID: [:],
                 titlesBySessionID: [:],
-                transcriptsBySessionID: [:],
+                historyBySessionID: [:],
             ),
             for: secondSceneIdentity,
             limit: WorkspacePersistenceDefaults.maxRecentlyClosedWorkspaceCount,
@@ -704,7 +740,7 @@ struct WorkspacePersistenceTests {
                 formerIndex: 3,
                 launchConfigurationsBySessionID: [:],
                 titlesBySessionID: [:],
-                transcriptsBySessionID: [:],
+                historyBySessionID: [:],
             ),
             for: sceneIdentity,
             limit: WorkspacePersistenceDefaults.maxRecentlyClosedWorkspaceCount,

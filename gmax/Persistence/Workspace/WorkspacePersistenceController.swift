@@ -131,7 +131,7 @@ final class WorkspacePersistenceController {
                         for: recentWorkspace.workspace,
                         launchConfigurationsBySessionID: recentWorkspace.launchConfigurationsBySessionID,
                         titlesBySessionID: recentWorkspace.titlesBySessionID,
-                        transcriptsBySessionID: recentWorkspace.transcriptsBySessionID,
+                        historyBySessionID: recentWorkspace.historyBySessionID,
                     ),
                     now: now,
                 )
@@ -382,7 +382,7 @@ final class WorkspacePersistenceController {
         liveWorkspaces: [Workspace],
         selectedWorkspaceID: WorkspaceID?,
         sessions: TerminalSessionRegistry,
-        liveTranscriptsByWorkspaceID: [WorkspaceID: [TerminalSessionID: String]] = [:],
+        liveHistoryByWorkspaceID: [WorkspaceID: [TerminalSessionID: WorkspaceSessionHistorySnapshot]] = [:],
     ) {
         let liveSessionSnapshotsByWorkspaceID = Dictionary(
             uniqueKeysWithValues: liveWorkspaces.map { workspace in
@@ -391,7 +391,7 @@ final class WorkspacePersistenceController {
                     Self.makeSessionSnapshots(
                         for: workspace,
                         sessions: sessions,
-                        transcriptsBySessionID: liveTranscriptsByWorkspaceID[workspace.id] ?? [:],
+                        historyBySessionID: liveHistoryByWorkspaceID[workspace.id] ?? [:],
                     ),
                 )
             },
@@ -509,14 +509,14 @@ final class WorkspacePersistenceController {
     func upsertWorkspaceLibraryItem(
         from workspace: Workspace,
         sessions: TerminalSessionRegistry,
-        transcriptsBySessionID: [TerminalSessionID: String] = [:],
+        historyBySessionID: [TerminalSessionID: WorkspaceSessionHistorySnapshot] = [:],
         notes: String? = nil,
         isPinned: Bool? = nil,
     ) -> LibraryItemListing? {
         let sessionSnapshots = Self.makeSessionSnapshots(
             for: workspace,
             sessions: sessions,
-            transcriptsBySessionID: transcriptsBySessionID,
+            historyBySessionID: historyBySessionID,
         )
         let context = container.viewContext
         return context.performAndWait {
@@ -565,14 +565,14 @@ final class WorkspacePersistenceController {
     func saveWorkspaceToLibrary(
         from workspace: Workspace,
         sessions: TerminalSessionRegistry,
-        transcriptsBySessionID: [TerminalSessionID: String] = [:],
+        historyBySessionID: [TerminalSessionID: WorkspaceSessionHistorySnapshot] = [:],
         notes: String? = nil,
         isPinned: Bool? = nil,
     ) -> LibraryItemListing? {
         upsertWorkspaceLibraryItem(
             from: workspace,
             sessions: sessions,
-            transcriptsBySessionID: transcriptsBySessionID,
+            historyBySessionID: historyBySessionID,
             notes: notes,
             isPinned: isPinned,
         )
@@ -797,6 +797,9 @@ extension WorkspacePersistenceController {
             entity.currentDirectory = sessionSnapshot.launchConfiguration.currentDirectory
             entity.title = sessionSnapshot.title
             entity.transcript = sessionSnapshot.transcript
+            entity.normalScrollPosition = sessionSnapshot.normalScrollPosition ?? 0
+            entity.hasNormalScrollPosition = sessionSnapshot.normalScrollPosition != nil
+            entity.wasAlternateBufferActive = sessionSnapshot.wasAlternateBufferActive
             entity.transcriptByteCount = Int64(sessionSnapshot.transcriptByteCount)
             entity.transcriptLineCount = Int64(sessionSnapshot.transcriptLineCount)
             entity.previewText = sessionSnapshot.previewText
@@ -816,7 +819,7 @@ extension WorkspacePersistenceController {
     private static func makeSessionSnapshots(
         for workspace: Workspace,
         sessions: TerminalSessionRegistry,
-        transcriptsBySessionID: [TerminalSessionID: String],
+        historyBySessionID: [TerminalSessionID: WorkspaceSessionHistorySnapshot],
     ) -> [WorkspaceSessionSnapshot] {
         makeSessionSnapshots(
             for: workspace,
@@ -838,7 +841,7 @@ extension WorkspacePersistenceController {
                     return (leaf.sessionID, session.title)
                 },
             ),
-            transcriptsBySessionID: transcriptsBySessionID,
+            historyBySessionID: historyBySessionID,
         )
     }
 
@@ -846,14 +849,20 @@ extension WorkspacePersistenceController {
         for workspace: Workspace,
         launchConfigurationsBySessionID: [TerminalSessionID: TerminalLaunchConfiguration],
         titlesBySessionID: [TerminalSessionID: String],
-        transcriptsBySessionID: [TerminalSessionID: String],
+        historyBySessionID: [TerminalSessionID: WorkspaceSessionHistorySnapshot],
     ) -> [WorkspaceSessionSnapshot] {
         (workspace.root?.leaves() ?? []).compactMap { leaf in
             guard let launchConfiguration = launchConfigurationsBySessionID[leaf.sessionID] else {
                 return nil
             }
 
-            let transcript = transcriptsBySessionID[leaf.sessionID]
+            let history = historyBySessionID[leaf.sessionID]
+                ?? WorkspaceSessionHistorySnapshot(
+                    transcript: nil,
+                    normalScrollPosition: nil,
+                    wasAlternateBufferActive: false,
+                )
+            let transcript = history.transcript
             let transcriptLineCount = transcript.map { transcript in
                 transcript.isEmpty ? 0 : transcript.reduce(into: 1) { count, character in
                     if character == "\n" {
@@ -866,7 +875,7 @@ extension WorkspacePersistenceController {
                 id: leaf.sessionID,
                 title: titlesBySessionID[leaf.sessionID] ?? "Shell",
                 launchConfiguration: launchConfiguration,
-                transcript: transcript,
+                history: history,
                 transcriptByteCount: transcript?.utf8.count ?? 0,
                 transcriptLineCount: transcriptLineCount,
                 previewText: previewText,
@@ -941,7 +950,13 @@ extension WorkspacePersistenceController {
                             environment: environment,
                             currentDirectory: sessionSnapshot.currentDirectory,
                         ),
-                        transcript: sessionSnapshot.transcript,
+                        history: WorkspaceSessionHistorySnapshot(
+                            transcript: sessionSnapshot.transcript,
+                            normalScrollPosition: sessionSnapshot.hasNormalScrollPosition
+                                ? sessionSnapshot.normalScrollPosition
+                                : nil,
+                            wasAlternateBufferActive: sessionSnapshot.wasAlternateBufferActive,
+                        ),
                         transcriptByteCount: Int(sessionSnapshot.transcriptByteCount),
                         transcriptLineCount: Int(sessionSnapshot.transcriptLineCount),
                         previewText: sessionSnapshot.previewText,

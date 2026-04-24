@@ -487,13 +487,139 @@ The current restore model is:
 
 1. capture transcript text from each pane up to a configured retention limit
 2. save the pane launch context alongside that transcript
-3. reopen the workspace by restoring layout first
-4. restore preserved transcript history into the pane's history presentation
-5. launch a fresh shell for each pane using the saved launch context
+3. also persist a small history-restore payload:
+   - normalized normal-buffer scroll position when available
+   - whether the pane was sitting in the alternate buffer at capture time
+4. reopen the workspace by restoring layout first
+5. restore preserved transcript history into the pane's history presentation
+6. if the pane was in ordinary scrollback rather than the alternate buffer,
+   restore its saved scroll position after the fresh shell starts
+7. launch a fresh shell for each pane using the saved launch context
 
 This should continue to be described in the product as restored history, not as the same suspended process being resumed.
 
 If a more faithful restoration is needed later, that should be treated as a second-phase terminal replay feature rather than as part of the initial saved-workspace library.
+
+### Current implementation details
+
+The current implementation is intentionally still modest, but it is no longer
+transcript-only:
+
+- `TerminalPaneController.captureHistory()` reads SwiftTerm's normal buffer as
+  UTF-8 text
+- the same capture step also records a normalized scroll position and whether
+  SwiftTerm was currently showing the alternate buffer
+- `WorkspaceStore` persists that restored-history payload into each pane
+  session snapshot
+- `TerminalSession` carries one pending restored-history payload per pane
+- `TerminalPaneController.restoreHistoryIfNeeded(...)` feeds the saved bytes
+  back into a fresh `LocalProcessTerminalView`
+- `TerminalPaneView.Coordinator` restores saved scroll position after process
+  launch when the pane was not captured from the alternate buffer
+- the shell process is then launched again from the saved launch context
+
+That gives `gmax` a materially better readable-history restore, but it still
+does **not** yet restore:
+
+- what portion of the history the user was actively reading
+- alternate-screen contents or full-screen TUI state
+- cursor state, attributes, or other emulator-local presentation details
+
+### Recommended next scope: improved restored terminal history
+
+The first `1 + 2` slice is now partially landed. The next follow-through should
+keep improving it rather than jumping straight to full emulator-state
+serialization.
+
+What is already in place:
+
+- transcript capture no longer trims away whitespace and newline-only history
+  just to decide whether it is worth restoring
+- pane session snapshots now persist:
+  - transcript text
+  - transcript byte and line counts
+  - normal-buffer scroll position when available
+  - an alternate-buffer-active flag
+- restore can now put ordinary shell panes back closer to the saved reading
+  position after relaunch
+
+What still remains worthwhile in this scope:
+
+1. make transcript retention explicit and configurable
+2. persist better visible-range context than one normalized scroll position
+3. decide whether alternate-buffer capture should record more operator-facing
+   hints without pretending to restore TUI state exactly
+
+#### Layer A: improve transcript fidelity
+
+This layer should tighten what we already capture and replay:
+
+- stop treating transcript persistence as "best effort preview text plus some
+  saved lines"
+- preserve transcript text more faithfully, including newline behavior and
+  trailing content that currently gets normalized away too aggressively
+- make transcript retention explicit and configurable instead of leaving it as
+  an implied behavior
+- keep transcript capture readable and search-friendly for the library and
+  recently closed workspace surfaces
+
+The first pass of this is now landed. Concretely, `TerminalPaneController` and
+`TerminalSession` preserve more of the real buffer and do less silent trimming.
+
+#### Layer B: add restore metadata
+
+This layer should stop treating restore as "just replay text into a new view"
+and instead persist a small history-restore model alongside the transcript.
+
+The first-pass metadata should stay practical and low-risk. The currently
+landed metadata is:
+
+- a normalized scroll position for the normal buffer
+- whether the pane looked like ordinary scrollback or a volatile alternate
+  screen at capture time
+
+Good next candidates are:
+
+- the last visible region of the normal buffer
+- enough row-count or visible-range context to reopen closer to what the user
+  was reading rather than always dropping them at the end of the transcript
+
+The product language for this layer should stay honest:
+
+- "restored terminal history" is accurate
+- "full terminal restore" is **not** accurate yet
+
+### Explicit non-goal for this pass
+
+This pass should **not** try to persist or restore full terminal emulator state.
+
+That means no commitment yet to serializing:
+
+- alternate-screen contents exactly
+- cursor position and styling exactly
+- terminal attributes, modes, or emulator-private state exactly
+- interactive TUI applications exactly as they were
+
+That deeper work remains a future option if the improved history model still
+proves insufficient.
+
+### Future option: full emulator-state persistence
+
+If later product requirements really demand "restore the terminal exactly as the
+user left it," that should be treated as a separate architectural decision with
+its own cost review.
+
+That future path would likely require:
+
+- reaching into SwiftTerm buffer and emulator internals beyond the current
+  public text-history path
+- defining a versioned serialized terminal-state payload
+- deciding how much alternate-screen and TUI state is safe to carry across app
+  relaunches
+- accepting tighter coupling between `gmax` and SwiftTerm internals
+
+This should remain future work until the improved transcript-plus-metadata path
+has been tried and judged insufficient.
 
 ## Close, Undo, and Save Matrix
 

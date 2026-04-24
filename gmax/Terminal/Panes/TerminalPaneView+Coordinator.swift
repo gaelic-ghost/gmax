@@ -74,7 +74,7 @@ extension TerminalPaneView {
                 return
             }
 
-            controller.restoreTranscriptIfNeeded(into: terminalView)
+            let pendingViewportRestore = controller.restoreHistoryIfNeeded(into: terminalView)
 
             let launch = controller.session.launchConfiguration
             terminalView.startProcess(
@@ -91,6 +91,23 @@ extension TerminalPaneView {
             Task { @MainActor in
                 await Task.yield()
                 controller.session.state = .running
+            }
+            if let pendingViewportRestore {
+                Task { @MainActor in
+                    await Task.yield()
+                    await Task.yield()
+                    guard controller.session.relaunchGeneration == generation else {
+                        return
+                    }
+                    guard !pendingViewportRestore.shouldSkipRestoreBecauseAlternateBufferWasActive else {
+                        return
+                    }
+                    guard let scrollPosition = pendingViewportRestore.normalScrollPosition else {
+                        return
+                    }
+
+                    terminalView.scroll(toPosition: scrollPosition)
+                }
             }
         }
     }

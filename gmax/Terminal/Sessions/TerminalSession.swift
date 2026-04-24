@@ -24,7 +24,7 @@ final class TerminalSession: ObservableObject, Identifiable {
     @Published var state: TerminalSessionState
     @Published private(set) var relaunchGeneration: Int
 
-    private var pendingRestoredTranscript: String?
+    private var pendingRestoredHistory: WorkspaceSessionHistorySnapshot?
 
     init(
         id: TerminalSessionID,
@@ -46,19 +46,44 @@ final class TerminalSession: ObservableObject, Identifiable {
         title = "Shell"
         currentDirectory = launchConfiguration.currentDirectory
         state = .idle
-        pendingRestoredTranscript = nil
+        pendingRestoredHistory = nil
         relaunchGeneration += 1
     }
 
-    func setRestoredTranscript(_ transcript: String?) {
-        let normalizedTranscript = transcript?
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        pendingRestoredTranscript = normalizedTranscript?.isEmpty == false ? transcript : nil
+    func setRestoredHistory(_ history: WorkspaceSessionHistorySnapshot?) {
+        guard let history else {
+            pendingRestoredHistory = nil
+            return
+        }
+
+        let normalizedHistory = WorkspaceSessionHistorySnapshot(
+            transcript: history.transcript?.isEmpty == true ? nil : history.transcript,
+            normalScrollPosition: history.normalScrollPosition,
+            wasAlternateBufferActive: history.wasAlternateBufferActive,
+        )
+        let hasRestorableContent = normalizedHistory.transcript != nil
+            || normalizedHistory.normalScrollPosition != nil
+            || normalizedHistory.wasAlternateBufferActive
+        pendingRestoredHistory = hasRestorableContent ? normalizedHistory : nil
     }
 
-    func consumeRestoredTranscript() -> String? {
-        let transcript = pendingRestoredTranscript
-        pendingRestoredTranscript = nil
-        return transcript
+    func setRestoredHistory(
+        transcript: String?,
+        normalScrollPosition: Double?,
+        wasAlternateBufferActive: Bool,
+    ) {
+        setRestoredHistory(
+            WorkspaceSessionHistorySnapshot(
+                transcript: transcript,
+                normalScrollPosition: normalScrollPosition,
+                wasAlternateBufferActive: wasAlternateBufferActive,
+            ),
+        )
+    }
+
+    func consumeRestoredHistory() -> WorkspaceSessionHistorySnapshot? {
+        let history = pendingRestoredHistory
+        pendingRestoredHistory = nil
+        return history
     }
 }

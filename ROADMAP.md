@@ -149,6 +149,7 @@ In Progress
 - [x] Add durable Core Data-backed window records for selection, open state, and window recency.
 - [x] Move recent workspace reopen behavior onto durable window membership plus workspace recency.
 - [ ] Add configurable transcript retention limits for saved workspace history.
+- [ ] Decide whether deeper terminal history restore should stop at richer normal-buffer scrollback or eventually grow full alternate-buffer and emulator-state replay.
 - [ ] Add crash-safe and operator-friendly persistence diagnostics.
 - [x] Introduce a unified library listing surface that can hold both saved workspaces and saved windows.
 - [ ] Add explicit saved-workspace revision history retention instead of replacing the current saved payload in place.
@@ -305,6 +306,7 @@ Planned
 ## Backlog Candidates
 
 - [ ] Revisit a user-facing support-bundle export UI once Milestone 6 settles the diagnostics payload and operator workflow.
+- [ ] Revisit full alternate-buffer and emulator-state restoration only if the current restored-history model still feels meaningfully insufficient for ordinary shell use.
 - [ ] Revisit Ghostty integration only if a stable pane-hosting surface actually exists.
 - [ ] Revisit pane-local tabs only after the current workspace, split, and close model feels settled enough to support another navigation layer cleanly.
 
