@@ -20,7 +20,7 @@
 
 ### What This Project Is
 
-`gmax` is a native macOS shell workspace app for managing multiple terminal workspaces across an intentional multi-window SwiftUI scene model. The shipped repo surface already includes a data-driven `WindowGroup` shell, recursive split-pane workspaces, SwiftTerm-hosted local shell sessions, basic `WKWebView` browser panes, a saved-workspace library with restored terminal history, Core Data persistence for live, recent, and saved workspace state, durable per-window restoration, ordinary shell scrollback restore on relaunch, scene-local command context, and a settings window for terminal appearance plus workspace persistence and browser-home behavior.
+`gmax` is a native macOS shell workspace app for managing mixed terminal and browser workspaces across an intentional multi-window SwiftUI scene model. The current shipped surface includes a data-driven `WindowGroup` shell, recursive split-pane workspaces, SwiftTerm-hosted local shell sessions, basic `WKWebView` browser panes, a unified library for saved workspaces and windows, Core Data persistence for live, recent, and saved state, durable per-window restoration, restored terminal history with ordinary shell scrollback on relaunch, scene-local command context, and a settings window for terminal appearance plus workspace persistence and browser-home behavior.
 
 This repository is the app itself. It also carries the maintainer notes, release checklists, and repo-maintenance scripts that document how the current shell is supposed to behave and how maintainers validate it.
 
@@ -43,8 +43,9 @@ From the current app surface you can:
 - create and switch workspaces
 - split panes right or down inside the selected workspace
 - move focus across panes with keyboard commands
-- save workspaces into the library and reopen them later
-- restore saved terminal history for reopened workspaces and ordinary live relaunches, including ordinary scroll position when available
+- save workspaces and windows into the library and reopen them later
+- restore terminal history for reopened workspaces and ordinary live relaunches, including ordinary scroll position when available
+- split dedicated browser panes into a workspace and navigate them in place
 - hide or show the sidebar and inspector independently
 - adjust terminal appearance and workspace persistence behavior in Settings
 
@@ -52,7 +53,7 @@ The command surface is intentionally keyboard-forward. The current menu and shor
 
 - `cmd-n` for a new workspace
 - `cmd-shift-n` for `New gmax Window`
-- `cmd-o` to open the saved-workspace library
+- `cmd-o` to open the library
 - `cmd-option-o` to open the most recently closed workspace for the active window
 - `cmd-shift-o` to open the most recently closed window
 - `cmd-option-s` to close the selected workspace into the library
@@ -119,6 +120,7 @@ For log validation during manual testing:
 │   │   ├── WorkspaceWindowGroup/
 │   │   └── Settings/
 │   ├── Terminal/
+│   ├── Browser/
 │   ├── Persistence/
 │   ├── Views/
 │   └── Support/
@@ -136,14 +138,15 @@ For log validation during manual testing:
 Key repo surfaces:
 
 - `gmax/Scenes/WorkspaceWindowGroup/` holds the main window-scene composition, scene-local selection, pane focus publication, and command wiring.
+- `gmax/Browser/` holds the browser-pane runtime, WebKit host boundary, and browser session models.
 - `gmax/Terminal/` holds the SwiftTerm hosting boundary, launch/session types, and pane controllers.
-- `gmax/Persistence/Workspace/` holds Core Data-backed workspace persistence plus the saved-workspace model.
+- `gmax/Persistence/Workspace/` holds Core Data-backed workspace persistence plus the unified library and session snapshot models.
 - `docs/maintainers/` holds the architectural and maintainer-facing source of truth for focus, persistence, accessibility, telemetry, and browser-pane planning.
 - `docs/releases/` holds release-oriented checklists such as [docs/releases/v0.1.0-release-checklist.md](docs/releases/v0.1.0-release-checklist.md).
 
 ## Release Notes
 
-The repository already has release tags through `v0.0.8`. The current release-prep checkpoint is [docs/releases/v0.0.9-release-notes.md](docs/releases/v0.0.9-release-notes.md), and the broader internal-release quality bar is tracked in [docs/releases/v0.1.0-release-checklist.md](docs/releases/v0.1.0-release-checklist.md). Both release docs assume `README.md`, `ROADMAP.md`, and the maintainer notes stay aligned with the shipped persistence, library, command, window-restoration, terminal-history, and browser-pane model.
+The repository currently has release tags through `v0.0.9`. The latest shipped checkpoint is documented in [docs/releases/v0.0.9-release-notes.md](docs/releases/v0.0.9-release-notes.md), and the broader internal-release quality bar is tracked in [docs/releases/v0.1.0-release-checklist.md](docs/releases/v0.1.0-release-checklist.md). Both release docs assume `README.md`, `ROADMAP.md`, and the maintainer notes stay aligned with the shipped persistence, library, command, window-restoration, terminal-history, and browser-pane model.
 
 ## License
 
