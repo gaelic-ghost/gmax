@@ -26,6 +26,14 @@ struct TerminalLaunchContextBuilder {
         let baseEnvironment = processInfo.environment
             .merging(swiftTermEnvironment, uniquingKeysWith: { _, new in new })
             .merging(stableTerminalEnvironment(), uniquingKeysWith: { _, new in new })
+            .merging(
+                ZshShellIntegration.environmentOverlay(
+                    shellExecutable: shellExecutable,
+                    baseEnvironment: processInfo.environment,
+                    fileManager: fileManager,
+                ),
+                uniquingKeysWith: { _, new in new },
+            )
 
         return TerminalLaunchContextBuilder(
             shellExecutable: shellExecutable,

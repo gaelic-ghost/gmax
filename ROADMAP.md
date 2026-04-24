@@ -38,7 +38,7 @@
 - Milestone 4: Preferences and Customization - In Progress
 - Milestone 5: Persistence and Sync Follow-Through - In Progress
 - Milestone 6: Quality and Release Readiness - In Progress
-- Milestone 7: Deeper Terminal Integrations / Remote / SSH / Etc. - Planned
+- Milestone 7: Deeper Terminal Integrations / Remote / SSH / Etc. - In Progress
 - Milestone 8: App Sandbox Compatibility - Planned
 - Milestone 9: iOS Remote and iPadOS App - Planned
 - Milestone 10: Chromium Browser Pane - Planned
@@ -66,7 +66,7 @@ In Progress
 
 ### Status
 
-Planned
+In Progress
 
 ### Scope
 
@@ -203,6 +203,10 @@ Planned
 ### Tickets
 
 - [ ] Explore other SwiftTerm types, particularly `TerminalView`.
+- [ ] Add a small shell-integration protocol for prompt start, command start, command completion, and cwd reporting before attempting richer command-aware terminal UX.
+- [ ] Extend the current shell-integration baseline beyond `zsh`, starting with `bash` support.
+- [ ] Route explicit terminal notifications into real macOS notifications with clear user-facing preference and attention behavior.
+- [ ] Decide which further shell-integration events beyond prompt, command, cwd, bell, and explicit notification are worth carrying as durable product metadata.
 - [ ] Decide how local-shell, headless, and remote-session backends should share one durable session model.
 - [ ] Add a headless terminal path for workflow command execution.
 - [ ] Add a remote SSH session path with clear connection lifecycle and operator-facing state.
@@ -309,6 +313,7 @@ Planned
 - [ ] Revisit a user-facing support-bundle export UI once Milestone 6 settles the diagnostics payload and operator workflow.
 - [ ] Revisit full alternate-buffer and emulator-state restoration only if the current restored-history model still feels meaningfully insufficient for ordinary shell use.
 - [ ] Revisit lower-side-effect browser history restoration if replaying saved URLs during restore proves too costly or noisy in practice.
+- [ ] Revisit whether shell integration should grow command-line capture, progress reporting, or richer remote-shell metadata after the current prompt, cwd, bell, and notification baseline has been used in practice.
 - [ ] Revisit Ghostty integration only if a stable pane-hosting surface actually exists.
 - [ ] Revisit pane-local tabs only after the current workspace, split, and close model feels settled enough to support another navigation layer cleanly.
 
@@ -319,3 +324,4 @@ Planned
 - 2026-04-23: Shipped the `v0.0.7` command-and-sizing follow-through checkpoint with intentional keyboard shortcut alignment, configurable closed-item auto-save behavior, and less constrained default window sizing.
 - 2026-04-23: Shipped the `v0.0.8` terminal-history follow-through checkpoint with ordinary shell scrollback restore on relaunch, viewport-timed restore startup, and a cleaner host-output-backed transcript capture path.
 - 2026-04-24: Shipped the `v0.0.9` browser-pane follow-through checkpoint with persisted browser session metadata, lightweight back-forward history restore, browser creation and navigation commands, and the first omnibox overlay pass.
+- 2026-04-24: Prepared the `v0.1.0` shell-integration checkpoint with prompt and command markers, `zsh` emission, pane and sidebar attention affordances, explicit terminal-notification capture, and the first bell-aware workspace attention model.

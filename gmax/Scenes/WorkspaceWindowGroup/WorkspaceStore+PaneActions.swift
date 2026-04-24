@@ -24,6 +24,7 @@ extension WorkspaceStore {
                     launchConfiguration: launchContextBuilder.makeLaunchConfiguration(),
                 )
             }
+            reconcileTerminalSessionObservations()
             schedulePersistenceSave(reason: .paneCreated)
             return pane.id
         }
@@ -93,6 +94,7 @@ extension WorkspaceStore {
                 ),
             )
         }
+        reconcileTerminalSessionObservations()
         schedulePersistenceSave(reason: .paneSplit)
         return newPane.id
     }
@@ -119,6 +121,7 @@ extension WorkspaceStore {
         }
 
         workspaces[workspaceIndex].root = root
+        reconcileTerminalSessionObservations()
         if let sessionID = newPane.browserSessionID {
             _ = browserSessions.ensureSession(id: sessionID)
         }
@@ -171,5 +174,6 @@ extension WorkspaceStore {
         browserSessions.removeSessions(notIn: activeBrowserSessionIDs)
         paneControllers.removeControllers(notIn: Set(activeLeaves.map(\.1.id)))
         browserPaneControllers.removeControllers(notIn: Set(activeLeaves.map(\.1.id)))
+        reconcileTerminalSessionObservations()
     }
 }

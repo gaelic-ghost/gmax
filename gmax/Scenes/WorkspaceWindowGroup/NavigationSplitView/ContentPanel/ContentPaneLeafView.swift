@@ -20,6 +20,25 @@ struct ContentPaneLeafView: View {
     let onSplitDown: () -> Void
     let onClose: () -> Void
 
+    private var shellStatusIndicatorState: ContentPaneLeafShellStatusIndicator.Status? {
+        if session.hasActiveBell {
+            return .bell
+        }
+
+        switch session.shellPhase {
+            case .runningCommand:
+                return .running
+            case .atPrompt:
+                guard let exitStatus = session.lastCommandExitStatus else {
+                    return nil
+                }
+
+                return exitStatus == 0 ? .finished : .failed
+            case .unknown:
+                return nil
+        }
+    }
+
     var body: some View {
         let isFocused = focusedTarget.wrappedValue == .pane(pane.id)
         let title = session.title.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -28,11 +47,25 @@ struct ContentPaneLeafView: View {
             case .running: "Shell running"
             case let .exited(exitCode): exitCode.map { "Shell exited with status \($0)" } ?? "Shell exited"
         }
+        let shellPhase: String? = switch session.shellPhase {
+            case .unknown: nil
+            case .atPrompt: "Shell at prompt"
+            case .runningCommand: "Shell running a command"
+        }
+        let shellStatusDescription: String? = switch shellStatusIndicatorState {
+            case .bell: "Terminal bell needs attention"
+            case .running: "Command running"
+            case .finished: "Last command finished successfully"
+            case .failed: "Last command failed"
+            case nil: nil
+        }
         let paneHostIdentity = "\(pane.id.rawValue.uuidString)-\(session.relaunchGeneration)"
         let accessibilityLabel = title.isEmpty || title == "Shell" ? "Shell pane" : "\(title) pane"
         let accessibilityValue = [
             isFocused ? "Focused" : nil,
             state,
+            shellPhase,
+            shellStatusDescription,
             session.currentDirectory.flatMap { $0.isEmpty ? nil : "Directory \($0)" },
         ]
         .compactMap(\.self)
@@ -49,6 +82,7 @@ struct ContentPaneLeafView: View {
                     return
                 }
 
+                session.clearBellAttention()
                 chromeRevealID += 1
             }
             .contentShape(Rectangle())
@@ -91,10 +125,15 @@ struct ContentPaneLeafView: View {
                 .padding(.top, 12)
         }
         .overlay(alignment: .topTrailing) {
-            if isFocused {
-                ContentPaneLeafFocusIndicator()
-                    .padding([.top, .trailing], 12)
+            HStack(spacing: 6) {
+                if isFocused {
+                    ContentPaneLeafFocusIndicator()
+                }
+                if let shellStatusIndicatorState {
+                    ContentPaneLeafShellStatusIndicator(state: shellStatusIndicatorState)
+                }
             }
+            .padding([.top, .trailing], 12)
         }
         .overlay(alignment: .bottomLeading) {
             if let currentDirectory = session.currentDirectory, !currentDirectory.isEmpty {
@@ -154,16 +193,6 @@ private struct ContentPaneLeafHeader: View {
     }
 }
 
-private struct ContentPaneLeafFocusIndicator: View {
-    var body: some View {
-        Circle()
-            .fill(.green)
-            .frame(width: 10, height: 10)
-            .padding(8)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
-    }
-}
-
 private struct ContentPaneLeafFooter: View {
     let currentDirectory: String
     let revealID: Int
@@ -176,6 +205,155 @@ private struct ContentPaneLeafFooter: View {
             foregroundStyle: AnyShapeStyle(.secondary),
             truncationMode: .middle,
         )
+    }
+}
+
+private struct ContentPaneLeafFocusIndicator: View {
+    var body: some View {
+        Circle()
+            .fill(.green)
+            .frame(width: 10, height: 10)
+            .padding(8)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
+    }
+}
+
+private struct ContentPaneLeafShellStatusIndicator: View {
+    enum Status {
+        case bell
+        case running
+        case finished
+        case failed
+    }
+
+    @State private var isPulsing = false
+    @State private var isFailureBlinking = false
+    @State private var pulseTask: Task<Void, Never>?
+    @State private var failureBlinkTask: Task<Void, Never>?
+
+    let state: Status
+
+    private var fillColor: Color {
+        switch state {
+            case .running, .finished:
+                .blue
+            case .failed, .bell:
+                .red
+        }
+    }
+
+    private var shouldPulse: Bool {
+        state == .running
+    }
+
+    private var shouldBlinkFailure: Bool {
+        state == .failed && isFailureBlinking
+    }
+
+    private var opacity: Double {
+        if shouldPulse {
+            return isPulsing ? 0.95 : 0.42
+        }
+        if shouldBlinkFailure {
+            return isFailureBlinking ? 0.95 : 0.2
+        }
+        return 0.95
+    }
+
+    init(state: Status) {
+        self.state = state
+    }
+
+    var body: some View {
+        statusContent
+            .foregroundStyle(fillColor)
+            .scaleEffect(shouldPulse ? (isPulsing ? 1 : 0.78) : 1)
+            .opacity(opacity)
+            .padding(8)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
+            .onAppear {
+                updateAnimationState()
+            }
+            .onChange(of: state) { _, _ in
+                updateAnimationState()
+            }
+            .onDisappear {
+                pulseTask?.cancel()
+                pulseTask = nil
+                failureBlinkTask?.cancel()
+                failureBlinkTask = nil
+            }
+            .animation(.easeInOut(duration: 0.18), value: isPulsing)
+            .animation(.easeInOut(duration: 0.18), value: isFailureBlinking)
+    }
+
+    @ViewBuilder
+    private var statusContent: some View {
+        switch state {
+            case .bell:
+                Image(systemName: "bell.and.waves.left.and.right")
+                    .font(.system(size: 11, weight: .semibold))
+            case .failed:
+                Image(systemName: "exclamationmark.warninglight")
+                    .font(.system(size: 11, weight: .semibold))
+            case .running, .finished:
+                Circle()
+                    .fill(fillColor)
+                    .frame(width: 10, height: 10)
+        }
+    }
+
+    private func updateAnimationState() {
+        pulseTask?.cancel()
+        pulseTask = nil
+        failureBlinkTask?.cancel()
+        failureBlinkTask = nil
+        isFailureBlinking = false
+
+        if shouldPulse {
+            isPulsing = true
+            pulseTask = Task { @MainActor in
+                while !Task.isCancelled, state == .running {
+                    try? await Task.sleep(for: .seconds(0.65))
+                    guard !Task.isCancelled, state == .running else {
+                        break
+                    }
+
+                    isPulsing.toggle()
+                }
+
+                guard !Task.isCancelled else {
+                    return
+                }
+
+                isPulsing = false
+            }
+        } else {
+            isPulsing = false
+        }
+
+        guard state == .failed else {
+            return
+        }
+
+        isFailureBlinking = true
+        failureBlinkTask = Task { @MainActor in
+            let endTime = ContinuousClock.now + .seconds(1.1)
+            while !Task.isCancelled, ContinuousClock.now < endTime, state == .failed {
+                try? await Task.sleep(for: .seconds(0.11))
+                guard !Task.isCancelled, state == .failed else {
+                    break
+                }
+
+                isFailureBlinking.toggle()
+            }
+
+            guard !Task.isCancelled else {
+                return
+            }
+
+            isFailureBlinking = false
+        }
     }
 }
 

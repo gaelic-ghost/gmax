@@ -10,6 +10,8 @@
 >   decisions and ownership boundaries
 > - [`framework-command-audit.md`](./framework-command-audit.md) for current
 >   command risks and test gaps
+> - [`shell-integration-protocol.md`](./shell-integration-protocol.md) for the
+>   current shell-integration event model and planned terminal metadata surface
 > - [`workspace-window-state-and-persistence-model.md`](./workspace-window-state-and-persistence-model.md)
 >   for current persistence structure
 >

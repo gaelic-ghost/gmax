@@ -8,6 +8,7 @@
 import Combine
 import CoreGraphics
 import Foundation
+import OSLog
 import SwiftTerm
 
 @MainActor
@@ -27,6 +28,7 @@ final class TerminalPaneController: ObservableObject {
     private var startedTerminalGeneration: Int?
     private var capturedHostOutput = ""
     private var pendingHostOutputBytes: [UInt8] = []
+    private var hostEventParser = TerminalHostEventParser()
 
     init(paneID: PaneID, session: TerminalSession) {
         self.paneID = paneID
@@ -50,6 +52,7 @@ final class TerminalPaneController: ObservableObject {
         startedTerminalGeneration = nil
         capturedHostOutput = ""
         pendingHostOutputBytes = []
+        hostEventParser = TerminalHostEventParser()
         configureTerminalView(terminalView, processDelegate: processDelegate)
         return terminalView
     }
@@ -143,6 +146,9 @@ final class TerminalPaneController: ObservableObject {
             terminalView.onHostOutput = { [weak self] slice in
                 self?.appendHostOutput(slice)
             }
+            terminalView.onBell = { [weak self] in
+                self?.recordBell()
+            }
         }
     }
 
@@ -195,6 +201,16 @@ final class TerminalPaneController: ObservableObject {
             return
         }
 
+        let hostEvents = hostEventParser.ingest(slice)
+        for event in hostEvents {
+            switch event {
+                case let .shellIntegration(shellIntegrationEvent):
+                    session.applyShellIntegrationEvent(shellIntegrationEvent)
+                case let .notification(title, body):
+                    recordAttentionNotification(title: title, body: body)
+            }
+        }
+
         let combinedBytes = pendingHostOutputBytes + slice
         let decodedByteCount = largestDecodableUTF8PrefixLength(in: combinedBytes)
         if decodedByteCount > 0,
@@ -220,13 +236,38 @@ final class TerminalPaneController: ObservableObject {
         }
         return 0
     }
+
+    private func recordBell() {
+        session.recordBell()
+        let paneID = paneID.rawValue.uuidString
+        let sessionID = session.id.rawValue.uuidString
+        let bellCount = session.bellCount
+        Logger.pane.notice(
+            "A pane terminal host emitted an attention bell. Pane ID: \(paneID, privacy: .public). Session ID: \(sessionID, privacy: .public). Bell count: \(bellCount)",
+        )
+    }
+
+    private func recordAttentionNotification(title: String, body: String) {
+        session.recordAttentionNotification(title: title, body: body)
+        let paneID = paneID.rawValue.uuidString
+        let sessionID = session.id.rawValue.uuidString
+        Logger.pane.notice(
+            "A pane terminal host emitted an explicit terminal notification. Pane ID: \(paneID, privacy: .public). Session ID: \(sessionID, privacy: .public). Title: \(title, privacy: .public). Body: \(body, privacy: .public)",
+        )
+    }
 }
 
 private final class HistoryRecordingTerminalView: LocalProcessTerminalView {
     var onHostOutput: ((ArraySlice<UInt8>) -> Void)?
+    var onBell: (() -> Void)?
 
     override func dataReceived(slice: ArraySlice<UInt8>) {
         onHostOutput?(slice)
         super.dataReceived(slice: slice)
+    }
+
+    override func bell(source: Terminal) {
+        onBell?()
+        super.bell(source: source)
     }
 }

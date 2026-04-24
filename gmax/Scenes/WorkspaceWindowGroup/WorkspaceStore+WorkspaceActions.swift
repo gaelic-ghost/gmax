@@ -52,6 +52,7 @@ extension WorkspaceStore {
                 launchConfiguration: launchContextBuilder.makeLaunchConfiguration(),
             )
         }
+        reconcileTerminalSessionObservations()
         Logger.workspace.notice("Created a new workspace and seeded it with an initial pane. Workspace title: \(workspace.title, privacy: .public). Workspace ID: \(workspace.id.rawValue.uuidString, privacy: .public)")
         schedulePersistenceSave(reason: .workspaceCreated)
         return workspace.id
@@ -85,6 +86,7 @@ extension WorkspaceStore {
             root: workspace.root.map { duplicateNode($0) },
         )
         workspaces.insert(duplicatedWorkspace, at: workspaceIndex + 1)
+        reconcileTerminalSessionObservations()
         Logger.workspace.notice("Duplicated a workspace layout into a new workspace. Source workspace ID: \(workspaceID.rawValue.uuidString, privacy: .public). New workspace title: \(duplicatedWorkspace.title, privacy: .public). New workspace ID: \(duplicatedWorkspace.id.rawValue.uuidString, privacy: .public)")
         schedulePersistenceSave(reason: .workspaceDuplicated)
         return duplicatedWorkspace.id
@@ -141,6 +143,7 @@ extension WorkspaceStore {
             session.setRestoredHistory(paneSnapshot?.history)
         }
 
+        reconcileTerminalSessionObservations()
         refreshRecentlyClosedWorkspaceCount()
         Logger.workspace.notice("Reopened the most recently closed workspace from durable window-scoped persistence. Workspace title: \(closedWorkspace.revision.workspace.title, privacy: .public). Workspace ID: \(closedWorkspace.revision.workspace.id.rawValue.uuidString, privacy: .public)")
         schedulePersistenceSave(reason: .workspaceUndoClose)
@@ -313,6 +316,7 @@ extension WorkspaceStore {
             _ = browserSessions.ensureSession(id: sessionID, snapshot: snapshot)
         }
 
+        reconcileTerminalSessionObservations()
         persistence.markLibraryItemOpened(libraryItemID)
         Logger.workspace.notice("Opened a workspace from a library item. Workspace title: \(savedWorkspace.title, privacy: .public). Library item ID: \(libraryItemID.uuidString, privacy: .public). Workspace ID: \(restoredWorkspace.id.rawValue.uuidString, privacy: .public). Restored pane count: \((restoredWorkspace.root?.leaves().count ?? 0))")
         schedulePersistenceSave(reason: .workspaceOpenedFromLibrary)

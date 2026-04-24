@@ -67,6 +67,7 @@ extension TerminalPaneView {
             Task { @MainActor in
                 await Task.yield()
                 controller.session.state = .exited(exitCode)
+                controller.session.clearShellIntegrationState()
             }
         }
 
@@ -102,6 +103,7 @@ extension TerminalPaneView {
             Task { @MainActor in
                 await Task.yield()
                 controller.session.state = .running
+                controller.session.clearShellIntegrationState()
             }
             if let pendingViewportRestore {
                 Task { @MainActor in
