@@ -33,12 +33,19 @@ struct ContentPaneLeafView: View {
             case .atPrompt: "Shell at prompt"
             case .runningCommand: "Shell running a command"
         }
+        let shellStatusDescription: String? = switch shellStatusIndicatorState {
+            case .running: "Command running"
+            case .finished: "Last command finished successfully"
+            case .failed: "Last command failed"
+            case nil: nil
+        }
         let paneHostIdentity = "\(pane.id.rawValue.uuidString)-\(session.relaunchGeneration)"
         let accessibilityLabel = title.isEmpty || title == "Shell" ? "Shell pane" : "\(title) pane"
         let accessibilityValue = [
             isFocused ? "Focused" : nil,
             state,
             shellPhase,
+            shellStatusDescription,
             session.currentDirectory.flatMap { $0.isEmpty ? nil : "Directory \($0)" },
         ]
         .compactMap(\.self)
@@ -96,10 +103,10 @@ struct ContentPaneLeafView: View {
             ContentPaneLeafHeader(title: session.title, revealID: chromeRevealID)
                 .padding(.top, 12)
         }
-        .overlay(alignment: .topTrailing) {
-            if isFocused {
-                ContentPaneLeafFocusIndicator()
-                    .padding([.top, .trailing], 12)
+        .overlay(alignment: .topLeading) {
+            if let shellStatusIndicatorState {
+                ContentPaneLeafShellStatusIndicator(state: shellStatusIndicatorState)
+                    .padding([.top, .leading], 12)
             }
         }
         .overlay(alignment: .bottomLeading) {
@@ -145,6 +152,20 @@ struct ContentPaneLeafView: View {
 
         session.prepareForRelaunch()
     }
+
+    private var shellStatusIndicatorState: ContentPaneLeafShellStatusIndicator.Status? {
+        switch session.shellPhase {
+            case .runningCommand:
+                return .running
+            case .atPrompt:
+                guard let exitStatus = session.lastCommandExitStatus else {
+                    return nil
+                }
+                return exitStatus == 0 ? .finished : .failed
+            case .unknown:
+                return nil
+        }
+    }
 }
 
 private struct ContentPaneLeafHeader: View {
@@ -160,16 +181,6 @@ private struct ContentPaneLeafHeader: View {
     }
 }
 
-private struct ContentPaneLeafFocusIndicator: View {
-    var body: some View {
-        Circle()
-            .fill(.green)
-            .frame(width: 10, height: 10)
-            .padding(8)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
-    }
-}
-
 private struct ContentPaneLeafFooter: View {
     let currentDirectory: String
     let revealID: Int
@@ -182,6 +193,57 @@ private struct ContentPaneLeafFooter: View {
             foregroundStyle: AnyShapeStyle(.secondary),
             truncationMode: .middle,
         )
+    }
+}
+
+private struct ContentPaneLeafShellStatusIndicator: View {
+    enum Status {
+        case running
+        case finished
+        case failed
+    }
+
+    @State private var isPulsing = false
+
+    let state: Status
+
+    init(state: Status) {
+        self.state = state
+    }
+
+    private var fillColor: Color {
+        switch state {
+            case .running, .finished:
+                return .blue
+            case .failed:
+                return .red
+        }
+    }
+
+    private var shouldPulse: Bool {
+        state == .running
+    }
+
+    var body: some View {
+        Circle()
+            .fill(fillColor)
+            .frame(width: 10, height: 10)
+            .scaleEffect(shouldPulse ? (isPulsing ? 1 : 0.78) : 1)
+            .opacity(shouldPulse ? (isPulsing ? 0.95 : 0.42) : 0.95)
+            .padding(8)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
+            .onAppear {
+                isPulsing = shouldPulse
+            }
+            .onChange(of: state) { _, _ in
+                isPulsing = shouldPulse
+            }
+            .animation(
+                shouldPulse
+                    ? .easeInOut(duration: 1.3).repeatForever(autoreverses: true)
+                    : .easeOut(duration: 0.18),
+                value: isPulsing,
+            )
     }
 }
 
