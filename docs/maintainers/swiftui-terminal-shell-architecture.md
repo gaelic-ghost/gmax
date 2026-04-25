@@ -12,6 +12,8 @@
 >   command risks and test gaps
 > - [`shell-integration-protocol.md`](./shell-integration-protocol.md) for the
 >   current shell-integration event model and planned terminal metadata surface
+> - [`ghostty-pane-integration-plan.md`](./ghostty-pane-integration-plan.md)
+>   for the planned `ghostty_surface_new` pane-spike and backend-adapter paths
 > - [`workspace-window-state-and-persistence-model.md`](./workspace-window-state-and-persistence-model.md)
 >   for current persistence structure
 >
