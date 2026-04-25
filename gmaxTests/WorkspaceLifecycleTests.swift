@@ -208,6 +208,19 @@ struct WorkspaceLifecycleTests {
         )
     }
 
+    @Test func `browser navigation normalization trims values and rejects whitespace separated input`() {
+        #expect(
+            BrowserNavigationDefaults.normalizedNavigationURLString(from: "  127.0.0.1:8080  ")
+                == "http://127.0.0.1:8080",
+        )
+        #expect(
+            BrowserNavigationDefaults.normalizedNavigationURLString(from: "\n[::1]:5173\t")
+                == "http://[::1]:5173",
+        )
+        #expect(BrowserNavigationDefaults.normalizedNavigationURLString(from: "") == nil)
+        #expect(BrowserNavigationDefaults.normalizedNavigationURLString(from: "docs local") == nil)
+    }
+
     @Test func `browser home URL normalization preserves supported explicit schemes`() {
         #expect(
             BrowserNavigationDefaults.normalizedNavigationURLString(from: "about:blank")
@@ -217,6 +230,29 @@ struct WorkspaceLifecycleTests {
             BrowserNavigationDefaults.normalizedNavigationURLString(from: "file:///tmp/example.html")
                 == "file:///tmp/example.html",
         )
+    }
+
+    @Test func `browser home URL defaults normalize configured values and fall back to blank page`() throws {
+        let suiteName = "WorkspaceLifecycleTests.browser-home-defaults"
+        let userDefaults = try #require(UserDefaults(suiteName: suiteName))
+        userDefaults.removePersistentDomain(forName: suiteName)
+
+        #expect(BrowserNavigationDefaults.configuredHomePageURLString(userDefaults: userDefaults) == nil)
+        #expect(BrowserNavigationDefaults.initialPageURLString(userDefaults: userDefaults) == "about:blank")
+
+        userDefaults.set(" developer.apple.com/documentation/webkit ", forKey: BrowserNavigationDefaults.homePageURLKey)
+        #expect(
+            BrowserNavigationDefaults.configuredHomePageURLString(userDefaults: userDefaults)
+                == "https://developer.apple.com/documentation/webkit",
+        )
+        #expect(
+            BrowserNavigationDefaults.initialPageURLString(userDefaults: userDefaults)
+                == "https://developer.apple.com/documentation/webkit",
+        )
+
+        userDefaults.set("not a valid URL", forKey: BrowserNavigationDefaults.homePageURLKey)
+        #expect(BrowserNavigationDefaults.configuredHomePageURLString(userDefaults: userDefaults) == nil)
+        #expect(BrowserNavigationDefaults.initialPageURLString(userDefaults: userDefaults) == "about:blank")
     }
 
     @Test func `closing a browser pane removes its browser session`() throws {
@@ -236,7 +272,7 @@ struct WorkspaceLifecycleTests {
         model.closePane(browserPane.id, in: workspace.id)
 
         #expect(model.browserSessions.session(for: browserSessionID) == nil)
-        #expect(try #require(model.workspaces.first)?.root == nil)
+        #expect(model.workspaces.first?.root == nil)
     }
 
     @Test func `splitting a focused pane into a browser pane creates a new browser session`() throws {

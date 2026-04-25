@@ -832,6 +832,73 @@ struct WorkspacePersistenceTests {
         #expect(restoredWorkspaces.isEmpty)
     }
 
+    @Test func `pane node coding round trips terminal browser and legacy leaf content`() throws {
+        let persistence = WorkspacePersistenceController.inMemoryForTesting()
+        let context = persistence.container.viewContext
+        let terminalPane = PaneLeaf(content: .terminal(TerminalSessionID()))
+        let browserPane = PaneLeaf(content: .browser(BrowserSessionID()))
+        let split = PaneSplit(
+            axis: .vertical,
+            fraction: 0.35,
+            first: .leaf(terminalPane),
+            second: .leaf(browserPane),
+        )
+
+        let encodedRoot = try #require(
+            WorkspacePersistenceController.makeNodeEntity(from: .split(split), context: context),
+        )
+        let decodedRoot = try #require(WorkspacePersistenceController.decodeNode(encodedRoot))
+        let decodedSplit = try #require(extractRootSplit(from: decodedRoot))
+        let decodedTerminalPane = try #require(extractRootLeaf(from: decodedSplit.first))
+        let decodedBrowserPane = try #require(extractRootLeaf(from: decodedSplit.second))
+
+        #expect(decodedSplit.axis == .vertical)
+        #expect(decodedSplit.fraction == 0.35)
+        #expect(decodedTerminalPane.terminalSessionID == terminalPane.terminalSessionID)
+        #expect(decodedBrowserPane.browserSessionID == browserPane.browserSessionID)
+
+        let legacyTerminalNode = PaneNodeEntity(context: context)
+        legacyTerminalNode.id = UUID()
+        legacyTerminalNode.kind = PaneNodeKind.leaf.rawValue
+        legacyTerminalNode.contentKind = nil
+        legacyTerminalNode.sessionID = UUID()
+        legacyTerminalNode.browserSessionID = nil
+
+        let decodedLegacyNode = try #require(WorkspacePersistenceController.decodeNode(legacyTerminalNode))
+        #expect(extractRootLeaf(from: decodedLegacyNode)?.terminalSessionID?.rawValue == legacyTerminalNode.sessionID)
+    }
+
+    @Test func `pane node decoding skips malformed leaf split and unknown kind payloads`() {
+        let persistence = WorkspacePersistenceController.inMemoryForTesting()
+        let context = persistence.container.viewContext
+
+        let missingTerminalSession = PaneNodeEntity(context: context)
+        missingTerminalSession.id = UUID()
+        missingTerminalSession.kind = PaneNodeKind.leaf.rawValue
+        missingTerminalSession.contentKind = PersistedPaneContentKind.terminal.rawValue
+        missingTerminalSession.sessionID = nil
+
+        let missingBrowserSession = PaneNodeEntity(context: context)
+        missingBrowserSession.id = UUID()
+        missingBrowserSession.kind = PaneNodeKind.leaf.rawValue
+        missingBrowserSession.contentKind = PersistedPaneContentKind.browser.rawValue
+        missingBrowserSession.browserSessionID = nil
+
+        let invalidSplit = PaneNodeEntity(context: context)
+        invalidSplit.id = UUID()
+        invalidSplit.kind = PaneNodeKind.split.rawValue
+        invalidSplit.axis = nil
+
+        let unknownKind = PaneNodeEntity(context: context)
+        unknownKind.id = UUID()
+        unknownKind.kind = "definitely-not-a-pane-node-kind"
+
+        #expect(WorkspacePersistenceController.decodeNode(missingTerminalSession) == nil)
+        #expect(WorkspacePersistenceController.decodeNode(missingBrowserSession) == nil)
+        #expect(WorkspacePersistenceController.decodeNode(invalidSplit) == nil)
+        #expect(WorkspacePersistenceController.decodeNode(unknownKind) == nil)
+    }
+
     @Test func `scene identities restore independent live workspace sets`() {
         let firstSceneIdentity = WorkspaceSceneIdentity()
         let secondSceneIdentity = WorkspaceSceneIdentity()
@@ -1027,15 +1094,20 @@ struct WorkspacePersistenceTests {
             browserSessions: BrowserSessionRegistry(workspaces: [workspace]),
         )
 
+        let workspaceID = workspace.id.rawValue
+        let workspaceTitle = workspace.title
+        let workspacePaneCount = workspace.paneCount
+        let windowID = sceneIdentity.windowID
+
         try context.performAndWait {
-            let workspaceEntity = try #require(try fetchWorkspaceEntity(id: workspace.id.rawValue, in: context))
+            let workspaceEntity = try #require(try fetchWorkspaceEntity(id: workspaceID, in: context))
             let livePlacement = try #require(
-                try fetchLiveWorkspacePlacement(id: workspace.id.rawValue, windowID: sceneIdentity.windowID, in: context),
+                try fetchLiveWorkspacePlacement(id: workspaceID, windowID: windowID, in: context),
             )
             context.delete(livePlacement)
 
             let legacyPlacement = WorkspacePlacementEntity(context: context)
-            legacyPlacement.id = workspace.id.rawValue
+            legacyPlacement.id = workspaceID
             legacyPlacement.role = WorkspacePersistenceLegacy.libraryPlacementRoleRawValue
             legacyPlacement.windowID = nil
             legacyPlacement.sortOrder = 0
@@ -1044,10 +1116,10 @@ struct WorkspacePersistenceTests {
             legacyPlacement.updatedAt = Date()
             legacyPlacement.lastOpenedAt = nil
             legacyPlacement.isPinned = true
-            legacyPlacement.title = workspace.title
+            legacyPlacement.title = workspaceTitle
             legacyPlacement.previewText = "legacy preview"
             legacyPlacement.searchText = "legacy search"
-            legacyPlacement.paneCount = Int64(workspace.paneCount)
+            legacyPlacement.paneCount = Int64(workspacePaneCount)
             legacyPlacement.workspace = workspaceEntity
 
             try context.save()
@@ -1086,6 +1158,22 @@ private func nodeSignature(from node: PaneNode) -> PaneNodeSignature {
                 second: nodeSignature(from: split.second),
             )
     }
+}
+
+private func extractRootSplit(from node: PaneNode) -> PaneSplit? {
+    guard case let .split(split) = node else {
+        return nil
+    }
+
+    return split
+}
+
+private func extractRootLeaf(from node: PaneNode) -> PaneLeaf? {
+    guard case let .leaf(leaf) = node else {
+        return nil
+    }
+
+    return leaf
 }
 
 @MainActor

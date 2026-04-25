@@ -72,6 +72,27 @@ class GmaxUITestCase: XCTestCase {
 
     func attemptToPresentAnotherWorkspaceWindow(in app: XCUIApplication) {
         app.typeKey("n", modifierFlags: [.command, .shift])
+
+        let workspaceList = activeWorkspaceSidebar(in: app)
+        if workspaceList.waitForExistence(timeout: 2) {
+            return
+        }
+
+        let fileMenu = app.menuBars.menuBarItems["File"]
+        guard fileMenu.waitForExistence(timeout: 2) else {
+            return
+        }
+
+        fileMenu.click()
+
+        let newWindowMenuItem = app.menuBars.menuItems
+            .matching(NSPredicate(format: "title BEGINSWITH %@", "New gmax Window"))
+            .firstMatch
+        guard newWindowMenuItem.waitForExistence(timeout: 2), newWindowMenuItem.isEnabled else {
+            return
+        }
+
+        newWindowMenuItem.click()
     }
 
     func createWorkspace(titled title: String, in app: XCUIApplication) {
@@ -298,23 +319,14 @@ class GmaxUITestCase: XCTestCase {
     func openLibraryButton(in app: XCUIApplication) -> XCUIElement {
         let activeWindow = activeWorkspaceWindow(in: app)
         let sidebarButton = activeWindow.buttons["sidebar.openLibraryButton"]
+        let currentButton = activeWindow.buttons["workspaceWindow.openLibraryButton"]
         if sidebarButton.exists {
             return sidebarButton
         }
-        let currentButton = activeWindow.buttons["workspaceWindow.openLibraryButton"]
         if currentButton.exists {
             return currentButton
         }
         return activeWindow.buttons["workspaceWindow.openSavedWorkspacesButton"]
-    }
-
-    func newWorkspaceButton(in app: XCUIApplication) -> XCUIElement {
-        let activeWindow = activeWorkspaceWindow(in: app)
-        let sidebarButton = activeWindow.buttons["sidebar.newWorkspaceButton"]
-        if sidebarButton.exists {
-            return sidebarButton
-        }
-        return activeWindow.buttons["workspaceWindow.newWorkspaceButton"]
     }
 
     func focusFirstVisiblePane(in app: XCUIApplication) {

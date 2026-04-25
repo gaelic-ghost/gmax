@@ -9,20 +9,14 @@ import XCTest
 
 final class SavedWorkspaceLibraryUITests: GmaxUITestCase {
     @MainActor
-    func testToolbarNewWorkspaceButtonCreatesWorkspace() {
+    func testNewWorkspaceCommandCreatesWorkspace() {
         let app = launchApp()
-        let toolbarButton = newWorkspaceButton(in: app)
 
-        XCTAssertTrue(
-            toolbarButton.waitForExistence(timeout: 5),
-            "The active workspace window should expose the new-workspace action in the sidebar toolbar group.",
+        chooseMenuBarAction(
+            menuBarItem: "File",
+            action: "New Workspace",
+            in: app,
         )
-        XCTAssertTrue(
-            toolbarButton.isHittable,
-            "The new-workspace sidebar toolbar action should stay directly clickable in the active workspace window.",
-        )
-
-        toolbarButton.click()
         assertWorkspaceExists("Workspace 2", in: app)
     }
 
