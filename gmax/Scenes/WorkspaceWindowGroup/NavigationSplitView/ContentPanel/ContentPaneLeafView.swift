@@ -108,14 +108,23 @@ struct ContentPaneLeafView: View {
     }
 
     private func paneSurface(isFocused: Bool, paneHostIdentity: String) -> some View {
-        TerminalPaneView(
-            controller: controller,
-            session: session,
-            onRestart: restartShell,
-            onSplitRight: onSplitRight,
-            onSplitDown: onSplitDown,
-            onClose: onClose,
-        )
+        Group {
+            if GhosttyPaneSpikeSwitch.isEnabled {
+                GhosttyPaneView(
+                    session: session,
+                    onClose: onClose,
+                )
+            } else {
+                TerminalPaneView(
+                    controller: controller,
+                    session: session,
+                    onRestart: restartShell,
+                    onSplitRight: onSplitRight,
+                    onSplitDown: onSplitDown,
+                    onClose: onClose,
+                )
+            }
+        }
         // The pane host must stay keyed to the actual pane leaf, not just relaunches,
         // or SwiftUI can reuse a surviving sibling's coordinator after split collapse.
         .id(paneHostIdentity)
