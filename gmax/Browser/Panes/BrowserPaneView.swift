@@ -239,6 +239,7 @@ private struct BrowserPaneOmniboxOverlay: View {
                             .textFieldStyle(.plain)
                             .font(.body.monospaced())
                             .focused($isFieldFocused)
+                            .accessibilityIdentifier("browserPane.omniboxField")
                             .onSubmit {
                                 guard let normalizedAddressDraft else {
                                     return

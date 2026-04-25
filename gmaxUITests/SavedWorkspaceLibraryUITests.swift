@@ -9,20 +9,14 @@ import XCTest
 
 final class SavedWorkspaceLibraryUITests: GmaxUITestCase {
     @MainActor
-    func testToolbarNewWorkspaceButtonCreatesWorkspace() {
+    func testNewWorkspaceCommandCreatesWorkspace() {
         let app = launchApp()
-        let toolbarButton = newWorkspaceButton(in: app)
 
-        XCTAssertTrue(
-            toolbarButton.waitForExistence(timeout: 5),
-            "The active workspace window should expose the new-workspace action in the sidebar toolbar group.",
+        chooseMenuBarAction(
+            menuBarItem: "File",
+            action: "New Workspace",
+            in: app,
         )
-        XCTAssertTrue(
-            toolbarButton.isHittable,
-            "The new-workspace sidebar toolbar action should stay directly clickable in the active workspace window.",
-        )
-
-        toolbarButton.click()
         assertWorkspaceExists("Workspace 2", in: app)
     }
 
@@ -90,6 +84,52 @@ final class SavedWorkspaceLibraryUITests: GmaxUITestCase {
                 in: app,
             ),
             "The contextual close command should close only the focused pane when the workspace still has multiple panes.",
+        )
+    }
+
+    @MainActor
+    func testCommandWClosesEmptyWorkspaceBeforeWindowWhenAnotherWorkspaceExists() {
+        let app = launchApp()
+
+        createWorkspace(titled: "Workspace 2", in: app)
+        selectWorkspace("Workspace 2", in: app)
+        focusFirstVisiblePane(in: app)
+
+        app.typeKey("w", modifierFlags: .command)
+        XCTAssertTrue(
+            waitForSidebarWorkspaceRowLabel(
+                titled: "Workspace 2",
+                toEqual: "Workspace 2, 0 panes",
+                in: app,
+            ),
+            "The first Command-W should close the focused pane and leave the selected workspace empty.",
+        )
+
+        selectWorkspace("Workspace 2", in: app)
+        app.typeKey("w", modifierFlags: .command)
+
+        assertWorkspaceDoesNotExist("Workspace 2", in: app)
+        assertWorkspaceExists("Workspace 1", in: app)
+    }
+
+    @MainActor
+    func testBrowserPaneCommandCreatesPaneAndFocusesAddressBar() {
+        let app = launchApp()
+
+        focusFirstVisiblePane(in: app)
+        app.typeKey("d", modifierFlags: [.command, .option])
+
+        XCTAssertTrue(
+            firstVisibleBrowserPane(in: app).waitForExistence(timeout: 5),
+            "The browser split command should create a browser pane in the active workspace.",
+        )
+
+        focusFirstVisibleBrowserPane(in: app)
+        app.typeKey("l", modifierFlags: .command)
+
+        XCTAssertTrue(
+            browserOmniboxField(in: app).waitForExistence(timeout: 5),
+            "Command-L should reveal the focused browser pane's address field.",
         )
     }
 

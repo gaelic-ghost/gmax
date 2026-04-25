@@ -18,16 +18,19 @@ struct WorkspaceSettingsSection: View {
     var body: some View {
         Section("Workspaces") {
             Toggle("Restore workspaces on launch", isOn: $restoreWorkspacesOnLaunch)
+                .accessibilityIdentifier("settings.workspace.restoreOnLaunchToggle")
                 .onChange(of: restoreWorkspacesOnLaunch) { _, isEnabled in
                     Logger.diagnostics.notice("Updated the launch-restoration preference from Settings. Restore workspaces on launch is now \(isEnabled ? "enabled" : "disabled", privacy: .public).")
                 }
 
             Toggle("Keep recently closed workspaces", isOn: $keepRecentlyClosedWorkspaces)
+                .accessibilityIdentifier("settings.workspace.keepRecentlyClosedToggle")
                 .onChange(of: keepRecentlyClosedWorkspaces) { _, isEnabled in
                     Logger.diagnostics.notice("Updated the recently-closed workspace retention preference from Settings. Keep recently closed workspaces is now \(isEnabled ? "enabled" : "disabled", privacy: .public).")
                 }
 
             Toggle("Auto-save closed workspaces and windows", isOn: $autoSaveClosedItems)
+                .accessibilityIdentifier("settings.workspace.autoSaveClosedItemsToggle")
                 .onChange(of: autoSaveClosedItems) { _, isEnabled in
                     Logger.diagnostics.notice("Updated the closed-item auto-save preference from Settings. Auto-save closed workspaces and windows is now \(isEnabled ? "enabled" : "disabled", privacy: .public).")
                 }
@@ -35,6 +38,7 @@ struct WorkspaceSettingsSection: View {
             Stepper(value: $backgroundSaveIntervalMinutes, in: 1...60) {
                 Text("Background save interval: \(backgroundSaveIntervalMinutes) minute\(backgroundSaveIntervalMinutes == 1 ? "" : "s")")
             }
+            .accessibilityIdentifier("settings.workspace.backgroundSaveIntervalStepper")
             .onChange(of: backgroundSaveIntervalMinutes) { _, newValue in
                 let normalizedInterval = WorkspacePersistenceDefaults.normalizedBackgroundSaveIntervalMinutes(newValue)
                 if normalizedInterval != newValue {
@@ -49,6 +53,7 @@ struct WorkspaceSettingsSection: View {
                 prompt: Text("about:blank when empty"),
             )
             .textFieldStyle(.roundedBorder)
+            .accessibilityIdentifier("settings.workspace.browserHomeURLField")
             .onChange(of: browserHomePageURL) { _, newValue in
                 let normalizedValue = BrowserNavigationDefaults.normalizedNavigationURLString(from: newValue) ?? ""
                 if normalizedValue != newValue {

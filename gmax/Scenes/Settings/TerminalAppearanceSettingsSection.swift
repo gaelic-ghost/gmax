@@ -23,6 +23,7 @@ struct TerminalAppearanceSettingsSection: View {
                     Text(font.displayName).tag(font.id)
                 }
             }
+            .accessibilityIdentifier("settings.terminal.fontPicker")
 
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
@@ -33,6 +34,7 @@ struct TerminalAppearanceSettingsSection: View {
                 }
 
                 Slider(value: $terminalFontSize, in: 10...28, step: 1)
+                    .accessibilityIdentifier("settings.terminal.fontSizeSlider")
             }
         }
 
@@ -42,6 +44,7 @@ struct TerminalAppearanceSettingsSection: View {
                     Text(theme == .defaultTerminal ? "Default" : theme.rawValue.capitalized).tag(theme.rawValue)
                 }
             }
+            .accessibilityIdentifier("settings.terminal.themePicker")
 
             VStack(alignment: .leading, spacing: 10) {
                 Text("$ pwd")
@@ -61,6 +64,7 @@ struct TerminalAppearanceSettingsSection: View {
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
                     .stroke(Color(nsColor: currentAppearance.theme.cursorColor).opacity(0.35), lineWidth: 1),
             )
+            .accessibilityIdentifier("settings.terminal.preview")
         }
     }
 }

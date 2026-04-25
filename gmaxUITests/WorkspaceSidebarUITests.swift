@@ -9,6 +9,31 @@ import XCTest
 
 final class WorkspaceSidebarUITests: GmaxUITestCase {
     @MainActor
+    func testRenameWorkspaceSheetSavesNewTitle() {
+        let app = launchApp()
+
+        chooseMenuBarAction(
+            menuBarItem: "Workspace",
+            action: "Rename Workspace",
+            in: app,
+        )
+
+        let nameField = renameWorkspaceField(in: app)
+        XCTAssertTrue(
+            nameField.waitForExistence(timeout: 5),
+            "The rename command should present a workspace name field.",
+        )
+        nameField.click()
+        nameField.typeKey("a", modifierFlags: .command)
+        nameField.typeText("Project Shell")
+
+        renameWorkspaceSaveButton(in: app).click()
+
+        assertWorkspaceDoesNotExist("Workspace 1", in: app)
+        assertWorkspaceExists("Project Shell", in: app)
+    }
+
+    @MainActor
     func testDeleteWorkspaceAlertCanCancelAndConfirm() {
         let app = launchApp()
 

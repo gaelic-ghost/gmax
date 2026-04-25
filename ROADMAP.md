@@ -176,7 +176,13 @@ In Progress
 
 ### Tickets
 
-- [ ] Add broader UI coverage for pane lifecycle flows and multi-window command interactions.
+- [x] Add broader UI coverage for pane lifecycle flows and multi-window command interactions.
+- [ ] Add focused coverage for the remaining low-coverage browser pane controller paths, especially navigation event handling, loading/error state transitions, and close-time cleanup.
+- [ ] Add coverage for view-owned pane composition surfaces that still sit below the release-readiness target, especially `ContentPaneLeafView`, `ContentPane`, and browser/terminal host view wrappers.
+- [ ] Add coverage for browser WebKit factory configuration so process-pool, preference, and navigation-delegate setup stays explicit and regression-tested.
+- [ ] Continue persistence coding coverage for malformed workspace payloads, browser history restore edge cases, and saved-workspace revision behavior.
+- [ ] Keep `WorkspaceStore+PaneActions` above the release-readiness coverage floor as new pane types and command paths are added.
+- [ ] Track coverage health from the current checkpoint: app target coverage is about 85%, with the remaining largest gaps concentrated in browser pane control, pane view composition, WebKit setup, and persistence coding.
 - [ ] Tighten operator-facing logs and error messages throughout the app.
 - [ ] Choose a lightweight logging and diagnostics baseline that supports support-bundle export and future crash or hang reporting.
 - [ ] Write onboarding and maintainer docs for release-oriented development.
@@ -324,3 +330,4 @@ Planned
 - 2026-04-23: Shipped the `v0.0.8` terminal-history follow-through checkpoint with ordinary shell scrollback restore on relaunch, viewport-timed restore startup, and a cleaner host-output-backed transcript capture path.
 - 2026-04-24: Shipped the `v0.0.9` browser-pane follow-through checkpoint with persisted browser session metadata, lightweight back-forward history restore, browser creation and navigation commands, and the first omnibox overlay pass.
 - 2026-04-24: Prepared the `v0.1.0` shell-integration checkpoint with prompt and command markers, `zsh` emission, pane and sidebar attention affordances, explicit terminal-notification capture, and the first bell-aware workspace attention model.
+- 2026-04-25: Expanded unit and UI coverage for pane actions, browser defaults, persistence coding, saved-workspace library flows, launch recovery, and Settings smoke coverage; remaining coverage work is now tracked under Milestone 6.
