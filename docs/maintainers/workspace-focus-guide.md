@@ -26,6 +26,8 @@ Use it together with:
 
 - [`framework-command-audit.md`](./framework-command-audit.md)
 - [`swiftui-terminal-shell-architecture.md`](./swiftui-terminal-shell-architecture.md)
+- [`ghostty-pane-integration-plan.md`](./ghostty-pane-integration-plan.md)
+  when evaluating Ghostty-backed terminal panes
 
 ## How To Use This Note
 
@@ -39,6 +41,8 @@ Use the workspace-window notes by role:
 - `swiftui-terminal-shell-architecture.md`
   - historical shell architecture plus the consolidated SwiftTerm-side ownership
     boundary
+- `ghostty-pane-integration-plan.md`
+  - `ghostty_surface_new` pane-host spike and backend-adapter planning
 
 Historical shell-shape context still lives in
 [`swiftui-terminal-shell-architecture.md`](./swiftui-terminal-shell-architecture.md),
