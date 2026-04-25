@@ -179,10 +179,10 @@ private struct BrowserPaneFocusIndicator: View {
 }
 
 private struct BrowserPaneOmniboxOverlay: View {
+    @FocusState private var isFieldFocused: Bool
     @State private var isHovered = false
     @State private var isFocusRevealed = false
     @State private var isEditing = false
-    @FocusState private var isFieldFocused: Bool
     @State private var addressDraft = ""
     @State private var textSelection: TextSelection?
     @State private var focusRequestToken = 0
@@ -319,7 +319,6 @@ private struct BrowserPaneOmniboxOverlay: View {
                 }
                 return
             }
-
             guard !isEditingExpanded else {
                 return
             }

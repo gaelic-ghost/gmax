@@ -395,7 +395,7 @@ struct WorkspaceWindowSceneView: View {
             focusedPaneID.flatMap { workspace.root?.findPane(id: $0) }
         } != nil
         let startShellInSelectedWorkspaceAction: (() -> Void)? = if let selectedWorkspaceID,
-                                                                   selectedWorkspace?.root == nil {
+                                                                    selectedWorkspace?.root == nil {
             {
                 createPaneInWorkspace(selectedWorkspaceID)
             }

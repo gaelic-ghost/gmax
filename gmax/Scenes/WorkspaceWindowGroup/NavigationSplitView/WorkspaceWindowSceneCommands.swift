@@ -340,7 +340,7 @@ struct WorkspaceWindowSceneCommands: Commands {
             .disabled(moveFocusedPaneFocus == nil)
 
             Section("New Pane") {
-            Button("Split Right") {
+                Button("Split Right") {
                     if let splitFocusedPane {
                         splitFocusedPane(.right)
                     } else {

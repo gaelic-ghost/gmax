@@ -263,16 +263,14 @@ final class TerminalPaneController: ObservableObject {
         let shell = URL(fileURLWithPath: session.launchConfiguration.executable).lastPathComponent
         let phaseBefore = String(describing: session.shellPhase)
         let exitBefore = session.lastCommandExitStatus.map(String.init) ?? "nil"
-        let eventDescription: String = {
-            switch event {
-                case .promptStarted:
-                    return "promptStarted"
-                case .commandStarted:
-                    return "commandStarted"
-                case let .commandFinished(exitStatus):
-                    return "commandFinished(\(exitStatus.map(String.init) ?? "nil"))"
-            }
-        }()
+        let eventDescription = switch event {
+            case .promptStarted:
+                "promptStarted"
+            case .commandStarted:
+                "commandStarted"
+            case let .commandFinished(exitStatus):
+                "commandFinished(\(exitStatus.map(String.init) ?? "nil"))"
+        }
 
         Logger.diagnostics.notice(
             "A terminal pane parsed a shell integration event. Pane ID: \(paneID, privacy: .public). Session ID: \(sessionID, privacy: .public). Shell: \(shell, privacy: .public). Event: \(eventDescription, privacy: .public). Shell phase before apply: \(phaseBefore, privacy: .public). Last exit before apply: \(exitBefore, privacy: .public)",

@@ -46,6 +46,46 @@ struct TerminalLaunchContextBuilder {
         )
     }
 
+    static func makeShellIntegrationPlan(
+        shellExecutable: String,
+        baseEnvironment: [String: String],
+        fileManager: FileManager,
+    ) -> ShellIntegrationPlan {
+        let shellName = ShellIntegrationSupport.shellName(for: shellExecutable)
+        switch shellName {
+            case "zsh":
+                return ShellIntegrationPlan(
+                    arguments: ["-l"],
+                    environment: ZshShellIntegration.environmentOverlay(
+                        shellExecutable: shellExecutable,
+                        baseEnvironment: baseEnvironment,
+                        fileManager: fileManager,
+                    ),
+                )
+            case "bash":
+                let environment = BashShellIntegration.environmentOverlay(
+                    shellExecutable: shellExecutable,
+                    baseEnvironment: baseEnvironment,
+                    fileManager: fileManager,
+                )
+                return ShellIntegrationPlan(
+                    arguments: BashShellIntegration.launchArguments(environment: environment) ?? ["-l"],
+                    environment: environment,
+                )
+            case "fish":
+                return ShellIntegrationPlan(
+                    arguments: ["-l"],
+                    environment: FishShellIntegration.environmentOverlay(
+                        shellExecutable: shellExecutable,
+                        baseEnvironment: baseEnvironment,
+                        fileManager: fileManager,
+                    ),
+                )
+            default:
+                return ShellIntegrationPlan(arguments: ["-l"], environment: [:])
+        }
+    }
+
     private static func resolvedShellExecutable(
         processInfo: ProcessInfo,
         fileManager: FileManager,
@@ -98,46 +138,6 @@ struct TerminalLaunchContextBuilder {
             "TERM_PROGRAM": "gmax",
             "ITERM_SHELL_INTEGRATION_INSTALLED": "Yes",
         ]
-    }
-
-    static func makeShellIntegrationPlan(
-        shellExecutable: String,
-        baseEnvironment: [String: String],
-        fileManager: FileManager,
-    ) -> ShellIntegrationPlan {
-        let shellName = ShellIntegrationSupport.shellName(for: shellExecutable)
-        switch shellName {
-        case "zsh":
-            return ShellIntegrationPlan(
-                arguments: ["-l"],
-                environment: ZshShellIntegration.environmentOverlay(
-                    shellExecutable: shellExecutable,
-                    baseEnvironment: baseEnvironment,
-                    fileManager: fileManager,
-                ),
-            )
-        case "bash":
-            let environment = BashShellIntegration.environmentOverlay(
-                shellExecutable: shellExecutable,
-                baseEnvironment: baseEnvironment,
-                fileManager: fileManager,
-            )
-            return ShellIntegrationPlan(
-                arguments: BashShellIntegration.launchArguments(environment: environment) ?? ["-l"],
-                environment: environment,
-            )
-        case "fish":
-            return ShellIntegrationPlan(
-                arguments: ["-l"],
-                environment: FishShellIntegration.environmentOverlay(
-                    shellExecutable: shellExecutable,
-                    baseEnvironment: baseEnvironment,
-                    fileManager: fileManager,
-                ),
-            )
-        default:
-            return ShellIntegrationPlan(arguments: ["-l"], environment: [:])
-        }
     }
 
     private static func shellHandoffEnvironment(

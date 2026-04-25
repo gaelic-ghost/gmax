@@ -36,17 +36,16 @@ struct TerminalLaunchContextBuilderTests {
         #expect(builder.baseEnvironment[FishShellIntegration.wrapperConfigHomeEnvironmentKey] != nil)
     }
 
-    @Test func `shell integration plan uses rcfile path for bash`() {
+    @Test func `shell integration plan uses rcfile path for bash`() throws {
         let plan = TerminalLaunchContextBuilder.makeShellIntegrationPlan(
             shellExecutable: "/bin/bash",
             baseEnvironment: ["HOME": "/tmp/original-home"],
             fileManager: .default,
         )
 
-        let rcfilePath = plan.environment[BashShellIntegration.rcfileEnvironmentKey]
+        let rcfilePath = try #require(plan.environment[BashShellIntegration.rcfileEnvironmentKey])
 
-        #expect(rcfilePath != nil)
-        #expect(plan.arguments == ["--rcfile", rcfilePath!, "-i"])
+        #expect(plan.arguments == ["--rcfile", rcfilePath, "-i"])
     }
 
     @Test func `shell integration plan keeps login mode for fish`() {
