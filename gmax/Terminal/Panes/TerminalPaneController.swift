@@ -205,6 +205,7 @@ final class TerminalPaneController: ObservableObject {
         for event in hostEvents {
             switch event {
                 case let .shellIntegration(shellIntegrationEvent):
+                    logShellIntegrationEvent(shellIntegrationEvent)
                     session.applyShellIntegrationEvent(shellIntegrationEvent)
                 case let .notification(title, body):
                     recordAttentionNotification(title: title, body: body)
@@ -253,6 +254,28 @@ final class TerminalPaneController: ObservableObject {
         let sessionID = session.id.rawValue.uuidString
         Logger.pane.notice(
             "A pane terminal host emitted an explicit terminal notification. Pane ID: \(paneID, privacy: .public). Session ID: \(sessionID, privacy: .public). Title: \(title, privacy: .public). Body: \(body, privacy: .public)",
+        )
+    }
+
+    private func logShellIntegrationEvent(_ event: ShellIntegrationEvent) {
+        let paneID = paneID.rawValue.uuidString
+        let sessionID = session.id.rawValue.uuidString
+        let shell = URL(fileURLWithPath: session.launchConfiguration.executable).lastPathComponent
+        let phaseBefore = String(describing: session.shellPhase)
+        let exitBefore = session.lastCommandExitStatus.map(String.init) ?? "nil"
+        let eventDescription: String = {
+            switch event {
+                case .promptStarted:
+                    return "promptStarted"
+                case .commandStarted:
+                    return "commandStarted"
+                case let .commandFinished(exitStatus):
+                    return "commandFinished(\(exitStatus.map(String.init) ?? "nil"))"
+            }
+        }()
+
+        Logger.diagnostics.notice(
+            "A terminal pane parsed a shell integration event. Pane ID: \(paneID, privacy: .public). Session ID: \(sessionID, privacy: .public). Shell: \(shell, privacy: .public). Event: \(eventDescription, privacy: .public). Shell phase before apply: \(phaseBefore, privacy: .public). Last exit before apply: \(exitBefore, privacy: .public)",
         )
     }
 }

@@ -180,11 +180,13 @@ private struct BrowserPaneFocusIndicator: View {
 
 private struct BrowserPaneOmniboxOverlay: View {
     @State private var isHovered = false
-    @State private var isKeyboardRevealed = false
-    @State private var isFieldFocused = false
+    @State private var isFocusRevealed = false
+    @State private var isEditing = false
+    @FocusState private var isFieldFocused: Bool
     @State private var addressDraft = ""
-    @State private var focusSelectionToken = 0
+    @State private var textSelection: TextSelection?
     @State private var focusRequestToken = 0
+    @State private var collapseTask: Task<Void, Never>?
 
     let controller: BrowserPaneController
     @ObservedObject var session: BrowserSession
@@ -192,8 +194,12 @@ private struct BrowserPaneOmniboxOverlay: View {
     let revealID: Int
     let isPaneFocused: Bool
 
-    private var isExpanded: Bool {
-        isHovered || isKeyboardRevealed || isFieldFocused
+    private var isPreviewExpanded: Bool {
+        isHovered || isFocusRevealed || isEditing || isFieldFocused
+    }
+
+    private var isEditingExpanded: Bool {
+        isEditing
     }
 
     private var currentAddress: String {
@@ -204,42 +210,64 @@ private struct BrowserPaneOmniboxOverlay: View {
         BrowserNavigationDefaults.normalizedNavigationURLString(from: addressDraft)
     }
 
+    private var previewText: String {
+        let resolvedAddress = currentAddress
+        guard let url = URL(string: resolvedAddress) else {
+            return resolvedAddress
+        }
+
+        if let host = url.host(), !host.isEmpty {
+            return host
+        }
+
+        if let scheme = url.scheme, scheme == "about" || scheme == "file" {
+            return resolvedAddress
+        }
+
+        return resolvedAddress
+    }
+
     var body: some View {
         Group {
-            if isExpanded {
-                HStack(spacing: 8) {
-                    Image(systemName: "globe")
-                        .foregroundStyle(.secondary)
+            if isPreviewExpanded {
+                if isEditingExpanded {
+                    HStack(spacing: 8) {
+                        Image(systemName: "globe")
+                            .foregroundStyle(.secondary)
 
-                    BrowserOmniboxTextField(
-                        text: $addressDraft,
-                        placeholder: currentAddress,
-                        isFocused: $isFieldFocused,
-                        focusRequestToken: focusRequestToken,
-                        selectAllToken: focusSelectionToken,
-                        onSubmit: {
-                            guard let normalizedAddressDraft else {
-                                return
-                            }
+                        TextField("", text: $addressDraft, selection: $textSelection, prompt: Text(currentAddress))
+                            .textFieldStyle(.plain)
+                            .font(.body.monospaced())
+                            .focused($isFieldFocused)
+                            .onSubmit {
+                                guard let normalizedAddressDraft else {
+                                    return
+                                }
 
-                            controller.loadAddress(normalizedAddressDraft)
-                            isKeyboardRevealed = false
-                            isFieldFocused = false
-                        },
-                        onCancel: {
-                            syncDraft()
-                            isKeyboardRevealed = false
-                            isFieldFocused = false
-                            Task { @MainActor in
-                                controller.focusWebView()
+                                controller.loadAddress(normalizedAddressDraft)
+                                endEditing(restorePreview: false, refocusWebView: false)
                             }
-                        },
-                    )
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 10)
+                    .frame(maxWidth: 420)
+                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                } else {
+                    HStack(spacing: 8) {
+                        Image(systemName: "globe")
+                            .foregroundStyle(.secondary)
+
+                        Text(previewText)
+                            .font(.headline)
+                            .foregroundStyle(.primary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 10)
+                    .frame(maxWidth: 420)
+                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                 }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 10)
-                .frame(maxWidth: 420)
-                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             } else {
                 Circle()
                     .fill(.regularMaterial)
@@ -248,6 +276,13 @@ private struct BrowserPaneOmniboxOverlay: View {
             }
         }
         .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .onTapGesture {
+            guard isPreviewExpanded, !isEditingExpanded else {
+                return
+            }
+
+            beginKeyboardEditing(selectAll: true)
+        }
         .onHover { hovering in
             isHovered = hovering
         }
@@ -259,34 +294,81 @@ private struct BrowserPaneOmniboxOverlay: View {
                 return
             }
 
-            syncDraft()
-            focusRequestToken += 1
-            focusSelectionToken += 1
-            isKeyboardRevealed = true
+            beginKeyboardEditing(selectAll: true)
         }
         .onChange(of: session.url) { _, _ in
-            guard !isKeyboardRevealed else {
+            guard !isEditing else {
                 return
             }
 
             syncDraft()
         }
         .onChange(of: session.lastCommittedURL) { _, _ in
-            guard !isKeyboardRevealed else {
+            guard !isEditing else {
                 return
             }
 
             syncDraft()
         }
         .onChange(of: isPaneFocused) { _, newValue in
-            guard !newValue else {
+            guard newValue else {
+                if !(isEditing || isFieldFocused) {
+                    isFocusRevealed = false
+                    collapseTask?.cancel()
+                    collapseTask = nil
+                }
                 return
             }
 
-            isKeyboardRevealed = false
-            isFieldFocused = false
+            guard !isEditingExpanded else {
+                return
+            }
+
+            syncDraft()
+            isFocusRevealed = true
+            scheduleFocusCollapse()
         }
-        .animation(.easeInOut(duration: 0.18), value: isExpanded)
+        .onChange(of: isFieldFocused) { _, newValue in
+            if newValue {
+                collapseTask?.cancel()
+                collapseTask = nil
+                return
+            }
+
+            guard isEditing else {
+                return
+            }
+
+            endEditing(restorePreview: isPaneFocused, refocusWebView: false)
+        }
+        .onChange(of: focusRequestToken) { _, _ in
+            guard isEditing else {
+                return
+            }
+
+            Task { @MainActor in
+                await Task.yield()
+                guard isEditing else {
+                    return
+                }
+
+                isFieldFocused = true
+                textSelection = TextSelection(range: addressDraft.startIndex..<addressDraft.endIndex)
+            }
+        }
+        .onExitCommand {
+            guard isEditing else {
+                return
+            }
+
+            syncDraft()
+            endEditing(restorePreview: isPaneFocused, refocusWebView: true)
+        }
+        .animation(.easeInOut(duration: 0.18), value: isPreviewExpanded)
+        .onDisappear {
+            collapseTask?.cancel()
+            collapseTask = nil
+        }
     }
 
     private func syncDraft() {
@@ -297,156 +379,47 @@ private struct BrowserPaneOmniboxOverlay: View {
 
         addressDraft = resolvedAddress
     }
-}
 
-private struct BrowserOmniboxTextField: NSViewRepresentable {
-    @MainActor
-    final class Coordinator: NSObject, NSSearchFieldDelegate, NSControlTextEditingDelegate {
-        @Binding var text: String
-        @Binding var isFocused: Bool
-
-        let onSubmit: () -> Void
-        let onCancel: () -> Void
-
-        var focusRequestToken: Int = 0
-        var selectAllToken: Int = 0
-        var lastAppliedFocusRequestToken: Int = -1
-        var lastAppliedSelectAllToken: Int = -1
-
-        init(
-            text: Binding<String>,
-            isFocused: Binding<Bool>,
-            onSubmit: @escaping () -> Void,
-            onCancel: @escaping () -> Void,
-        ) {
-            _text = text
-            _isFocused = isFocused
-            self.onSubmit = onSubmit
-            self.onCancel = onCancel
+    private func beginKeyboardEditing(selectAll: Bool) {
+        syncDraft()
+        collapseTask?.cancel()
+        collapseTask = nil
+        isFocusRevealed = false
+        isEditing = true
+        focusRequestToken += 1
+        if selectAll {
+            textSelection = TextSelection(range: addressDraft.startIndex..<addressDraft.endIndex)
         }
+    }
 
-        func controlTextDidChange(_ obj: Notification) {
-            guard let field = obj.object as? NSSearchField else {
+    private func scheduleFocusCollapse() {
+        collapseTask?.cancel()
+        collapseTask = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(2))
+            guard !Task.isCancelled else {
                 return
             }
 
-            text = field.stringValue
+            isFocusRevealed = false
+        }
+    }
+
+    private func endEditing(restorePreview: Bool, refocusWebView: Bool) {
+        isEditing = false
+        isFieldFocused = false
+        textSelection = nil
+
+        if restorePreview {
+            isFocusRevealed = true
+            scheduleFocusCollapse()
+        } else {
+            isFocusRevealed = false
         }
 
-        func controlTextDidBeginEditing(_ obj: Notification) {
-            DispatchQueue.main.async { [weak self] in
-                guard let self else {
-                    return
-                }
-
-                isFocused = true
+        if refocusWebView {
+            Task { @MainActor in
+                controller.focusWebView()
             }
-        }
-
-        func controlTextDidEndEditing(_ obj: Notification) {
-            DispatchQueue.main.async { [weak self] in
-                guard let self else {
-                    return
-                }
-
-                isFocused = false
-            }
-        }
-
-        func control(
-            _ control: NSControl,
-            textView: NSTextView,
-            doCommandBy commandSelector: Selector,
-        ) -> Bool {
-            switch commandSelector {
-                case #selector(NSResponder.insertNewline(_:)):
-                    onSubmit()
-                    return true
-                case #selector(NSResponder.cancelOperation(_:)):
-                    onCancel()
-                    return true
-                default:
-                    return false
-            }
-        }
-    }
-
-    @Binding var text: String
-    let placeholder: String
-    @Binding var isFocused: Bool
-
-    let focusRequestToken: Int
-    let selectAllToken: Int
-    let onSubmit: () -> Void
-    let onCancel: () -> Void
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator(
-            text: $text,
-            isFocused: $isFocused,
-            onSubmit: onSubmit,
-            onCancel: onCancel,
-        )
-    }
-
-    func makeNSView(context: Context) -> NSSearchField {
-        let field = NSSearchField()
-        field.delegate = context.coordinator
-        field.sendsSearchStringImmediately = true
-        field.focusRingType = .none
-        field.font = NSFont.monospacedSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
-        field.isBordered = false
-        field.drawsBackground = false
-        field.lineBreakMode = .byTruncatingMiddle
-        return field
-    }
-
-    func updateNSView(_ nsView: NSSearchField, context: Context) {
-        if nsView.stringValue != text {
-            nsView.stringValue = text
-        }
-        if nsView.placeholderString != placeholder {
-            nsView.placeholderString = placeholder
-        }
-        context.coordinator.focusRequestToken = focusRequestToken
-        context.coordinator.selectAllToken = selectAllToken
-
-        if context.coordinator.lastAppliedFocusRequestToken != focusRequestToken {
-            requestFocusIfNeeded(for: nsView, coordinator: context.coordinator)
-        } else if isFocused {
-            requestSelectionIfNeeded(for: nsView, coordinator: context.coordinator)
-        } else if nsView.window?.firstResponder === nsView.currentEditor() {
-            nsView.window?.makeFirstResponder(nil)
-        }
-    }
-
-    private func requestFocusIfNeeded(
-        for nsView: NSSearchField,
-        coordinator: Coordinator,
-    ) {
-        DispatchQueue.main.async {
-            nsView.window?.makeFirstResponder(nsView)
-            nsView.currentEditor()?.selectAll(nil)
-            coordinator.lastAppliedFocusRequestToken = focusRequestToken
-            coordinator.lastAppliedSelectAllToken = selectAllToken
-        }
-    }
-
-    private func requestSelectionIfNeeded(
-        for nsView: NSSearchField,
-        coordinator: Coordinator,
-    ) {
-        guard coordinator.lastAppliedSelectAllToken != selectAllToken else {
-            return
-        }
-
-        DispatchQueue.main.async {
-            guard isFocused else {
-                return
-            }
-
-            nsView.currentEditor()?.selectAll(nil)
-            coordinator.lastAppliedSelectAllToken = selectAllToken
         }
     }
 }

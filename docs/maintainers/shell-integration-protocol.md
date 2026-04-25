@@ -92,16 +92,24 @@ The first `gmax` shell integration pass should unlock these product outcomes:
 The currently shipped baseline does this much:
 
 - parses prompt-start, command-start, and command-finish markers
-- emits those markers from the `zsh` launch path
+- emits those markers from the `zsh`, `bash`, and `fish` launch paths
 - tracks prompt-idle versus command-running session state
 - surfaces pane-local running, success, failure, and bell-attention chrome
 - aggregates active bell attention into workspace-local sidebar counts
 - records explicit terminal notifications in pane session state and the
   inspector
+- uses a generated `bash` `--rcfile` wrapper to recreate login-style startup
+  before installing prompt markers
+- uses a generated `fish` `XDG_CONFIG_HOME` wrapper to source the user's
+  original `conf.d` snippets and `config.fish` before installing prompt
+  markers
+- has focused wrapper-generation and launch-plan tests for all three shells,
+  with live local runtime verification currently exercised for `zsh` and
+  `bash`; `fish` still needs a machine with fish installed for a real manual
+  runtime check
 
 The main follow-through still ahead is:
 
-- `bash` integration support
 - routing explicit terminal notifications into real macOS notifications
 - deciding whether richer shell-integration events are worth durable product
   surface area beyond the current runtime metadata
@@ -257,8 +265,7 @@ Possible `gmax` uses:
 
 The current follow-through priority after pane and sidebar attention affordances
 is to route explicit terminal notifications into real macOS notifications
-before doing deeper notification persistence work, then extend the same shell
-marker baseline to `bash`.
+before doing deeper notification persistence work.
 
 These should not be collapsed into one generic “activity happened” signal.
 
@@ -306,7 +313,8 @@ support every shell-specific prompt framework in the first pass.
 
 1. Keep using `OSC 7` and make sure the current path continues flowing cleanly
    through the existing terminal host and pane metadata surfaces.
-2. Add a small `gmax` shell snippet for `zsh` first that emits:
+2. Keep the built-in shell snippets aligned across `zsh`, `bash`, and `fish`
+   so they all emit:
    - `OSC 133;A`
    - `OSC 133;C`
    - `OSC 133;D;<status>`
@@ -315,8 +323,10 @@ support every shell-specific prompt framework in the first pass.
 4. Add subtle pane-level UI for:
    - running versus prompt-idle
    - most recent command success or failure
-5. Only after that, decide whether command text, command regions, or richer
-   command-history features are worth carrying.
+5. Only after the cross-shell marker baseline is stable, route explicit
+   terminal notifications into real macOS notifications and then decide
+   whether command text, command regions, or richer command-history features
+   are worth carrying.
 
 ## Explicit Non-Goals
 

@@ -14,6 +14,9 @@ struct SidebarPane: View {
     let focusedTarget: FocusState<WorkspaceFocusTarget?>.Binding
     let openLibrary: () -> Void
     let createWorkspace: () -> Void
+    let duplicateWorkspace: (WorkspaceID) -> Void
+    let closeWorkspaceToLibrary: (WorkspaceID) -> Void
+    let closeWorkspace: (WorkspaceID) -> Void
     let requestRenameWorkspace: (WorkspaceID) -> Void
     let requestDeleteWorkspace: (WorkspaceID) -> Void
 
@@ -67,7 +70,7 @@ struct SidebarPane: View {
         }
 
         Button("Duplicate Workspace Layout") {
-            selection = model.duplicateWorkspace(workspace.id)
+            duplicateWorkspace(workspace.id)
         }
 
         Divider()
@@ -77,13 +80,13 @@ struct SidebarPane: View {
         }
 
         Button("Close Workspace to Library") {
-            selection = model.closeWorkspaceToLibrary(workspace.id)
+            closeWorkspaceToLibrary(workspace.id)
         }
 
         Divider()
 
         Button("Close Workspace") {
-            selection = model.closeWorkspace(workspace.id)
+            closeWorkspace(workspace.id)
         }
 
         Button("Delete Workspace", role: .destructive) {
@@ -138,6 +141,9 @@ private struct SidebarPanePreview: View {
             focusedTarget: $focusedTarget,
             openLibrary: {},
             createWorkspace: {},
+            duplicateWorkspace: { _ in },
+            closeWorkspaceToLibrary: { _ in },
+            closeWorkspace: { _ in },
             requestRenameWorkspace: { _ in },
             requestDeleteWorkspace: { _ in },
         )

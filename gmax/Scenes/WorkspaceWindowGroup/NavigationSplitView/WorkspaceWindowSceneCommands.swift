@@ -5,6 +5,8 @@ extension FocusedValues {
     @Entry var activeWorkspaceFocusTarget: WorkspaceFocusTarget?
     @Entry var activeWorkspaceSceneIdentity: WorkspaceSceneIdentity?
     @Entry var selectedWorkspaceSelection: Binding<WorkspaceID?>?
+    @Entry var createWorkspaceAndFocus: (() -> Void)?
+    @Entry var closeSelectedWorkspaceAndFocus: (() -> Void)?
     @Entry var dismissPresentedWorkspaceModal: (() -> Void)?
     @Entry var isWorkspaceSidebarVisible: Bool?
     @Entry var toggleWorkspaceSidebar: (() -> Void)?
@@ -16,6 +18,7 @@ extension FocusedValues {
     @Entry var presentWorkspaceRename: ((WorkspaceID) -> Void)?
     @Entry var presentWorkspaceDeletion: ((WorkspaceID) -> Void)?
     @Entry var moveFocusedPaneFocus: ((PaneFocusDirection) -> Void)?
+    @Entry var startShellInSelectedWorkspace: (() -> Void)?
     @Entry var splitFocusedPane: ((SplitDirection) -> Void)?
     @Entry var splitFocusedPaneAsBrowser: ((SplitDirection) -> Void)?
     @Entry var goBackFocusedBrowserPane: (() -> Void)?
@@ -31,6 +34,8 @@ struct WorkspaceWindowSceneCommands: Commands {
     @FocusedValue(\.activeWorkspaceFocusTarget) private var activeWorkspaceFocusTarget
     @FocusedValue(\.activeWorkspaceSceneIdentity) private var activeWorkspaceSceneIdentity
     @FocusedValue(\.selectedWorkspaceSelection) private var selectedWorkspaceSelection
+    @FocusedValue(\.createWorkspaceAndFocus) private var createWorkspaceAndFocus
+    @FocusedValue(\.closeSelectedWorkspaceAndFocus) private var closeSelectedWorkspaceAndFocus
     @FocusedValue(\.dismissPresentedWorkspaceModal) private var dismissPresentedWorkspaceModal
     @FocusedValue(\.isWorkspaceSidebarVisible) private var isWorkspaceSidebarVisible
     @FocusedValue(\.toggleWorkspaceSidebar) private var toggleWorkspaceSidebar
@@ -42,6 +47,7 @@ struct WorkspaceWindowSceneCommands: Commands {
     @FocusedValue(\.presentWorkspaceRename) private var presentWorkspaceRename
     @FocusedValue(\.presentWorkspaceDeletion) private var presentWorkspaceDeletion
     @FocusedValue(\.moveFocusedPaneFocus) private var moveFocusedPaneFocus
+    @FocusedValue(\.startShellInSelectedWorkspace) private var startShellInSelectedWorkspace
     @FocusedValue(\.splitFocusedPane) private var splitFocusedPane
     @FocusedValue(\.splitFocusedPaneAsBrowser) private var splitFocusedPaneAsBrowser
     @FocusedValue(\.goBackFocusedBrowserPane) private var goBackFocusedBrowserPane
@@ -57,7 +63,8 @@ struct WorkspaceWindowSceneCommands: Commands {
         let selectedWorkspace = selectedWorkspaceID.flatMap { selectedWorkspaceID in workspaces.first { $0.id == selectedWorkspaceID } }
         let isOnlyWorkspaceInWindow = workspaces.count == 1
         let isSelectedWorkspaceEmpty = selectedWorkspace?.root == nil
-        let canSplitFocusedPane = splitFocusedPane != nil
+        let canStartShellInSelectedWorkspace = startShellInSelectedWorkspace != nil
+        let canSplitFocusedPane = splitFocusedPane != nil || canStartShellInSelectedWorkspace
         let canSplitFocusedPaneAsBrowser = splitFocusedPaneAsBrowser != nil
         let canGoBackFocusedBrowserPane = goBackFocusedBrowserPane != nil
         let canGoForwardFocusedBrowserPane = goForwardFocusedBrowserPane != nil
@@ -69,15 +76,7 @@ struct WorkspaceWindowSceneCommands: Commands {
         let inspectorCommandTitle = (isWorkspaceInspectorVisible ?? false) ? "Hide Inspector" : "Show Inspector"
         let canCloseWindow = activeWorkspaceSceneIdentity != nil
         let canUndoCloseWindow = !windowRestoration.recentlyClosedWindowSceneIdentities.isEmpty
-        let closeWorkspaceAction: (() -> Void)? = {
-            guard let workspaceStore, let selectedWorkspaceID else {
-                return nil
-            }
-
-            return {
-                selectedWorkspaceSelection?.wrappedValue = workspaceStore.closeWorkspace(selectedWorkspaceID)
-            }
-        }()
+        let closeWorkspaceAction = closeSelectedWorkspaceAndFocus
         let closeWindowAction: (() -> Void)? = {
             guard canCloseWindow else {
                 return nil
@@ -139,12 +138,10 @@ struct WorkspaceWindowSceneCommands: Commands {
 
         CommandGroup(after: .newItem) {
             Button("New Workspace") {
-                if let workspaceStore {
-                    selectedWorkspaceSelection?.wrappedValue = workspaceStore.createWorkspace()
-                }
+                createWorkspaceAndFocus?()
             }
             .keyboardShortcut("n", modifiers: [.command])
-            .disabled(workspaceStore == nil)
+            .disabled(createWorkspaceAndFocus == nil)
 
             Button("New Browser Pane Right") {
                 splitFocusedPaneAsBrowser?(.right)
@@ -254,20 +251,10 @@ struct WorkspaceWindowSceneCommands: Commands {
             .disabled(selectedWorkspaceID == nil || workspaceStore == nil)
 
             Button("Close Workspace") {
-                guard let workspaceStore else {
-                    return
-                }
-                guard let selectedWorkspaceID else {
-                    Logger.diagnostics.notice(
-                        "Skipped the close-workspace command because the active shell scene has no selected workspace.",
-                    )
-                    return
-                }
-
-                selectedWorkspaceSelection?.wrappedValue = workspaceStore.closeWorkspace(selectedWorkspaceID)
+                closeSelectedWorkspaceAndFocus?()
             }
             .keyboardShortcut("w", modifiers: [.command, .option])
-            .disabled(selectedWorkspaceID == nil || workspaceStore == nil)
+            .disabled(closeSelectedWorkspaceAndFocus == nil)
 
             Button("Delete Workspace", role: .destructive) {
                 if let selectedWorkspaceID {
@@ -353,14 +340,22 @@ struct WorkspaceWindowSceneCommands: Commands {
             .disabled(moveFocusedPaneFocus == nil)
 
             Section("New Pane") {
-                Button("Split Right") {
-                    splitFocusedPane?(.right)
+            Button("Split Right") {
+                    if let splitFocusedPane {
+                        splitFocusedPane(.right)
+                    } else {
+                        startShellInSelectedWorkspace?()
+                    }
                 }
                 .keyboardShortcut("d", modifiers: [.command])
                 .disabled(!canSplitFocusedPane)
 
                 Button("Split Down") {
-                    splitFocusedPane?(.down)
+                    if let splitFocusedPane {
+                        splitFocusedPane(.down)
+                    } else {
+                        startShellInSelectedWorkspace?()
+                    }
                 }
                 .keyboardShortcut("d", modifiers: [.command, .shift])
                 .disabled(!canSplitFocusedPane)
