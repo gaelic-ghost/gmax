@@ -85,7 +85,8 @@ class GmaxUITestCase: XCTestCase {
 
         fileMenu.click()
 
-        let newWindowMenuItem = app.menuBars.menuItems
+        let newWindowMenuItem = app.menuBars
+            .menuItems
             .matching(NSPredicate(format: "title BEGINSWITH %@", "New gmax Window"))
             .firstMatch
         guard newWindowMenuItem.waitForExistence(timeout: 2), newWindowMenuItem.isEnabled else {
