@@ -322,6 +322,30 @@ code?
 
 This is the shape to ship if the option 1 spike works.
 
+### Integration Map
+
+The backend adapter should make terminal panes work the way browser panes and
+SwiftTerm panes already want to work: the pane model identifies a long-lived
+session, a registry keeps that session available while the workspace owns it,
+and SwiftUI/AppKit views attach to that session when they are present.
+
+The adapter is a durable building-block change, not just a Ghostty local detail.
+It exists because the thin spike proved a concrete failure mode: when the
+Ghostty surface is owned only by the transient AppKit view, SwiftUI view removal
+also removes terminal contents and shell state. The backend object should be the
+owner of terminal lifetime; the view should only be the visible attachment.
+
+The design should combine:
+
+- a shared terminal backend contract
+- explicit backend capabilities
+- a persistent per-pane terminal backend object
+- backend-specific restore behavior
+- a small compatibility path for the current SwiftTerm implementation
+
+It should not introduce a new command router, focus bridge, pane selection
+model, or workspace coordinator.
+
 ### Shape
 
 Introduce an app-facing terminal backend contract. SwiftTerm and Ghostty would
@@ -339,6 +363,170 @@ of view:
 
 SwiftTerm would keep using `LocalProcessTerminalView` behind this contract.
 Ghostty would use the option 1 host internally.
+
+The first implementation can be narrower than the final protocol, but it should
+name the real roles from the start:
+
+- `TerminalBackendKind` identifies the selected backend, probably `swiftTerm`
+  and `ghostty`.
+- `TerminalBackendCapabilities` reports what a backend can honestly do.
+- `TerminalBackendState` is the normalized state consumed by pane chrome,
+  inspector UI, persistence, and accessibility.
+- `TerminalBackendHost` owns one backend session for one pane/session pair.
+- `TerminalBackendView` or a similarly named AppKit host view attaches the
+  backend's terminal view into SwiftUI.
+- `TerminalBackendRegistry` retains backend hosts by terminal session ID or pane
+  ID while the workspace still owns the pane.
+
+The exact names can change, but those jobs should stay separate. A capability
+value should not own views. A host should not own scene commands. The pane view
+should not decide how Ghostty launches.
+
+### Ownership Boundary
+
+`gmax` owns:
+
+- pane identity and split topology
+- workspace windows and scene-local focus state
+- scene commands and menu availability
+- terminal launch configuration selected by the app
+- normalized pane metadata shown in chrome and the inspector
+- persistence of backend identity and supported restoration payloads
+- app-level accessibility fallback labels and actions
+
+The terminal backend owns:
+
+- terminal process/session lifetime
+- terminal renderer state
+- terminal input translation after AppKit receives events
+- terminal-native copy, paste, select all, selection, search, and scroll behavior
+- backend-specific transcript or restore capture
+- backend-specific metadata extraction
+- backend-specific teardown
+
+The SwiftUI/AppKit boundary owns:
+
+- creating an `NSViewRepresentable` wrapper
+- attaching the backend's AppKit view when the SwiftUI pane is visible
+- updating size, scale, appearance, focus, and accessibility snapshots
+- detaching the visible view without destroying the backend session unless the
+  pane/session is actually closed or relaunched
+
+### Capability Model
+
+Backend differences should be visible, not hidden behind false parity. The
+first capability set should cover the behaviors `gmax` already shows or is
+about to expose:
+
+| Capability | SwiftTerm expectation | Ghostty spike expectation |
+| --- | --- | --- |
+| `title` | Available from terminal callbacks or session state | Available from Ghostty title callback |
+| `currentDirectory` | Available from launch config and shell integration | Available, but needs URL/path normalization |
+| `shellPhase` | Available from shell integration parser | Partially available through Ghostty command events |
+| `lastCommandExitStatus` | Available from shell integration parser | Available for observed commands |
+| `bell` | Available through SwiftTerm bell override | Present but inconsistent in live spike |
+| `notification` | Available through parsed OSC notification | Available through Ghostty callback |
+| `copyPaste` | Terminal view owns responder behavior | Must be verified through Ghostty surface callbacks/actions |
+| `selection` | Terminal view owns selection | Must be verified |
+| `search` | SwiftTerm owns terminal search | Unknown or Ghostty-specific |
+| `historyCapture` | Available through current transcript capture | Not available yet |
+| `historyRestore` | Available through current SwiftTerm restore path | Defer unless Ghostty exposes a clean restore surface |
+| `closeRequest` | App owns pane close, terminal can report process exit | Available from Ghostty close request callback |
+| `readableAccessibilityText` | Partial through SwiftTerm text extraction | Unknown |
+
+The important product rule is that missing Ghostty capabilities should degrade
+honestly. A Ghostty pane can initially restore launch context without claiming
+to restore transcript history.
+
+### State Flow
+
+The backend should publish normalized state into the existing `TerminalSession`
+surface or into a successor object with the same app-facing meaning:
+
+1. Workspace model contains a terminal pane with a stable terminal session ID.
+2. The terminal session registry creates or restores the session metadata.
+3. The backend registry creates or retrieves the backend host for that session.
+4. The pane view asks the backend host for an attachable AppKit view.
+5. Backend callbacks update normalized terminal state.
+6. Pane chrome, inspector UI, persistence capture, and accessibility read the
+   normalized state without inspecting the backend type.
+
+This keeps dependency direction straight: Ghostty knows how to report terminal
+events to the backend host; the backend host knows how to update terminal state;
+workspace views read terminal state. Workspace views should not call Ghostty
+runtime APIs directly.
+
+### Persistence And Restore
+
+The first persistence change should add backend identity separately from
+restored content. A terminal snapshot should be able to say:
+
+- this was a SwiftTerm-backed terminal
+- this was a Ghostty-backed terminal
+- this backend can restore transcript content
+- this backend can only restore launch context right now
+
+The current `WorkspaceSessionSnapshot` shape already carries session ID, title,
+launch configuration, and SwiftTerm-oriented history. The backend work should
+avoid forcing Ghostty data into that history payload. Either add backend
+identity and a backend-specific restoration payload, or split the terminal
+snapshot into common fields plus backend restore fields.
+
+Early Ghostty restore should be explicit:
+
+- restore pane layout
+- restore backend identity
+- restore launch command and working directory
+- start a fresh Ghostty terminal session
+- leave transcript restore unsupported until a Ghostty-owned transcript or
+  surface-restore API is proven
+
+### Implementation Slices
+
+Build this in small slices so each step can be validated:
+
+1. Add backend identity and capability types without changing runtime behavior.
+2. Wrap the current SwiftTerm controller behind the backend contract.
+3. Move the env-gated Ghostty host behind the same contract.
+4. Add a backend registry that retains backend hosts independently from
+   SwiftUI view presence.
+5. Prove Ghostty survives workspace switching when the pane/session still
+   exists.
+6. Move pane chrome and inspector reads to normalized backend/session state.
+7. Add persistence for backend identity while keeping SwiftTerm as the default.
+8. Add user-facing backend selection only after lifecycle, teardown, and restore
+   behavior are documented.
+
+The first red/green behavior should be simple: run a Ghostty command, switch to
+another workspace, switch back, and confirm the command output is still present
+because the backend host survived view detachment.
+
+### Open Design Choices
+
+The main design choice is the key used by the backend registry.
+
+Using `TerminalSessionID` makes backend lifetime match terminal session
+identity. That is attractive for persistence and restore, and it avoids tying
+session lifetime to transient pane geometry. Using `PaneID` matches the existing
+`TerminalPaneControllerStore` and browser pane controller store, but pane IDs are
+layout identity rather than terminal session identity.
+
+The initial recommendation is to retain backend hosts by terminal session ID,
+and let a host also know its current pane ID for logging and accessibility. If a
+future feature allows moving one terminal session between panes, this choice
+will compose better.
+
+The second choice is whether `TerminalSession` remains the normalized state
+object or whether a new `TerminalBackendState` replaces it. The initial
+recommendation is to keep `TerminalSession` as the app-facing state surface
+while extracting backend-specific behavior out of `TerminalPaneController`.
+That reduces churn and lets the inspector keep working while the backend
+contract takes shape.
+
+The third choice is how far the spike path remains env-gated. The initial
+recommendation is to keep `GMAX_GHOSTTY_PANE_SPIKE=1` as the only selector until
+backend lifetime works, then replace the flag with persisted backend identity or
+an internal debug setting.
 
 ### Shared App-Facing State
 
