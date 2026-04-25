@@ -329,6 +329,49 @@ class GmaxUITestCase: XCTestCase {
         pane.click()
     }
 
+    func focusFirstVisibleBrowserPane(in app: XCUIApplication) {
+        let pane = firstVisibleBrowserPane(in: app)
+        XCTAssertTrue(
+            pane.waitForExistence(timeout: 5),
+            "The workspace content area should expose a browser pane before the test tries to focus it.",
+        )
+        pane.click()
+    }
+
+    func firstVisibleBrowserPane(in app: XCUIApplication) -> XCUIElement {
+        activeWorkspaceWindow(in: app)
+            .descendants(matching: .any)
+            .matching(NSPredicate(format: "identifier BEGINSWITH %@", "contentPane.browserLeaf."))
+            .firstMatch
+    }
+
+    func renameWorkspaceField(in app: XCUIApplication) -> XCUIElement {
+        let identifiedField = app.descendants(matching: .any)["sidebar.renameWorkspaceField"]
+        if identifiedField.exists {
+            return identifiedField
+        }
+
+        let titledField = app.textFields["Workspace Name"]
+        if titledField.exists {
+            return titledField
+        }
+
+        return app.textFields.firstMatch
+    }
+
+    func renameWorkspaceSaveButton(in app: XCUIApplication) -> XCUIElement {
+        let identifiedButton = app.descendants(matching: .any)["sidebar.renameWorkspaceSaveButton"]
+        if identifiedButton.exists {
+            return identifiedButton
+        }
+
+        return app.buttons["Save"]
+    }
+
+    func browserOmniboxField(in app: XCUIApplication) -> XCUIElement {
+        app.descendants(matching: .any)["browserPane.omniboxField"]
+    }
+
     @discardableResult
     func waitForNonExistence(
         timeout: TimeInterval,

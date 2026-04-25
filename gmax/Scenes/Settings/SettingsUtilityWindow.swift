@@ -57,6 +57,7 @@ struct SettingsUtilityWindow: View {
         .formStyle(.grouped)
         .scenePadding()
         .frame(width: 420)
+        .accessibilityIdentifier("settings.utilityWindow")
     }
 }
 
