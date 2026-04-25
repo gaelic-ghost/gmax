@@ -194,6 +194,78 @@ Those names are illustrative. The important rule is that prototype code should
 not be scattered through the workspace scene, persistence model, or SwiftTerm
 controller.
 
+### Current Spike Implementation
+
+The current branch contains that thin host spike behind one process environment
+switch:
+
+```sh
+GMAX_GHOSTTY_PANE_SPIKE=1
+```
+
+When the switch is absent, panes still use SwiftTerm. When the switch is set to
+`1`, `ContentPaneLeafView` creates `GhosttyPaneView` instead of
+`TerminalPaneView` for terminal leaves. The rest of the pane chrome, focus
+highlighting, accessibility label, split controls, current-directory footer, and
+ended-session overlay remain owned by the existing workspace view.
+
+The spike is deliberately split into two pieces:
+
+- Swift code under `gmax/Ghostty/` owns the SwiftUI-to-AppKit pane host, dynamic
+  shim loading, `NSView` geometry, basic keyboard/mouse forwarding, and
+  translation of Ghostty lifecycle callbacks into the existing
+  `TerminalSession` metadata.
+- `tools/ghostty-spike/` owns the tiny C shim that includes Ghostty's embedding
+  header, dynamically links the installed `Ghostty.app` binary, creates the
+  Ghostty runtime, and exposes a narrow C ABI that Swift can call without
+  importing Zig/Clang struct details directly.
+
+Build the shim before launching the spike:
+
+```sh
+tools/ghostty-spike/build-shim.sh
+```
+
+The script downloads the pinned `ghostty.h`, builds
+`build/GhosttyPaneSpike/libgmax-ghostty-shim.dylib`, and ad-hoc signs the shim.
+The built dylib is intentionally ignored local build output.
+
+The default runtime paths are:
+
+- Ghostty binary:
+  `/Applications/Ghostty.app/Contents/MacOS/ghostty`
+- Sparkle preload:
+  `/Applications/Ghostty.app/Contents/Frameworks/Sparkle.framework/Versions/B/Sparkle`
+- Shim:
+  `build/GhosttyPaneSpike/libgmax-ghostty-shim.dylib`
+
+These can be overridden for local experiments:
+
+```sh
+GMAX_GHOSTTY_APP_BINARY=/path/to/Ghostty.app/Contents/MacOS/ghostty
+GMAX_GHOSTTY_SPARKLE_PATH=/path/to/Sparkle
+GMAX_GHOSTTY_SHIM_PATH=/path/to/libgmax-ghostty-shim.dylib
+```
+
+One important finding from the installed Ghostty app is that the pinned header
+declares `ghostty_surface_draw`, `ghostty_surface_refresh`, and
+`ghostty_config_free`, but this local `Ghostty.app` binary does not currently
+export them. The shim treats draw and refresh as optional no-ops and avoids
+calling `ghostty_config_free`. If the first app run creates a surface but does
+not render nonblank content, the next thing to validate is a Ghostty build whose
+exported symbols match the pinned embedding header.
+
+The current spike validates dynamic runtime loading with:
+
+```sh
+tools/ghostty-spike/build-shim.sh
+swift tools/ghostty-spike/smoke-runtime.swift
+```
+
+The real surface validation still requires launching `gmax` with
+`GMAX_GHOSTTY_PANE_SPIKE=1`, because `ghostty_surface_new` needs the live
+pane-owned `NSView`.
+
 ## Option 2: Backend Adapter Beside SwiftTerm
 
 ### Real Job
