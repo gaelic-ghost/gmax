@@ -204,7 +204,6 @@ Planned
 
 - [ ] Explore other SwiftTerm types, particularly `TerminalView`.
 - [ ] Add a small shell-integration protocol for prompt start, command start, command completion, and cwd reporting before attempting richer command-aware terminal UX.
-- [ ] Extend the current shell-integration baseline beyond `zsh`, starting with `bash` support.
 - [ ] Route explicit terminal notifications into real macOS notifications with clear user-facing preference and attention behavior.
 - [ ] Decide which further shell-integration events beyond prompt, command, cwd, bell, and explicit notification are worth carrying as durable product metadata.
 - [ ] Decide how local-shell, headless, and remote-session backends should share one durable session model.

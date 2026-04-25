@@ -23,24 +23,67 @@ struct TerminalLaunchContextBuilder {
         let swiftTermEnvironment = parseEnvironmentEntries(
             Terminal.getEnvironmentVariables(termName: "xterm-256color"),
         )
+        let shellHandoffEnvironment = shellHandoffEnvironment(
+            baseEnvironment: processInfo.environment,
+            fileManager: fileManager,
+        )
+        let shellIntegrationPlan = makeShellIntegrationPlan(
+            shellExecutable: shellExecutable,
+            baseEnvironment: processInfo.environment,
+            fileManager: fileManager,
+        )
         let baseEnvironment = processInfo.environment
             .merging(swiftTermEnvironment, uniquingKeysWith: { _, new in new })
             .merging(stableTerminalEnvironment(), uniquingKeysWith: { _, new in new })
-            .merging(
-                ZshShellIntegration.environmentOverlay(
-                    shellExecutable: shellExecutable,
-                    baseEnvironment: processInfo.environment,
-                    fileManager: fileManager,
-                ),
-                uniquingKeysWith: { _, new in new },
-            )
+            .merging(shellHandoffEnvironment, uniquingKeysWith: { _, new in new })
+            .merging(shellIntegrationPlan.environment, uniquingKeysWith: { _, new in new })
 
         return TerminalLaunchContextBuilder(
             shellExecutable: shellExecutable,
-            shellArguments: ["-l"],
+            shellArguments: shellIntegrationPlan.arguments,
             baseEnvironment: baseEnvironment,
             defaultCurrentDirectory: defaultCurrentDirectory,
         )
+    }
+
+    static func makeShellIntegrationPlan(
+        shellExecutable: String,
+        baseEnvironment: [String: String],
+        fileManager: FileManager,
+    ) -> ShellIntegrationPlan {
+        let shellName = ShellIntegrationSupport.shellName(for: shellExecutable)
+        switch shellName {
+            case "zsh":
+                return ShellIntegrationPlan(
+                    arguments: ["-l"],
+                    environment: ZshShellIntegration.environmentOverlay(
+                        shellExecutable: shellExecutable,
+                        baseEnvironment: baseEnvironment,
+                        fileManager: fileManager,
+                    ),
+                )
+            case "bash":
+                let environment = BashShellIntegration.environmentOverlay(
+                    shellExecutable: shellExecutable,
+                    baseEnvironment: baseEnvironment,
+                    fileManager: fileManager,
+                )
+                return ShellIntegrationPlan(
+                    arguments: BashShellIntegration.launchArguments(environment: environment) ?? ["-l"],
+                    environment: environment,
+                )
+            case "fish":
+                return ShellIntegrationPlan(
+                    arguments: ["-l"],
+                    environment: FishShellIntegration.environmentOverlay(
+                        shellExecutable: shellExecutable,
+                        baseEnvironment: baseEnvironment,
+                        fileManager: fileManager,
+                    ),
+                )
+            default:
+                return ShellIntegrationPlan(arguments: ["-l"], environment: [:])
+        }
     }
 
     private static func resolvedShellExecutable(
@@ -97,6 +140,30 @@ struct TerminalLaunchContextBuilder {
         ]
     }
 
+    private static func shellHandoffEnvironment(
+        baseEnvironment: [String: String],
+        fileManager: FileManager,
+    ) -> [String: String] {
+        ZshShellIntegration.handoffEnvironment(
+            baseEnvironment: baseEnvironment,
+            fileManager: fileManager,
+        )
+        .merging(
+            BashShellIntegration.handoffEnvironment(
+                baseEnvironment: baseEnvironment,
+                fileManager: fileManager,
+            ),
+            uniquingKeysWith: { _, new in new },
+        )
+        .merging(
+            FishShellIntegration.handoffEnvironment(
+                baseEnvironment: baseEnvironment,
+                fileManager: fileManager,
+            ),
+            uniquingKeysWith: { _, new in new },
+        )
+    }
+
     private static func isDirectory(_ path: String, fileManager: FileManager) -> Bool {
         var isDirectory = ObjCBool(false)
         guard fileManager.fileExists(atPath: path, isDirectory: &isDirectory) else {
@@ -121,4 +188,9 @@ struct TerminalLaunchContextBuilder {
             currentDirectory: resolvedCurrentDirectory,
         )
     }
+}
+
+struct ShellIntegrationPlan {
+    let arguments: [String]
+    let environment: [String: String]
 }

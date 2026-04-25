@@ -39,6 +39,7 @@ struct WorkspaceWindowSceneView: View {
     @State private var paneFocusHistory: [PaneID] = []
     @State private var browserOmniboxRevealIDByPaneID: [PaneID: Int] = [:]
     @State private var pendingFocusedPaneID: PaneID?
+    @State private var pendingWorkspaceSelectionFocusPaneID: PaneID?
     @State private var pendingHistoryPaneID: PaneID?
     @State private var shouldSaveWindowToLibraryOnClose = false
     @StateObject private var workspaceStore: WorkspaceStore
@@ -255,6 +256,50 @@ struct WorkspaceWindowSceneView: View {
                 pendingFocusedPaneID = nil
             }
         }
+        let firstPaneIDInWorkspace: (WorkspaceID?) -> PaneID? = { workspaceID in
+            guard let workspaceID else {
+                return nil
+            }
+
+            return workspaceStore.workspaces
+                .first(where: { $0.id == workspaceID })?
+                .root?
+                .firstLeaf()?
+                .id
+        }
+        let selectWorkspaceAndRepairFocus: (WorkspaceID?) -> Void = { workspaceID in
+            selectedWorkspaceID = workspaceID
+            pendingWorkspaceSelectionFocusPaneID = firstPaneIDInWorkspace(workspaceID)
+            prunePaneNavigationState()
+            pruneBrowserOmniboxState()
+        }
+        let createWorkspaceAndFocus: () -> Void = {
+            let workspaceID = workspaceStore.createWorkspace()
+            selectWorkspaceAndRepairFocus(workspaceID)
+        }
+        let duplicateWorkspaceAndFocus: (WorkspaceID) -> Void = { workspaceID in
+            let duplicatedWorkspaceID = workspaceStore.duplicateWorkspace(workspaceID)
+            selectWorkspaceAndRepairFocus(duplicatedWorkspaceID)
+        }
+        let closeSelectedWorkspaceAndFocus: () -> Void = {
+            guard let selectedWorkspaceID else {
+                Logger.diagnostics.notice(
+                    "Skipped the close-workspace command because the active shell scene has no selected workspace.",
+                )
+                return
+            }
+
+            let nextWorkspaceID = workspaceStore.closeWorkspace(selectedWorkspaceID)
+            selectWorkspaceAndRepairFocus(nextWorkspaceID)
+        }
+        let closeWorkspaceToLibraryAndFocus: (WorkspaceID) -> Void = { workspaceID in
+            let nextWorkspaceID = workspaceStore.closeWorkspaceToLibrary(workspaceID)
+            selectWorkspaceAndRepairFocus(nextWorkspaceID)
+        }
+        let closeWorkspaceAndFocus: (WorkspaceID) -> Void = { workspaceID in
+            let nextWorkspaceID = workspaceStore.closeWorkspace(workspaceID)
+            selectWorkspaceAndRepairFocus(nextWorkspaceID)
+        }
         let createPaneInWorkspace: (WorkspaceID) -> Void = { workspaceID in
             let createdPaneID = workspaceStore.createPane(in: workspaceID)
             prunePaneNavigationState()
@@ -349,6 +394,14 @@ struct WorkspaceWindowSceneView: View {
         let canSplitFocusedPane = selectedWorkspace.flatMap { workspace in
             focusedPaneID.flatMap { workspace.root?.findPane(id: $0) }
         } != nil
+        let startShellInSelectedWorkspaceAction: (() -> Void)? = if let selectedWorkspaceID,
+                                                                    selectedWorkspace?.root == nil {
+            {
+                createPaneInWorkspace(selectedWorkspaceID)
+            }
+        } else {
+            nil
+        }
         let focusedBrowserPane: PaneLeaf? = {
             guard let selectedWorkspace, let focusedPaneID else {
                 return nil
@@ -427,9 +480,10 @@ struct WorkspaceWindowSceneView: View {
                 selection: $selectedWorkspaceID,
                 focusedTarget: $focusedTarget,
                 openLibrary: openLibrary,
-                createWorkspace: {
-                    selectedWorkspaceID = workspaceStore.createWorkspace()
-                },
+                createWorkspace: createWorkspaceAndFocus,
+                duplicateWorkspace: duplicateWorkspaceAndFocus,
+                closeWorkspaceToLibrary: closeWorkspaceToLibraryAndFocus,
+                closeWorkspace: closeWorkspaceAndFocus,
                 requestRenameWorkspace: presentWorkspaceRename,
                 requestDeleteWorkspace: presentWorkspaceDeletion,
             )
@@ -493,6 +547,8 @@ struct WorkspaceWindowSceneView: View {
         .focusedSceneValue(\.activeWorkspaceFocusTarget, focusedTarget)
         .focusedSceneValue(\.activeWorkspaceSceneIdentity, sceneIdentity)
         .focusedSceneValue(\.selectedWorkspaceSelection, $selectedWorkspaceID)
+        .focusedSceneValue(\.createWorkspaceAndFocus, createWorkspaceAndFocus)
+        .focusedSceneValue(\.closeSelectedWorkspaceAndFocus, closeSelectedWorkspaceAndFocus)
         .focusedSceneValue(\.dismissPresentedWorkspaceModal, dismissPresentedWorkspaceModal)
         .focusedSceneValue(\.isWorkspaceSidebarVisible, isSidebarVisible)
         .focusedSceneValue(\.toggleWorkspaceSidebar, toggleSidebar)
@@ -504,6 +560,7 @@ struct WorkspaceWindowSceneView: View {
         .focusedSceneValue(\.presentWorkspaceRename, presentWorkspaceRename)
         .focusedSceneValue(\.presentWorkspaceDeletion, presentWorkspaceDeletion)
         .focusedSceneValue(\.moveFocusedPaneFocus, moveFocusedPaneFocusAction)
+        .focusedSceneValue(\.startShellInSelectedWorkspace, startShellInSelectedWorkspaceAction)
         .focusedSceneValue(\.splitFocusedPane, splitFocusedPaneAction)
         .focusedSceneValue(\.splitFocusedPaneAsBrowser, splitFocusedPaneAsBrowserAction)
         .focusedSceneValue(\.goBackFocusedBrowserPane, goBackFocusedBrowserPaneAction)
@@ -564,6 +621,14 @@ struct WorkspaceWindowSceneView: View {
                     paneIDs: paneIDs,
                     applyFocusAssignment: applyFocusAssignment,
                 )
+                if let pendingWorkspaceSelectionFocusPaneID,
+                   paneIDs.contains(pendingWorkspaceSelectionFocusPaneID) {
+                    restorePaneFocusAfterWindowActivationDirect(
+                        pendingWorkspaceSelectionFocusPaneID,
+                        activePaneIDs: Set(paneIDs),
+                    )
+                    self.pendingWorkspaceSelectionFocusPaneID = nil
+                }
             },
             isInspectorVisible: isInspectorVisible,
             onInspectorVisibilityChange: { newValue in
@@ -745,6 +810,9 @@ struct WorkspaceWindowSceneView: View {
 
     private func handleSelectedWorkspacePersistence(_ selectedWorkspaceID: WorkspaceID?) {
         workspaceStore.persistedSelectedWorkspaceID = selectedWorkspaceID
+        if selectedWorkspaceID == nil {
+            pendingWorkspaceSelectionFocusPaneID = nil
+        }
     }
 
     private func applyFocusAssignmentDirect(

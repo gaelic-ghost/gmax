@@ -77,9 +77,11 @@ struct ZshShellIntegrationTests {
         #expect(zprofile.contains("export ZDOTDIR=\"${GMAX_SHELL_INTEGRATION_WRAPPER_ZDOTDIR}\""))
         #expect(zshrc.contains("typeset -g GMAX_SHELL_INTEGRATION_WRAPPER_ZDOTDIR=\"${ZDOTDIR:-}\""))
         #expect(zshrc.contains("source \"${GMAX_SHELL_INTEGRATION_WRAPPER_ZDOTDIR}/gmax-shell-integration.zsh\""))
+        #expect(integrationScript.contains("gmax() {"))
+        #expect(integrationScript.contains("exec /bin/bash --rcfile \"${GMAX_BASH_INTEGRATION_RCFILE}\" -i"))
         #expect(integrationScript.contains("gmax_emit_osc '133;A'"))
         #expect(integrationScript.contains("gmax_emit_osc '133;C'"))
-        #expect(integrationScript.contains("gmax_emit_osc \"133;D;${status}\""))
+        #expect(integrationScript.contains("gmax_emit_osc \"133;D;${exit_status}\""))
         #expect(integrationScript.contains("gmax_emit_osc \"7;file://"))
     }
 
