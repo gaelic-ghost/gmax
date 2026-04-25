@@ -11,7 +11,7 @@ if [ "${REPO_MAINTENANCE_REQUIRE_AGENTS:-true}" != "true" ]; then
 fi
 
 agents_path="$REPO_ROOT/AGENTS.md"
-[ -f "$agents_path" ] || die "Expected $agents_path to exist so the repo-maintenance toolkit has repo guidance to complement."
+[ -f "$agents_path" ] || die "Expected $agents_path to exist so maintain-project-repo has repo guidance to complement."
 [ -s "$agents_path" ] || die "Expected $agents_path to be non-empty."
 
 for needle in \

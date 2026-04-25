@@ -39,7 +39,7 @@ load_profile_env() {
 }
 
 ensure_git_repo() {
-  git -C "$REPO_ROOT" rev-parse --is-inside-work-tree >/dev/null 2>&1 || die "The repo-maintenance toolkit must run inside a git worktree rooted at $REPO_ROOT."
+  git -C "$REPO_ROOT" rev-parse --is-inside-work-tree >/dev/null 2>&1 || die "maintain-project-repo must run inside a git worktree rooted at $REPO_ROOT."
 }
 
 run_dispatch_dir() {
