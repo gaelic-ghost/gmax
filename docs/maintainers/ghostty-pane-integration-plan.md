@@ -266,6 +266,50 @@ The real surface validation still requires launching `gmax` with
 `GMAX_GHOSTTY_PANE_SPIKE=1`, because `ghostty_surface_new` needs the live
 pane-owned `NSView`.
 
+### Live Spike Findings
+
+The first live run of the thin host is promising enough to continue. It proves
+that Ghostty can render inside a `gmax` pane while `gmax` still owns workspace
+chrome, pane focus visuals, split layout, and the detail inspector.
+
+Confirmed behavior:
+
+- The shim can load the installed Ghostty app binary, create the runtime, and
+  create pane surfaces with `ghostty_surface_new`.
+- The renderer is alive in ordinary split panes; cursor blink and terminal
+  output render inside the pane.
+- A Ghostty terminal pane can coexist beside a browser pane in the same
+  workspace.
+- After the `ccab323` input fix, printable keys and core control keys flow
+  through `ghostty_surface_key`; commands such as `ls`, `pwd`, `echo $0`,
+  `true`, and `false` execute.
+- Shell metadata is good enough to drive the existing `TerminalSession` UI:
+  successful commands set shell phase back to prompt with exit status `0`, and
+  failing commands produce the existing failure indicator.
+
+Observed limitations:
+
+- The initial raw-text path displayed typed text but did not reliably execute
+  commands. Ghostty needs key events for normal keyboard input, not just
+  `ghostty_surface_text`.
+- Bell reporting is incomplete. Delete on an empty prompt produced a bell once,
+  but bell state was inconsistent in live testing.
+- Surface contents disappear on workspace switch. This is expected for the
+  current thin host because SwiftUI view removal destroys the AppKit host and
+  therefore the Ghostty surface and its shell/session state.
+- Current-directory reporting can arrive in a form like `file://Mac.lan%23/...`;
+  a product adapter should normalize or source this metadata more deliberately.
+- The installed Ghostty app still does not export `ghostty_surface_draw`,
+  `ghostty_surface_refresh`, or `ghostty_config_free` despite the pinned header
+  declaring them, so this spike should stay tied to local validation rather than
+  treated as an API-stability proof.
+
+The practical implication is that the view-only spike is useful evidence, but
+it is not the product shape. A real integration should promote Ghostty into a
+backend object that owns the Ghostty runtime, surface, and shell/session
+lifetimes independently from transient SwiftUI view presence. The view should
+attach to that backend; it should not be the only owner of the terminal session.
+
 ## Option 2: Backend Adapter Beside SwiftTerm
 
 ### Real Job
