@@ -48,6 +48,8 @@ Primary upstream references:
   [`src/apprt/embedded.zig`](https://github.com/ghostty-org/ghostty/blob/main/src/apprt/embedded.zig)
 - Ghostty macOS AppKit surface:
   [`macos/Sources/Ghostty/Surface View/SurfaceView_AppKit.swift`](https://github.com/ghostty-org/ghostty/blob/main/macos/Sources/Ghostty/Surface%20View/SurfaceView_AppKit.swift)
+- Ghostty keybinding action reference:
+  <https://ghostty.org/docs/config/keybind/reference>
 - `libghostty-vt` documentation:
   <https://libghostty.tip.ghostty.org/>
 - SwiftUI `NSViewRepresentable`:
@@ -429,14 +431,86 @@ about to expose:
 | `copyPaste` | Terminal view owns responder behavior | Must be verified through Ghostty surface callbacks/actions |
 | `selection` | Terminal view owns selection | Must be verified |
 | `search` | SwiftTerm owns terminal search | Unknown or Ghostty-specific |
-| `historyCapture` | Available through current transcript capture | Not available yet |
-| `historyRestore` | Available through current SwiftTerm restore path | Defer unless Ghostty exposes a clean restore surface |
+| `historyTextExport` | Available through current transcript capture | Possible through text-read APIs or scrollback file action |
+| `historyRestore` | Available through current SwiftTerm restore path | Unsupported until Ghostty exposes a clean restore surface |
 | `closeRequest` | App owns pane close, terminal can report process exit | Available from Ghostty close request callback |
-| `readableAccessibilityText` | Partial through SwiftTerm text extraction | Unknown |
+| `readableAccessibilityText` | Partial through SwiftTerm text extraction | Possible through selection/text-read APIs |
 
 The important product rule is that missing Ghostty capabilities should degrade
 honestly. A Ghostty pane can initially restore launch context without claiming
 to restore transcript history.
+
+### Ghostty Text And Scrollback Capabilities
+
+Ghostty's current embedding header exposes text-read helpers:
+
+- `ghostty_surface_has_selection`
+- `ghostty_surface_read_selection`
+- `ghostty_surface_read_text`
+- `ghostty_surface_free_text`
+
+Those APIs are useful for selection, accessibility, and maybe text-only history
+export, but they are not a complete restore model. They do not promise a
+serializable terminal state that includes scroll position, alternate-screen
+state, style runs, prompt markers, graphics protocol content, or renderer state.
+
+Ghostty also exposes keybinding actions such as `write_scrollback_file`,
+`write_screen_file`, and `write_selection_file`. Because the embedding surface
+has `ghostty_surface_binding_action`, `gmax` may be able to trigger one of
+those actions and intercept the resulting clipboard or file flow through the
+runtime callbacks. Treat that as a diagnostic or archive workaround, not as the
+main restore path.
+
+The initial capability stance should be:
+
+- `historyTextExport`: maybe, text-only, behind explicit validation
+- `historyArchive`: possible as a separate saved artifact
+- `historyRestore`: unsupported for Ghostty
+- `sessionContinuityWhileAlive`: required for the backend adapter
+
+This means a Ghostty pane can preserve live contents while the app process and
+backend host are alive, but after app restart it should relaunch from the saved
+launch context rather than replaying scrollback into Ghostty.
+
+Avoid raw PTY-output replay as a restore strategy. The current embedding surface
+does not expose a "feed historical terminal output" API, and sending recorded
+output through `ghostty_surface_text` would be input to the child process, not
+terminal output into the emulator.
+
+### Ghostty Dependency Path
+
+There are three dependency stages:
+
+1. Local installed-app spike.
+2. Pinned Ghostty source or binary artifact behind a `gmax` shim.
+3. Optional upstream embedding package if Ghostty publishes one later.
+
+The installed-app path is only for concept validation. It relies on a local
+`Ghostty.app`, dynamic loading, and hardened-runtime settings that are
+acceptable for a spike but not the product dependency story.
+
+The product-shaped path should keep a `gmax`-owned shim. The shim should expose
+only the C ABI `gmax` actually uses, keep Ghostty/Zig layout details out of
+Swift, and make header/export mismatches fail with readable diagnostics.
+
+The shim should cover, at minimum:
+
+- app/runtime create, tick, and destroy
+- surface create and destroy
+- size, content scale, display ID, focus, occlusion, color scheme, refresh, and
+  draw when exported
+- keyboard, text, preedit, mouse button, mouse position, mouse scroll, and
+  mouse capture state
+- selection and text read APIs
+- binding actions for copy, paste, select all, search, and text export
+- foreground process ID and TTY name
+- close request, process-exited query, and quit-confirmation query
+- runtime callbacks for wakeup, actions, clipboard, close-surface, and
+  notifications
+
+Do not import Ghostty's macOS app view, app scene model, tab model, split model,
+menus, settings UI, or persistence assumptions. Those are Ghostty.app product
+surfaces, not the terminal-surface dependency boundary `gmax` needs.
 
 ### State Flow
 
@@ -492,9 +566,13 @@ Build this in small slices so each step can be validated:
    SwiftUI view presence.
 5. Prove Ghostty survives workspace switching when the pane/session still
    exists.
-6. Move pane chrome and inspector reads to normalized backend/session state.
-7. Add persistence for backend identity while keeping SwiftTerm as the default.
-8. Add user-facing backend selection only after lifecycle, teardown, and restore
+6. Validate Ghostty text export, selection read, copy, paste, and select-all
+   through capabilities rather than assuming parity.
+7. Move pane chrome and inspector reads to normalized backend/session state.
+8. Add persistence for backend identity while keeping SwiftTerm as the default.
+9. Replace the installed-app spike dependency with a pinned Ghostty source or
+   binary artifact behind the `gmax` shim.
+10. Add user-facing backend selection only after lifecycle, teardown, and restore
    behavior are documented.
 
 The first red/green behavior should be simple: run a Ghostty command, switch to
