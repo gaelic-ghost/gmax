@@ -11,7 +11,7 @@ struct ContentPaneLeafView: View {
     @State private var chromeRevealID = 0
 
     let pane: PaneLeaf
-    let controller: TerminalPaneController
+    let backendHost: any TerminalBackendHost
     @ObservedObject var session: TerminalSession
 
     let focusedTarget: FocusState<WorkspaceFocusTarget?>.Binding
@@ -109,20 +109,29 @@ struct ContentPaneLeafView: View {
 
     private func paneSurface(isFocused: Bool, paneHostIdentity: String) -> some View {
         Group {
-            if GhosttyPaneSpikeSwitch.isEnabled {
-                GhosttyPaneView(
-                    session: session,
-                    onClose: onClose,
-                )
-            } else {
-                TerminalPaneView(
-                    controller: controller,
-                    session: session,
-                    onRestart: restartShell,
-                    onSplitRight: onSplitRight,
-                    onSplitDown: onSplitDown,
-                    onClose: onClose,
-                )
+            switch backendHost.kind {
+                case .ghostty:
+                    if let backendHost = backendHost as? GhosttyBackendHost {
+                        GhosttyPaneView(
+                            backendHost: backendHost,
+                            onClose: onClose,
+                        )
+                    } else {
+                        backendMismatchView(expectedBackend: .ghostty)
+                    }
+                case .swiftTerm:
+                    if let backendHost = backendHost as? SwiftTermBackendHost {
+                        TerminalPaneView(
+                            controller: backendHost.controller,
+                            session: session,
+                            onRestart: restartShell,
+                            onSplitRight: onSplitRight,
+                            onSplitDown: onSplitDown,
+                            onClose: onClose,
+                        )
+                    } else {
+                        backendMismatchView(expectedBackend: .swiftTerm)
+                    }
             }
         }
         // The pane host must stay keyed to the actual pane leaf, not just relaunches,
@@ -180,6 +189,14 @@ struct ContentPaneLeafView: View {
         }
         .padding(20)
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+
+    private func backendMismatchView(expectedBackend: TerminalBackendKind) -> some View {
+        ContentUnavailableView {
+            Label("Terminal Backend Unavailable", systemImage: "terminal")
+        } description: {
+            Text("This pane expected the \(expectedBackend.rawValue) terminal backend, but the retained backend host has a different type. Close and reopen the pane to create a fresh terminal host.")
+        }
     }
 
     private func restartShell() {

@@ -14,8 +14,8 @@ final class WorkspaceStore: ObservableObject {
     let persistence: WorkspacePersistenceController
     let launchContextBuilder: TerminalLaunchContextBuilder
     let sessions: TerminalSessionRegistry
+    let terminalBackends: TerminalBackendRegistry
     let browserSessions: BrowserSessionRegistry
-    let paneControllers: TerminalPaneControllerStore
     let browserPaneControllers: BrowserPaneControllerStore
     var persistedSelectedWorkspaceID: WorkspaceID?
     var persistedSelectedPaneID: PaneID?
@@ -102,11 +102,11 @@ final class WorkspaceStore: ObservableObject {
             defaultLaunchConfiguration: launchContextBuilder.makeLaunchConfiguration(),
             restoredPaneSnapshotsBySessionID: resolvedPaneSnapshotsBySessionID,
         )
+        terminalBackends = TerminalBackendRegistry()
         browserSessions = BrowserSessionRegistry(
             workspaces: resolvedWorkspaces,
             restoredSnapshotsBySessionID: resolvedBrowserSnapshotsBySessionID,
         )
-        paneControllers = TerminalPaneControllerStore()
         browserPaneControllers = BrowserPaneControllerStore()
         self.workspaces = resolvedWorkspaces
         recentlyClosedWorkspaceCount = resolvedRecentlyClosedWorkspaceCount

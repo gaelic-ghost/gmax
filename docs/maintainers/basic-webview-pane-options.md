@@ -88,7 +88,7 @@ What is true now:
 What is still terminal-specific:
 
 - `TerminalSessionRegistry` remains the terminal-session registry
-- `TerminalPaneControllerStore` remains the terminal-controller cache
+- `TerminalBackendRegistry` remains the terminal-backend host cache
 - `ContentPaneLeafView` is still terminal-only
 
 So the current shell is no longer lying about leaf content, and it now has a
@@ -204,7 +204,7 @@ Then the supporting pieces become parallel in a clean way:
 
 - `TerminalSessionRegistry` stays terminal-specific
 - add `BrowserSessionRegistry`
-- `TerminalPaneControllerStore` stays terminal-specific
+- `TerminalBackendRegistry` stays terminal-specific
 - add `BrowserPaneControllerStore`
 - `ContentPane` switches on `PaneLeaf.content`
 - persistence encodes a leaf content kind plus the matching session identifier

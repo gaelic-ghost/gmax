@@ -571,7 +571,7 @@ extension WorkspaceStore {
             guard let sessionID = leaf.terminalSessionID, resolvedHistory[sessionID] == nil else {
                 continue
             }
-            guard let history = paneControllers.existingController(for: leaf.id)?.captureHistory() else {
+            guard let history = terminalBackends.existingHost(for: sessionID)?.captureHistory() else {
                 continue
             }
 

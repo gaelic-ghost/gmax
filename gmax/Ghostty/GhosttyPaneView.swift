@@ -8,7 +8,7 @@
 import SwiftUI
 
 struct GhosttyPaneView: NSViewRepresentable {
-    let session: TerminalSession
+    let backendHost: GhosttyBackendHost
     let onClose: () -> Void
 
     static func dismantleNSView(_ nsView: GhosttyPaneHostView, coordinator: Coordinator) {
@@ -16,23 +16,26 @@ struct GhosttyPaneView: NSViewRepresentable {
     }
 
     func makeCoordinator() -> Coordinator {
-        Coordinator()
+        Coordinator(backendHost: backendHost)
     }
 
     func makeNSView(context: Context) -> GhosttyPaneHostView {
-        let hostView = GhosttyPaneHostView(session: session)
-        hostView.onCloseRequested = onClose
-        return hostView
+        backendHost.hostView(onClose: onClose)
     }
 
     func updateNSView(_ nsView: GhosttyPaneHostView, context: Context) {
-        nsView.onCloseRequested = onClose
-        nsView.refreshSurface()
+        backendHost.update(hostView: nsView, onClose: onClose)
     }
 
     final class Coordinator {
+        let backendHost: GhosttyBackendHost
+
+        init(backendHost: GhosttyBackendHost) {
+            self.backendHost = backendHost
+        }
+
         func dismantle(hostView: GhosttyPaneHostView) {
-            hostView.onCloseRequested = nil
+            backendHost.detach(hostView: hostView)
         }
     }
 }

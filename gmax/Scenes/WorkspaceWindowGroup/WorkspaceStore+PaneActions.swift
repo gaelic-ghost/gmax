@@ -171,8 +171,8 @@ extension WorkspaceStore {
         let activeTerminalSessionIDs = Set(activeLeaves.compactMap(\.1.terminalSessionID))
         let activeBrowserSessionIDs = Set(activeLeaves.compactMap(\.1.browserSessionID))
         sessions.removeSessions(notIn: activeTerminalSessionIDs)
+        terminalBackends.removeHosts(notIn: activeTerminalSessionIDs)
         browserSessions.removeSessions(notIn: activeBrowserSessionIDs)
-        paneControllers.removeControllers(notIn: Set(activeLeaves.map(\.1.id)))
         browserPaneControllers.removeControllers(notIn: Set(activeLeaves.map(\.1.id)))
         reconcileTerminalSessionObservations()
     }

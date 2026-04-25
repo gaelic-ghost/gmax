@@ -85,14 +85,15 @@ private struct ContentPaneNodeView: View {
             case let .leaf(leaf):
                 Group {
                     if let sessionID = leaf.terminalSessionID {
-                        let controller = model.paneControllers.controller(
+                        let session = model.sessions.ensureSession(id: sessionID)
+                        let backendHost = model.terminalBackends.host(
                             for: leaf,
-                            session: model.sessions.ensureSession(id: sessionID),
+                            session: session,
                         )
                         ContentPaneLeafView(
                             pane: leaf,
-                            controller: controller,
-                            session: controller.session,
+                            backendHost: backendHost,
+                            session: session,
                             focusedTarget: focusedTarget,
                             onMovePaneFocus: onMovePaneFocus,
                             onSplitRight: {

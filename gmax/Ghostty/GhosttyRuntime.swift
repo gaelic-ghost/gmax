@@ -236,7 +236,9 @@ final class GhosttyRuntime {
             return NSString(string: path).expandingTildeInPath
         }
 
-        return "/Users/galew/Workspace/gaelic-ghost/gmax/build/GhosttyPaneSpike/libgmax-ghostty-shim.dylib"
+        return FileManager.default
+            .currentDirectoryPath
+            .appending("/build/GhosttyPaneSpike/libgmax-ghostty-shim.dylib")
     }
 
     private func resolvedGhosttyBinaryPath() -> String {

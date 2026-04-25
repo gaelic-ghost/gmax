@@ -585,9 +585,9 @@ The main design choice is the key used by the backend registry.
 
 Using `TerminalSessionID` makes backend lifetime match terminal session
 identity. That is attractive for persistence and restore, and it avoids tying
-session lifetime to transient pane geometry. Using `PaneID` matches the existing
-`TerminalPaneControllerStore` and browser pane controller store, but pane IDs are
-layout identity rather than terminal session identity.
+session lifetime to transient pane geometry. Using `PaneID` would match the
+browser pane controller store, but pane IDs are layout identity rather than
+terminal session identity.
 
 The initial recommendation is to retain backend hosts by terminal session ID,
 and let a host also know its current pane ID for logging and accessibility. If a
@@ -874,3 +874,51 @@ The clean path is not "use Ghostty's app view." The clean path is:
    persistence metadata, scene commands, and app-level accessibility.
 4. Let each terminal backend own its own terminal state, input behavior,
    selection, search, and rendering.
+
+## Product Integration Readiness
+
+As of 2026-04-25, the branch is ready to start the first product-quality
+integration pass, but not ready to expose Ghostty as a user-facing backend
+choice.
+
+Readiness evidence:
+
+- the Ghostty shim builds locally with `tools/ghostty-spike/build-shim.sh`
+- the runtime smoke script passes when pointed at the worktree-built shim
+- `scripts/repo-maintenance/validate-all.sh` passes
+- `xcodebuild -project gmax.xcodeproj -scheme gmax -destination 'platform=macOS' build`
+  succeeds
+
+The first implementation pass should focus on terminal lifetime ownership, not
+settings UI. The current spike proved the concrete failure mode: a Ghostty
+surface owned only by the transient AppKit view disappears when SwiftUI removes
+that view during workspace switching. A product integration needs a
+session-keyed backend host that outlives SwiftUI view attachment while the pane
+and terminal session still exist.
+
+First-pass scope:
+
+- add terminal backend identity and capability types
+- introduce a shared app-facing backend host contract
+- keep SwiftTerm as the default backend and wrap its existing controller behind
+  that contract
+- move the Ghostty spike behind the same backend host contract
+- retain backend hosts by `TerminalSessionID`
+- preserve `TerminalSession` as the normalized app-facing state surface
+- keep `GMAX_GHOSTTY_PANE_SPIKE=1` as the only Ghostty selector until lifecycle
+  behavior is proven
+
+The first red/green behavior is intentionally small: run a command in a Ghostty
+pane, switch to another workspace, switch back, and confirm the command output
+is still present because the backend host survived SwiftUI view detachment.
+
+Known blockers before product exposure:
+
+- the installed Ghostty app dependency is still a spike-only path
+- the pinned header and installed app exports still disagree for some declared
+  symbols
+- current-directory metadata needs normalization before it becomes product UI
+- bell, copy, paste, selection, search, readable text, and text export need
+  capability-specific validation
+- Ghostty restore should initially mean launch-context restore, not transcript
+  history restore

@@ -37,7 +37,7 @@ func requiredSymbol<T>(_ name: String, from handle: UnsafeMutableRawPointer) -> 
 let environment = ProcessInfo.processInfo.environment
 let shimPath = expandedPath(
     environment["GMAX_GHOSTTY_SHIM_PATH"]
-        ?? "/Users/galew/Workspace/gaelic-ghost/gmax/build/GhosttyPaneSpike/libgmax-ghostty-shim.dylib",
+        ?? FileManager.default.currentDirectoryPath.appending("/build/GhosttyPaneSpike/libgmax-ghostty-shim.dylib"),
 )
 let ghosttyPath = expandedPath(
     environment["GMAX_GHOSTTY_APP_BINARY"]

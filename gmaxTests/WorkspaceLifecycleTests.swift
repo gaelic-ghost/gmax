@@ -197,6 +197,34 @@ struct WorkspaceLifecycleTests {
         #expect(session.url == nil)
     }
 
+    @Test func `terminal backend registry retains hosts by terminal session`() throws {
+        let pane = PaneLeaf()
+        let workspace = Workspace(title: "Workspace 1", root: .leaf(pane))
+        let model = WorkspaceStore(workspaces: [workspace])
+        let sessionID = try #require(pane.terminalSessionID)
+        let session = model.sessions.ensureSession(id: sessionID)
+
+        let firstHost = model.terminalBackends.host(for: pane, session: session)
+        let secondHost = model.terminalBackends.host(for: pane, session: session)
+
+        #expect(firstHost === secondHost)
+        #expect(firstHost.kind == .swiftTerm)
+        #expect(firstHost.session === session)
+    }
+
+    @Test func `closing a terminal pane prunes its backend host`() throws {
+        let pane = PaneLeaf()
+        let workspace = Workspace(title: "Workspace 1", root: .leaf(pane))
+        let model = WorkspaceStore(workspaces: [workspace])
+        let sessionID = try #require(pane.terminalSessionID)
+        let session = model.sessions.ensureSession(id: sessionID)
+        _ = model.terminalBackends.host(for: pane, session: session)
+
+        model.closePane(pane.id, in: workspace.id)
+
+        #expect(model.terminalBackends.existingHost(for: sessionID) == nil)
+    }
+
     @Test func `browser navigation normalization prefers http for localhost and https for hostnames`() {
         #expect(
             BrowserNavigationDefaults.normalizedNavigationURLString(from: "localhost:3000")
