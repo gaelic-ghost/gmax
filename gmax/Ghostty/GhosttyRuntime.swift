@@ -29,6 +29,15 @@ final class GhosttyRuntime {
     fileprivate typealias SurfaceSetScale = @convention(c) (OpaquePointer?, Double) -> Void
     fileprivate typealias SurfaceSetFocus = @convention(c) (OpaquePointer?, Bool) -> Void
     fileprivate typealias SurfaceText = @convention(c) (OpaquePointer?, UnsafePointer<CChar>?, UInt) -> Void
+    fileprivate typealias SurfaceKey = @convention(c) (
+        OpaquePointer?,
+        Int32,
+        Int32,
+        UnsafePointer<CChar>?,
+        UInt32,
+        UInt32,
+        Bool,
+    ) -> Bool
     fileprivate typealias SurfaceMousePosition = @convention(c) (OpaquePointer?, Double, Double) -> Void
     fileprivate typealias SurfaceMouseButton = @convention(c) (OpaquePointer?, Int32, Int32) -> Void
     fileprivate typealias SurfaceScroll = @convention(c) (OpaquePointer?, Double, Double) -> Void
@@ -40,6 +49,7 @@ final class GhosttyRuntime {
         fileprivate let setScale: SurfaceSetScale
         fileprivate let setFocus: SurfaceSetFocus
         fileprivate let text: SurfaceText
+        fileprivate let key: SurfaceKey
         fileprivate let mousePosition: SurfaceMousePosition
         fileprivate let mouseButton: SurfaceMouseButton
         fileprivate let scroll: SurfaceScroll
@@ -189,6 +199,7 @@ final class GhosttyRuntime {
             setScale: load("gmax_ghostty_surface_set_scale", from: dlHandle),
             setFocus: load("gmax_ghostty_surface_set_focus", from: dlHandle),
             text: load("gmax_ghostty_surface_text", from: dlHandle),
+            key: load("gmax_ghostty_surface_key", from: dlHandle),
             mousePosition: load("gmax_ghostty_surface_mouse_position", from: dlHandle),
             mouseButton: load("gmax_ghostty_surface_mouse_button", from: dlHandle),
             scroll: load("gmax_ghostty_surface_scroll", from: dlHandle),
@@ -295,6 +306,34 @@ final class GhosttySurfaceHandle {
         }
     }
 
+    func sendKey(action: GhosttyKeyAction, event: NSEvent, text: String? = nil, composing: Bool = false) {
+        let modifiers = GhosttyInputModifierFlags(event.modifierFlags)
+        let unshiftedCodepoint = event.charactersIgnoringModifiers?.unicodeScalars.first?.value ?? 0
+        if let text, !text.isEmpty {
+            text.withCString { pointer in
+                _ = functions.key(
+                    surface,
+                    action.rawValue,
+                    modifiers.rawValue,
+                    pointer,
+                    UInt32(event.keyCode),
+                    unshiftedCodepoint,
+                    composing,
+                )
+            }
+        } else {
+            _ = functions.key(
+                surface,
+                action.rawValue,
+                modifiers.rawValue,
+                nil,
+                UInt32(event.keyCode),
+                unshiftedCodepoint,
+                composing,
+            )
+        }
+    }
+
     func mousePosition(x: Double, y: Double) {
         functions.mousePosition(surface, x, y)
     }
@@ -309,6 +348,37 @@ final class GhosttySurfaceHandle {
 
     func refresh() {
         functions.refresh(surface)
+    }
+}
+
+enum GhosttyKeyAction: Int32 {
+    case release = 0
+    case press = 1
+    case repeatPress = 2
+}
+
+struct GhosttyInputModifierFlags {
+    let rawValue: Int32
+
+    init(_ flags: NSEvent.ModifierFlags) {
+        var rawValue: Int32 = 0
+        if flags.contains(.shift) {
+            rawValue |= 1 << 0
+        }
+        if flags.contains(.control) {
+            rawValue |= 1 << 1
+        }
+        if flags.contains(.option) {
+            rawValue |= 1 << 2
+        }
+        if flags.contains(.command) {
+            rawValue |= 1 << 3
+        }
+        if flags.contains(.capsLock) {
+            rawValue |= 1 << 4
+        }
+
+        self.rawValue = rawValue
     }
 }
 

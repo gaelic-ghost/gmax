@@ -19,6 +19,7 @@ final class GhosttyPaneHostView: NSView {
     private let session: TerminalSession
     private var surface: GhosttySurfaceHandle?
     private var loadError: String?
+    private var activeKeyDownEvent: NSEvent?
 
     init(session: TerminalSession) {
         self.session = session
@@ -62,38 +63,30 @@ final class GhosttyPaneHostView: NSView {
     }
 
     override func keyDown(with event: NSEvent) {
+        activeKeyDownEvent = event
+        defer { activeKeyDownEvent = nil }
         interpretKeyEvents([event])
+    }
+
+    override func keyUp(with event: NSEvent) {
+        surface?.sendKey(action: .release, event: event)
     }
 
     override func insertText(_ insertString: Any) {
         if let attributedString = insertString as? NSAttributedString {
-            surface?.sendText(attributedString.string)
+            sendInsertedText(attributedString.string)
         } else if let string = insertString as? String {
-            surface?.sendText(string)
+            sendInsertedText(string)
         }
     }
 
     override func doCommand(by selector: Selector) {
-        switch selector {
-            case #selector(insertNewline(_:)):
-                surface?.sendText("\r")
-            case #selector(deleteBackward(_:)):
-                surface?.sendText("\u{7f}")
-            case #selector(insertTab(_:)):
-                surface?.sendText("\t")
-            case #selector(cancelOperation(_:)):
-                surface?.sendText("\u{1b}")
-            case #selector(moveUp(_:)):
-                surface?.sendText("\u{1b}[A")
-            case #selector(moveDown(_:)):
-                surface?.sendText("\u{1b}[B")
-            case #selector(moveRight(_:)):
-                surface?.sendText("\u{1b}[C")
-            case #selector(moveLeft(_:)):
-                surface?.sendText("\u{1b}[D")
-            default:
-                Logger.pane.debug("Ghostty pane spike ignored an AppKit text command. Selector: \(NSStringFromSelector(selector), privacy: .public)")
+        guard let keyCode = GhosttySpecialKeyCode(selector: selector) else {
+            Logger.pane.debug("Ghostty pane spike ignored an AppKit text command. Selector: \(NSStringFromSelector(selector), privacy: .public)")
+            return
         }
+
+        sendSpecialKey(keyCode)
     }
 
     override func mouseMoved(with event: NSEvent) {
@@ -202,5 +195,101 @@ final class GhosttyPaneHostView: NSView {
     private func sendMousePosition(_ event: NSEvent) {
         let location = convert(event.locationInWindow, from: nil)
         surface?.mousePosition(x: location.x, y: bounds.height - location.y)
+    }
+
+    private func sendInsertedText(_ text: String) {
+        guard !text.isEmpty else {
+            return
+        }
+        guard let activeKeyDownEvent else {
+            surface?.sendText(text)
+            return
+        }
+
+        let action: GhosttyKeyAction = activeKeyDownEvent.isARepeat ? .repeatPress : .press
+        surface?.sendKey(action: action, event: activeKeyDownEvent, text: text)
+    }
+
+    private func sendSpecialKey(_ keyCode: GhosttySpecialKeyCode) {
+        guard let event = NSEvent.keyEvent(
+            with: .keyDown,
+            location: .zero,
+            modifierFlags: [],
+            timestamp: ProcessInfo.processInfo.systemUptime,
+            windowNumber: window?.windowNumber ?? 0,
+            context: nil,
+            characters: keyCode.characters,
+            charactersIgnoringModifiers: keyCode.characters,
+            isARepeat: false,
+            keyCode: keyCode.rawValue,
+        ) else {
+            return
+        }
+
+        surface?.sendKey(action: .press, event: event)
+    }
+}
+
+private enum GhosttySpecialKeyCode: UInt16 {
+    case `return` = 36
+    case tab = 48
+    case delete = 51
+    case escape = 53
+    case home = 115
+    case pageUp = 116
+    case forwardDelete = 117
+    case end = 119
+    case pageDown = 121
+    case leftArrow = 123
+    case rightArrow = 124
+    case downArrow = 125
+    case upArrow = 126
+
+    var characters: String {
+        switch self {
+            case .return:
+                "\r"
+            case .tab:
+                "\t"
+            case .delete:
+                "\u{7F}"
+            case .escape:
+                "\u{1B}"
+            default:
+                ""
+        }
+    }
+
+    init?(selector: Selector) {
+        switch selector {
+            case #selector(NSResponder.insertNewline(_:)):
+                self = .return
+            case #selector(NSResponder.insertTab(_:)):
+                self = .tab
+            case #selector(NSResponder.deleteBackward(_:)):
+                self = .delete
+            case #selector(NSResponder.deleteForward(_:)):
+                self = .forwardDelete
+            case #selector(NSResponder.cancelOperation(_:)):
+                self = .escape
+            case #selector(NSResponder.moveUp(_:)):
+                self = .upArrow
+            case #selector(NSResponder.moveDown(_:)):
+                self = .downArrow
+            case #selector(NSResponder.moveRight(_:)):
+                self = .rightArrow
+            case #selector(NSResponder.moveLeft(_:)):
+                self = .leftArrow
+            case #selector(NSResponder.moveToBeginningOfLine(_:)):
+                self = .home
+            case #selector(NSResponder.moveToEndOfLine(_:)):
+                self = .end
+            case #selector(NSResponder.pageUp(_:)):
+                self = .pageUp
+            case #selector(NSResponder.pageDown(_:)):
+                self = .pageDown
+            default:
+                return nil
+        }
     }
 }

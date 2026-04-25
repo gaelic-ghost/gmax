@@ -55,6 +55,7 @@ struct GmaxGhosttyRuntime {
   void (*ghostty_surface_set_size)(ghostty_surface_t, uint32_t, uint32_t);
   void (*ghostty_surface_text)(ghostty_surface_t, const char *, uintptr_t);
   void (*ghostty_surface_preedit)(ghostty_surface_t, const char *, uintptr_t);
+  bool (*ghostty_surface_key)(ghostty_surface_t, ghostty_input_key_s);
   bool (*ghostty_surface_mouse_button)(
       ghostty_surface_t,
       ghostty_input_mouse_state_e,
@@ -308,6 +309,7 @@ int gmax_ghostty_runtime_create(
   LOAD(ghostty_surface_set_size);
   LOAD(ghostty_surface_text);
   LOAD(ghostty_surface_preedit);
+  LOAD(ghostty_surface_key);
   LOAD(ghostty_surface_mouse_button);
   LOAD(ghostty_surface_mouse_pos);
   LOAD(ghostty_surface_mouse_scroll);
@@ -486,6 +488,30 @@ void gmax_ghostty_surface_preedit(GmaxGhosttySurface *surface, const char *text,
     return;
   }
   surface->runtime->ghostty_surface_preedit(surface->surface, text, len);
+}
+
+bool gmax_ghostty_surface_key(
+    GmaxGhosttySurface *surface,
+    int action,
+    int mods,
+    const char *text,
+    uint32_t keycode,
+    uint32_t unshifted_codepoint,
+    bool composing) {
+  if (surface == NULL || surface->surface == NULL) {
+    return false;
+  }
+
+  ghostty_input_key_s input = {
+      .action = action == 0 ? GHOSTTY_ACTION_RELEASE : (action == 2 ? GHOSTTY_ACTION_REPEAT : GHOSTTY_ACTION_PRESS),
+      .mods = mods,
+      .consumed_mods = GHOSTTY_MODS_NONE,
+      .keycode = keycode,
+      .text = text,
+      .unshifted_codepoint = unshifted_codepoint,
+      .composing = composing,
+  };
+  return surface->runtime->ghostty_surface_key(surface->surface, input);
 }
 
 void gmax_ghostty_surface_mouse_position(GmaxGhosttySurface *surface, double x, double y) {
