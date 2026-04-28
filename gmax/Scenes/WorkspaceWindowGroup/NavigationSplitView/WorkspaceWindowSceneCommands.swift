@@ -188,6 +188,7 @@ struct WorkspaceWindowSceneCommands: Commands {
                 )
                 _ = workspaceStore.saveWorkspaceToLibrary(selectedWorkspaceID)
             }
+            .keyboardShortcut("s", modifiers: [.command])
             .disabled(selectedWorkspaceSelection?.wrappedValue == nil || workspaceStore == nil)
 
             Divider()
