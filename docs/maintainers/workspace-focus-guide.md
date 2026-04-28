@@ -55,6 +55,8 @@ multi-window regression coverage for behavior that is already intentional.
 The current shipped shape is:
 
 - pane leaves participate in scene focus with `.focusable(interactions: .edit)`
+- empty workspace placeholders participate in scene focus so closing the last
+  pane does not move focus into the inspector
 - `WorkspaceWindowSceneView` is the single runtime owner of pane focus
 - pane split, close, and navigation commands are derived at the scene root
 - pane close restores the latest surviving focused pane from scene-local
@@ -129,6 +131,8 @@ These are not open planning questions anymore:
 - the scene owns window-local selection, sidebar and inspector visibility, and
   modal presentation state
 - pane containers own pane identity and visual focus treatment
+- empty workspace placeholders own the focus target for a selected workspace
+  after its last pane closes
 - the sidebar stays native and list-driven
 - the inspector is a real focus region, but pane-oriented commands disable when
   focus leaves content and moves there

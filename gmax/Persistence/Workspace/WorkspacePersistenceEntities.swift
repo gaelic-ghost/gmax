@@ -95,6 +95,7 @@ final class WorkspaceWindowEntity: NSManagedObject {
     @NSManaged var updatedAt: Date
     @NSManaged var lastActiveAt: Date
     @NSManaged var selectedWorkspaceID: UUID?
+    @NSManaged var selectedPaneID: UUID?
     @NSManaged var title: String?
     @NSManaged var isOpen: Bool
 }
@@ -113,6 +114,7 @@ final class WindowWorkspaceMembershipEntity: NSManagedObject {
 final class WorkspaceWindowStateEntity: NSManagedObject {
     @NSManaged var windowID: UUID
     @NSManaged var selectedWorkspaceID: UUID?
+    @NSManaged var selectedPaneID: UUID?
     @NSManaged var createdAt: Date
     @NSManaged var updatedAt: Date
 }

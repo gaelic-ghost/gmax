@@ -49,6 +49,27 @@ struct WorkspacePersistenceTests {
         #expect(restoredWindowState.selectedWorkspaceID == secondWorkspace.id)
     }
 
+    @Test func `persistSceneStateNow writes the durable selected pane for a window`() throws {
+        let persistence = WorkspacePersistenceController.inMemoryForTesting()
+        let sceneIdentity = WorkspaceSceneIdentity()
+        let pane = PaneLeaf()
+        let workspace = Workspace(title: "Workspace 1", root: .leaf(pane))
+        let model = WorkspaceStore(
+            sceneIdentity: sceneIdentity,
+            workspaces: [workspace],
+            persistence: persistence,
+            launchContextBuilder: TestSupport.makeLaunchContextBuilder(defaultCurrentDirectory: "/tmp/gmax-tests"),
+        )
+
+        model.persistedSelectedWorkspaceID = workspace.id
+        model.persistedSelectedPaneID = pane.id
+        model.persistSceneStateNow(reason: .unitTestImmediateFlush)
+
+        let restoredWindowState = try #require(persistence.loadWindowState(for: sceneIdentity))
+        #expect(restoredWindowState.selectedWorkspaceID == workspace.id)
+        #expect(restoredWindowState.selectedPaneID == pane.id)
+    }
+
     @Test func `persistSceneStateNow creates an open durable window record`() {
         let persistence = WorkspacePersistenceController.inMemoryForTesting()
         let sceneIdentity = WorkspaceSceneIdentity()
@@ -361,6 +382,7 @@ struct WorkspacePersistenceTests {
             for: sceneIdentity,
             liveWorkspaces: [workspace],
             selectedWorkspaceID: workspace.id,
+            selectedPaneID: nil,
             sessions: sessions,
             browserSessions: BrowserSessionRegistry(workspaces: [workspace]),
             liveHistoryByWorkspaceID: [
@@ -434,6 +456,7 @@ struct WorkspacePersistenceTests {
             for: sceneIdentity,
             liveWorkspaces: [workspace],
             selectedWorkspaceID: workspace.id,
+            selectedPaneID: nil,
             sessions: sessions,
             browserSessions: browserSessions,
             liveHistoryByWorkspaceID: [:],
@@ -814,6 +837,7 @@ struct WorkspacePersistenceTests {
             for: sceneIdentity,
             liveWorkspaces: [workspace],
             selectedWorkspaceID: workspace.id,
+            selectedPaneID: nil,
             sessions: TerminalSessionRegistry(
                 workspaces: [workspace],
                 defaultLaunchConfiguration: TestSupport.makeLaunchContextBuilder(defaultCurrentDirectory: "/tmp/gmax-tests").makeLaunchConfiguration(),
@@ -911,6 +935,7 @@ struct WorkspacePersistenceTests {
             for: firstSceneIdentity,
             liveWorkspaces: [firstSceneWorkspace],
             selectedWorkspaceID: firstSceneWorkspace.id,
+            selectedPaneID: nil,
             sessions: TerminalSessionRegistry(
                 workspaces: [firstSceneWorkspace],
                 defaultLaunchConfiguration: launchConfiguration,
@@ -921,6 +946,7 @@ struct WorkspacePersistenceTests {
             for: secondSceneIdentity,
             liveWorkspaces: [secondSceneWorkspace],
             selectedWorkspaceID: secondSceneWorkspace.id,
+            selectedPaneID: nil,
             sessions: TerminalSessionRegistry(
                 workspaces: [secondSceneWorkspace],
                 defaultLaunchConfiguration: launchConfiguration,
@@ -1030,6 +1056,7 @@ struct WorkspacePersistenceTests {
             for: sceneIdentity,
             liveWorkspaces: [recentWorkspace],
             selectedWorkspaceID: recentWorkspace.id,
+            selectedPaneID: nil,
             sessions: sessions,
             browserSessions: BrowserSessionRegistry(workspaces: [recentWorkspace]),
         )
@@ -1090,6 +1117,7 @@ struct WorkspacePersistenceTests {
             for: sceneIdentity,
             liveWorkspaces: [workspace],
             selectedWorkspaceID: workspace.id,
+            selectedPaneID: nil,
             sessions: sessions,
             browserSessions: BrowserSessionRegistry(workspaces: [workspace]),
         )

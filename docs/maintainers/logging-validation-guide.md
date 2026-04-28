@@ -145,6 +145,8 @@ During terminal-host validation, expect `pane` logs for:
 During command-surface and settings validation, expect `diagnostics` logs for:
 
 - contextual close, workspace close, and frontmost-window command-routing outcomes
+- workspace scene focus changes, including pane, empty-workspace, sidebar,
+  inspector, and cleared-focus targets
 - save-workspace command requests
 - saved-workspace library presentation requests
 - rename-sheet presentation requests

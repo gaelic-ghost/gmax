@@ -96,6 +96,7 @@ struct WorkspacePersistenceProfileTests {
         let windowUpdatedAt = windowEntity.attributesByName["updatedAt"]
         let windowLastActiveAt = windowEntity.attributesByName["lastActiveAt"]
         let windowSelectedWorkspaceID = windowEntity.attributesByName["selectedWorkspaceID"]
+        let windowSelectedPaneID = windowEntity.attributesByName["selectedPaneID"]
         let windowIsOpen = windowEntity.attributesByName["isOpen"]
         let membershipCreatedAt = membershipEntity.attributesByName["createdAt"]
         let membershipUpdatedAt = membershipEntity.attributesByName["updatedAt"]
@@ -117,6 +118,7 @@ struct WorkspacePersistenceProfileTests {
         #expect(windowUpdatedAt?.defaultValue is Date)
         #expect(windowLastActiveAt?.defaultValue is Date)
         #expect(windowSelectedWorkspaceID?.isOptional == true)
+        #expect(windowSelectedPaneID?.isOptional == true)
         #expect(windowIsOpen?.defaultValue as? Bool == false)
         #expect(membershipCreatedAt?.defaultValue is Date)
         #expect(membershipUpdatedAt?.defaultValue is Date)

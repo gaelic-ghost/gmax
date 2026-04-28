@@ -111,11 +111,13 @@ struct WindowWorkspaceHistoryRecord: Hashable, Codable {
 
 struct WorkspaceWindowStateSnapshot: Hashable, Codable {
     var selectedWorkspaceID: WorkspaceID?
+    var selectedPaneID: PaneID?
 }
 
 struct PersistedWorkspaceWindow: Hashable, Codable, Identifiable {
     var id: WorkspaceSceneIdentity
     var selectedWorkspaceID: WorkspaceID?
+    var selectedPaneID: PaneID?
     var title: String?
     var isOpen: Bool
     var lastActiveAt: Date

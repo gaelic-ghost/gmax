@@ -273,6 +273,7 @@ extension WorkspacePersistenceController {
             defaultValue: migrationDefaultDate,
         )
         let windowSelectedWorkspaceID = attribute(name: "selectedWorkspaceID", type: .UUIDAttributeType, isOptional: true)
+        let windowSelectedPaneID = attribute(name: "selectedPaneID", type: .UUIDAttributeType, isOptional: true)
         let windowTitle = attribute(name: "title", type: .stringAttributeType, isOptional: true)
         let windowIsOpen = attribute(name: "isOpen", type: .booleanAttributeType, defaultValue: false)
 
@@ -293,6 +294,7 @@ extension WorkspacePersistenceController {
 
         let windowStateWindowID = attribute(name: "windowID", type: .UUIDAttributeType)
         let windowStateSelectedWorkspaceID = attribute(name: "selectedWorkspaceID", type: .UUIDAttributeType, isOptional: true)
+        let windowStateSelectedPaneID = attribute(name: "selectedPaneID", type: .UUIDAttributeType, isOptional: true)
         let windowStateCreatedAt = attribute(
             name: "createdAt",
             type: .dateAttributeType,
@@ -492,6 +494,7 @@ extension WorkspacePersistenceController {
             windowUpdatedAt,
             windowLastActiveAt,
             windowSelectedWorkspaceID,
+            windowSelectedPaneID,
             windowTitle,
             windowIsOpen,
         ]
@@ -524,6 +527,7 @@ extension WorkspacePersistenceController {
         workspaceWindowStateEntity.properties = [
             windowStateWindowID,
             windowStateSelectedWorkspaceID,
+            windowStateSelectedPaneID,
             windowStateCreatedAt,
             windowStateUpdatedAt,
         ]
