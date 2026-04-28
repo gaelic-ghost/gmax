@@ -561,19 +561,25 @@ Build this in small slices so each step can be validated:
 
 1. Add backend identity and capability types without changing runtime behavior.
 2. Wrap the current SwiftTerm controller behind the backend contract.
-3. Move the env-gated Ghostty host behind the same contract.
+3. Move the Ghostty host behind the same contract.
 4. Add a backend registry that retains backend hosts independently from
    SwiftUI view presence.
-5. Prove Ghostty survives workspace switching when the pane/session still
+5. Add an experimental Settings toggle for creating new terminal panes with
+   Ghostty while keeping SwiftTerm as the default and retaining each existing
+   terminal session's current backend.
+6. Add explicit Ghostty lifecycle and startup-error state so missing shims,
+   missing symbols, missing app binaries, and runtime creation failures produce
+   readable pane UI and logs instead of silently falling back.
+7. Prove Ghostty survives workspace switching when the pane/session still
    exists.
-6. Validate Ghostty text export, selection read, copy, paste, and select-all
+8. Validate Ghostty text export, selection read, copy, paste, and select-all
    through capabilities rather than assuming parity.
-7. Move pane chrome and inspector reads to normalized backend/session state.
-8. Add persistence for backend identity while keeping SwiftTerm as the default.
-9. Replace the installed-app spike dependency with a pinned Ghostty source or
+9. Move pane chrome and inspector reads to normalized backend/session state.
+10. Add persistence for backend identity while keeping SwiftTerm as the default.
+11. Replace the installed-app spike dependency with a pinned Ghostty source or
    binary artifact behind the `gmax` shim.
-10. Add user-facing backend selection only after lifecycle, teardown, and restore
-   behavior are documented.
+12. Promote the experimental backend selection only after lifecycle, teardown,
+   and restore behavior are documented.
 
 The first red/green behavior should be simple: run a Ghostty command, switch to
 another workspace, switch back, and confirm the command output is still present

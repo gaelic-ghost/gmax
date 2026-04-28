@@ -32,6 +32,9 @@ struct SettingsUtilityWindow: View {
     @AppStorage(WorkspacePersistenceDefaults.browserHomePageURLKey)
     private var browserHomePageURL = ""
 
+    @AppStorage(ExperimentalSettingsDefaults.useGhosttyForNewTerminalPanesKey)
+    private var useGhosttyForNewTerminalPanes = false
+
     var body: some View {
         Form {
             TerminalAppearanceSettingsSection(
@@ -52,6 +55,10 @@ struct SettingsUtilityWindow: View {
                 autoSaveClosedItems: $autoSaveClosedItems,
                 backgroundSaveIntervalMinutes: $backgroundSaveIntervalMinutes,
                 browserHomePageURL: $browserHomePageURL,
+            )
+
+            ExperimentalSettingsSection(
+                useGhosttyForNewTerminalPanes: $useGhosttyForNewTerminalPanes,
             )
         }
         .formStyle(.grouped)

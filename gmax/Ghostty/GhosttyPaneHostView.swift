@@ -15,6 +15,7 @@ final class GhosttyPaneHostView: NSView {
     }
 
     var onCloseRequested: (() -> Void)?
+    var onLifecycleStateChange: ((GhosttyBackendLifecycleState) -> Void)?
 
     private let session: TerminalSession
     private var surface: GhosttySurfaceHandle?
@@ -132,6 +133,7 @@ final class GhosttyPaneHostView: NSView {
             return
         }
 
+        onLifecycleStateChange?(.loading)
         let sessionID = session.id.rawValue.uuidString
         do {
             surface = try GhosttyRuntime.shared.makeSurface(
@@ -144,11 +146,13 @@ final class GhosttyPaneHostView: NSView {
             )
             session.state = .running
             session.title = "Ghostty"
+            onLifecycleStateChange?(.ready)
             Logger.pane.notice("Created a Ghostty pane spike surface for a terminal session. Session ID: \(sessionID, privacy: .public)")
         } catch {
             let message = error.localizedDescription
             loadError = message
             session.state = .exited(nil)
+            onLifecycleStateChange?(.failed(message))
             Logger.pane.error("The Ghostty pane spike could not create a surface. Session ID: \(sessionID, privacy: .public). Error: \(message, privacy: .public)")
             needsDisplay = true
         }
@@ -174,8 +178,10 @@ final class GhosttyPaneHostView: NSView {
             case .closeRequested:
                 onCloseRequested?()
             case .error:
-                loadError = primary ?? "Ghostty pane spike reported an unknown runtime error."
+                let message = primary ?? "Ghostty pane spike reported an unknown runtime error."
+                loadError = message
                 session.state = .exited(nil)
+                onLifecycleStateChange?(.failed(message))
         }
     }
 

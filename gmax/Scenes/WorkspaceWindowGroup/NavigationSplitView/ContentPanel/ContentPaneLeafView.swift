@@ -39,6 +39,14 @@ struct ContentPaneLeafView: View {
         }
     }
 
+    private var ghosttyFailureMessage: String? {
+        guard let backendHost = backendHost as? GhosttyBackendHost else {
+            return nil
+        }
+
+        return backendHost.lifecycleState.failureMessage
+    }
+
     var body: some View {
         let isFocused = focusedTarget.wrappedValue == .pane(pane.id)
         let title = session.title.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -112,9 +120,10 @@ struct ContentPaneLeafView: View {
             switch backendHost.kind {
                 case .ghostty:
                     if let backendHost = backendHost as? GhosttyBackendHost {
-                        GhosttyPaneView(
+                        GhosttyPaneSurface(
                             backendHost: backendHost,
                             onClose: onClose,
+                            onRestart: restartShell,
                         )
                     } else {
                         backendMismatchView(expectedBackend: .ghostty)
@@ -163,7 +172,9 @@ struct ContentPaneLeafView: View {
             }
         }
         .overlay {
-            if case let .exited(exitCode) = session.state {
+            if ghosttyFailureMessage != nil {
+                EmptyView()
+            } else if case let .exited(exitCode) = session.state {
                 exitedSessionOverlay(exitCode: exitCode)
             }
         }
@@ -203,6 +214,44 @@ struct ContentPaneLeafView: View {
         guard session.state != .running else { return }
 
         session.prepareForRelaunch()
+    }
+}
+
+private struct GhosttyPaneSurface: View {
+    @ObservedObject var backendHost: GhosttyBackendHost
+
+    let onClose: () -> Void
+    let onRestart: () -> Void
+
+    var body: some View {
+        GhosttyPaneView(
+            backendHost: backendHost,
+            onClose: onClose,
+        )
+        .overlay {
+            if let message = backendHost.lifecycleState.failureMessage {
+                failureOverlay(message: message)
+            }
+        }
+    }
+
+    private func failureOverlay(message: String) -> some View {
+        VStack(spacing: 10) {
+            Text("Ghostty Terminal Unavailable")
+                .font(.headline.weight(.semibold))
+
+            Text(message)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+
+            Button("Restart Terminal") {
+                onRestart()
+            }
+            .buttonStyle(.borderedProminent)
+        }
+        .padding(20)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 }
 

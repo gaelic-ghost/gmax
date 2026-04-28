@@ -12,7 +12,7 @@ enum TerminalBackendKind: String, Codable, Hashable {
     case ghostty
 
     static var selectedForNewSession: TerminalBackendKind {
-        GhosttyPaneSpikeSwitch.isEnabled ? .ghostty : .swiftTerm
+        ExperimentalSettingsDefaults.useGhosttyForNewTerminalPanes() ? .ghostty : .swiftTerm
     }
 }
 

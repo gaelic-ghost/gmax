@@ -11,13 +11,18 @@ import OSLog
 @MainActor
 final class TerminalBackendRegistry {
     private var hostsBySessionID: [TerminalSessionID: any TerminalBackendHost] = [:]
+    private let selectedBackend: () -> TerminalBackendKind
+
+    init(selectedBackend: @escaping () -> TerminalBackendKind = { TerminalBackendKind.selectedForNewSession }) {
+        self.selectedBackend = selectedBackend
+    }
 
     func host(for pane: PaneLeaf, session: TerminalSession) -> any TerminalBackendHost {
         if let host = hostsBySessionID[session.id] {
             return host
         }
 
-        let kind = TerminalBackendKind.selectedForNewSession
+        let kind = selectedBackend()
         let host: any TerminalBackendHost = switch kind {
             case .swiftTerm:
                 SwiftTermBackendHost(paneID: pane.id, session: session)

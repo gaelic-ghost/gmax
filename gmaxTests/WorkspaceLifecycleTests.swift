@@ -212,6 +212,43 @@ struct WorkspaceLifecycleTests {
         #expect(firstHost.session === session)
     }
 
+    @Test func `terminal backend registry creates Ghostty hosts when selected`() throws {
+        let pane = PaneLeaf()
+        let registry = TerminalBackendRegistry(selectedBackend: { .ghostty })
+        let session = try TerminalSession(id: #require(pane.terminalSessionID))
+
+        let host = registry.host(for: pane, session: session)
+
+        #expect(host.kind == .ghostty)
+        #expect(host is GhosttyBackendHost)
+    }
+
+    @Test func `terminal backend registry keeps existing host after selection changes`() throws {
+        let pane = PaneLeaf()
+        var selectedBackend = TerminalBackendKind.swiftTerm
+        let registry = TerminalBackendRegistry(selectedBackend: { selectedBackend })
+        let session = try TerminalSession(id: #require(pane.terminalSessionID))
+
+        let firstHost = registry.host(for: pane, session: session)
+        selectedBackend = .ghostty
+        let secondHost = registry.host(for: pane, session: session)
+
+        #expect(firstHost === secondHost)
+        #expect(secondHost.kind == .swiftTerm)
+    }
+
+    @Test func `experimental setting selects Ghostty for new terminal panes`() throws {
+        let suiteName = "WorkspaceLifecycleTests.experimental-backend"
+        let userDefaults = try #require(UserDefaults(suiteName: suiteName))
+        userDefaults.removePersistentDomain(forName: suiteName)
+
+        #expect(!ExperimentalSettingsDefaults.useGhosttyForNewTerminalPanes(userDefaults: userDefaults))
+
+        userDefaults.set(true, forKey: ExperimentalSettingsDefaults.useGhosttyForNewTerminalPanesKey)
+
+        #expect(ExperimentalSettingsDefaults.useGhosttyForNewTerminalPanes(userDefaults: userDefaults))
+    }
+
     @Test func `closing a terminal pane prunes its backend host`() throws {
         let pane = PaneLeaf()
         let workspace = Workspace(title: "Workspace 1", root: .leaf(pane))
