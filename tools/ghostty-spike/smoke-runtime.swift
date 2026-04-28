@@ -77,8 +77,9 @@ let result = ghosttyPath.withCString { ghosttyPointer in
 }
 
 guard result != 0 else {
-    _ = error.withUnsafeBufferPointer { pointer in
-        fputs("The Ghostty pane spike smoke test could not create the runtime: \(String(cString: pointer.baseAddress!))\n", stderr)
+    error.withUnsafeBufferPointer { pointer in
+        let message = pointer.baseAddress.map { String(cString: $0) } ?? "the Ghostty shim did not provide an error message"
+        fputs("The Ghostty pane spike smoke test could not create the runtime: \(message)\n", stderr)
     }
     exit(1)
 }
