@@ -181,7 +181,7 @@ final class GhosttyRuntime {
         let shimPath = resolvedShimPath()
         guard FileManager.default.fileExists(atPath: shimPath) else {
             throw GhosttyRuntimeError.unavailable(
-                "The Ghostty pane spike shim was not found at \(shimPath). Run tools/ghostty-spike/build-shim.sh before enabling GMAX_GHOSTTY_PANE_SPIKE=1.",
+                "The Ghostty pane spike shim was not found at \(shimPath). Run tools/ghostty-spike/build-shim.sh, or set GMAX_GHOSTTY_SHIM_PATH to the built libgmax-ghostty-shim.dylib before enabling Ghostty terminal panes.",
             )
         }
         guard let dlHandle = dlopen(shimPath, RTLD_NOW | RTLD_LOCAL) else {
@@ -236,9 +236,44 @@ final class GhosttyRuntime {
             return NSString(string: path).expandingTildeInPath
         }
 
-        return FileManager.default
+        let fileManager = FileManager.default
+        let relativeShimPath = "build/GhosttyPaneSpike/libgmax-ghostty-shim.dylib"
+        let searchRoots = [
+            fileManager.currentDirectoryPath,
+            Bundle.main.bundleURL.path,
+            #filePath,
+        ]
+
+        for root in searchRoots {
+            if let shimPath = firstExistingAncestorPath(named: relativeShimPath, from: root) {
+                return shimPath
+            }
+        }
+
+        return fileManager
             .currentDirectoryPath
-            .appending("/build/GhosttyPaneSpike/libgmax-ghostty-shim.dylib")
+            .appending("/\(relativeShimPath)")
+    }
+
+    private func firstExistingAncestorPath(named relativePath: String, from startPath: String) -> String? {
+        let fileManager = FileManager.default
+        var url = URL(fileURLWithPath: startPath)
+        if !startPath.hasSuffix("/") {
+            url.deleteLastPathComponent()
+        }
+
+        while true {
+            let candidate = url.appendingPathComponent(relativePath).path
+            if fileManager.fileExists(atPath: candidate) {
+                return candidate
+            }
+
+            let parent = url.deletingLastPathComponent()
+            if parent.path == url.path {
+                return nil
+            }
+            url = parent
+        }
     }
 
     private func resolvedGhosttyBinaryPath() -> String {
