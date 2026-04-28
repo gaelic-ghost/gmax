@@ -885,6 +885,11 @@ struct WorkspaceWindowSceneView: View {
             return
         }
 
+        if hasPresentedWorkspaceModal,
+           restoredPaneFocusTarget == focusedTarget {
+            return
+        }
+
         if case let .pane(paneID) = restoredPaneFocusTarget {
             restorePaneFocusAfterWindowActivationDirect(
                 paneID,
