@@ -149,6 +149,9 @@ In Progress
 - [x] Add durable Core Data-backed window records for selection, open state, and window recency.
 - [x] Move recent workspace reopen behavior onto durable window membership plus workspace recency.
 - [ ] Add configurable transcript retention limits for saved workspace history.
+- [ ] Add a saved-history privacy control that can disable terminal transcript persistence for sensitive workspaces.
+- [ ] Redact obvious secret-bearing terminal launch environment keys before saving workspace session snapshots.
+- [ ] Stop indexing full terminal transcripts in workspace search by default, or make transcript search an explicit privacy setting.
 - [ ] Decide whether deeper terminal history restore should stop at richer normal-buffer scrollback or eventually grow full alternate-buffer and emulator-state replay.
 - [ ] Add crash-safe and operator-friendly persistence diagnostics.
 - [x] Introduce a unified library listing surface that can hold both saved workspaces and saved windows.
@@ -186,6 +189,7 @@ In Progress
 - [ ] Tighten operator-facing logs and error messages throughout the app.
 - [ ] Choose a lightweight logging and diagnostics baseline that supports support-bundle export and future crash or hang reporting.
 - [ ] Write onboarding and maintainer docs for release-oriented development.
+- [ ] Pin GitHub Actions and release-validation tool versions, or explicitly document that CI intentionally tracks the latest `actions/checkout`, SwiftFormat, and SwiftLint releases.
 - [ ] Add an `OSLogStore`-based recent-diagnostics export path suitable for future user-facing feedback bundles.
 - [ ] Decide what support-bundle metadata should accompany exported logs, such as workspace summaries, pane state, persistence outcomes, or recent alerts.
 - [ ] Evaluate `MetricKit` intake for crash and hang diagnostics once the ordinary logging baseline is stable.
@@ -237,6 +241,8 @@ Planned
 
 - [ ] Move environment capture to a bundled XPC service or SMAppService helper.
 - [ ] Audit local-shell launch assumptions against macOS App Sandbox constraints.
+- [ ] Document the unsandboxed terminal-plus-browser threat model before the first public notarized DMG.
+- [ ] Decide whether generated shell integration wrapper files need stricter permissions or symlink-destination checks.
 - [ ] Decide how shell launching, environment inheritance, and path resolution should behave in sandboxed builds.
 - [ ] Add security-scoped or bookmark-backed file access where the product needs durable user-selected locations.
 - [ ] Keep helper and IPC design explicit, minimal, and operator-friendly to debug.
@@ -283,6 +289,8 @@ Planned
 - [ ] Define the browser-pane use cases that justify embedding Chromium instead of bouncing out to the default browser.
 - [ ] Add a browser pane model that can coexist with terminal panes in the same workspace tree.
 - [ ] Decide how navigation state, history, and session isolation should persist.
+- [ ] Decide whether `file:` browser navigation is an intentional product feature before public DMG distribution.
+- [ ] If `file:` browser navigation remains supported, define whether saved `file:` history should restore automatically.
 - [ ] Add intentional controls and inspector metadata for browser panes.
 - [ ] Define security boundaries for web content inside mixed terminal workspaces.
 
