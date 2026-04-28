@@ -70,6 +70,29 @@ struct WorkspacePersistenceTests {
         #expect(restoredWindowState.selectedPaneID == pane.id)
     }
 
+    @Test func `load window state migrates legacy selected pane onto durable window record`() throws {
+        let persistence = WorkspacePersistenceController.inMemoryForTesting()
+        let context = persistence.container.viewContext
+        let sceneIdentity = WorkspaceSceneIdentity()
+        let workspaceID = WorkspaceID()
+        let paneID = PaneID()
+
+        try context.performAndWait {
+            let legacyState = WorkspaceWindowStateEntity(context: context)
+            legacyState.windowID = sceneIdentity.windowID
+            legacyState.selectedWorkspaceID = workspaceID.rawValue
+            legacyState.selectedPaneID = paneID.rawValue
+            legacyState.createdAt = Date()
+            legacyState.updatedAt = Date()
+
+            try context.save()
+        }
+
+        let restoredWindowState = try #require(persistence.loadWindowState(for: sceneIdentity))
+        #expect(restoredWindowState.selectedWorkspaceID == workspaceID)
+        #expect(restoredWindowState.selectedPaneID == paneID)
+    }
+
     @Test func `persistSceneStateNow creates an open durable window record`() {
         let persistence = WorkspacePersistenceController.inMemoryForTesting()
         let sceneIdentity = WorkspaceSceneIdentity()
