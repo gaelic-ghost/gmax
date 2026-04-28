@@ -12,7 +12,8 @@ mode="${REPO_MAINTENANCE_DEFAULT_RELEASE_MODE:-standard}"
 release_tag=""
 skip_validate="false"
 skip_gh_release="false"
-skip_version_bump="false"
+skip_version_bump="${REPO_MAINTENANCE_SKIP_VERSION_BUMP:-false}"
+package_local_dmg="${REPO_MAINTENANCE_PACKAGE_LOCAL_DMG:-false}"
 base_branch="${REPO_MAINTENANCE_RELEASE_BRANCH:-main}"
 review_comments_addressed="false"
 skip_branch_cleanup="false"
@@ -40,6 +41,14 @@ while [ "$#" -gt 0 ]; do
       skip_version_bump="true"
       shift
       ;;
+    --package-local-dmg)
+      package_local_dmg="true"
+      shift
+      ;;
+    --skip-local-dmg)
+      package_local_dmg="false"
+      shift
+      ;;
     --base-branch)
       base_branch="${2:-}"
       shift 2
@@ -59,7 +68,7 @@ while [ "$#" -gt 0 ]; do
     -h|--help)
       cat <<'USAGE'
 Usage:
-  release.sh --mode standard --version <vX.Y.Z> [--base-branch main] [--skip-validate] [--skip-version-bump] [--skip-gh-release] [--review-comments-addressed] [--skip-branch-cleanup] [--dry-run]
+  release.sh --mode standard --version <vX.Y.Z> [--base-branch main] [--skip-validate] [--skip-version-bump] [--skip-gh-release] [--package-local-dmg|--skip-local-dmg] [--review-comments-addressed] [--skip-branch-cleanup] [--dry-run]
   release.sh --mode submodule --version <vX.Y.Z> [--skip-validate] [--skip-gh-release] [--dry-run]
 USAGE
       exit 0
@@ -136,7 +145,7 @@ run_version_bump() {
 
 create_release_tag() {
   head_sha="$(git -C "$REPO_ROOT" rev-parse HEAD)"
-  tag_sha="$(git -C "$REPO_ROOT" rev-parse -q --verify "refs/tags/$RELEASE_TAG" 2>/dev/null || true)"
+  tag_sha="$(git -C "$REPO_ROOT" rev-parse -q --verify "refs/tags/$RELEASE_TAG^{}" 2>/dev/null || true)"
 
   if [ -n "$tag_sha" ]; then
     [ "$tag_sha" = "$head_sha" ] || die "Tag $RELEASE_TAG already exists and does not point at HEAD."
@@ -211,6 +220,8 @@ EOF
 
 watch_ci() {
   pr_number="$1"
+  attempts=0
+  max_attempts=12
 
   if [ "$REPO_MAINTENANCE_DRY_RUN" = "true" ]; then
     log "Would watch CI for PR #$pr_number."
@@ -218,10 +229,28 @@ watch_ci() {
   fi
 
   log "Watching CI for PR #$pr_number."
-  if ! gh pr checks "$pr_number" --watch; then
-    die "CI is not green for PR #$pr_number. Fix the failing checks, push the branch, and rerun release.sh so it can watch CI again."
-  fi
-  log "CI is green for PR #$pr_number."
+  while :; do
+    checks_output="$(gh pr checks "$pr_number" --watch 2>&1)" && {
+      log "CI is green for PR #$pr_number."
+      return 0
+    }
+
+    case "$checks_output" in
+      *"no checks reported"*)
+        attempts=$((attempts + 1))
+        [ "$attempts" -lt "$max_attempts" ] || {
+          printf '%s\n' "$checks_output" >&2
+          die "CI did not report checks for PR #$pr_number after waiting. Rerun release.sh once GitHub has created the check run."
+        }
+        log "GitHub has not reported checks for PR #$pr_number yet; waiting before retrying."
+        sleep 5
+        ;;
+      *)
+        printf '%s\n' "$checks_output" >&2
+        die "CI is not green for PR #$pr_number. Fix the failing checks, push the branch, and rerun release.sh so it can watch CI again."
+        ;;
+    esac
+  done
 }
 
 check_pr_comments() {
@@ -295,6 +324,47 @@ create_github_release() {
   log "Created GitHub release $RELEASE_TAG."
 }
 
+package_local_release_dmg() {
+  if [ "$package_local_dmg" != "true" ]; then
+    return 0
+  fi
+
+  if [ "$REPO_MAINTENANCE_SKIP_GH_RELEASE" = "true" ]; then
+    die "--package-local-dmg needs a GitHub release object so it can upload the notarized DMG. Remove --skip-gh-release or package manually with scripts/package-notarized-dmg.sh."
+  fi
+
+  if [ "$REPO_MAINTENANCE_DRY_RUN" = "true" ]; then
+    log "Would package, notarize, staple, and verify a local DMG for $RELEASE_TAG from the tagged release candidate."
+    return 0
+  fi
+
+  head_sha="$(git -C "$REPO_ROOT" rev-parse HEAD)"
+  tag_sha="$(git -C "$REPO_ROOT" rev-parse "$RELEASE_TAG^{}")"
+  [ "$head_sha" = "$tag_sha" ] || die "Refusing to package the notarized DMG because HEAD does not match $RELEASE_TAG. HEAD: $head_sha. Tag: $tag_sha."
+
+  "$REPO_ROOT/scripts/package-notarized-dmg.sh" --version "$RELEASE_TAG"
+  log "Packaged notarized local DMG assets for $RELEASE_TAG."
+}
+
+upload_local_release_dmg() {
+  if [ "$package_local_dmg" != "true" ]; then
+    return 0
+  fi
+
+  if [ "$REPO_MAINTENANCE_DRY_RUN" = "true" ]; then
+    log "Would upload local DMG assets for $RELEASE_TAG to the GitHub release."
+    return 0
+  fi
+
+  dmg_path="$REPO_ROOT/build/distribution/Gmax-$RELEASE_TAG.dmg"
+  sha_path="$dmg_path.sha256"
+  [ -f "$dmg_path" ] || die "Expected notarized DMG at $dmg_path before uploading release assets."
+  [ -f "$sha_path" ] || die "Expected notarized DMG checksum at $sha_path before uploading release assets."
+
+  gh release upload "$RELEASE_TAG" "$dmg_path" "$sha_path" --clobber
+  log "Uploaded notarized local DMG assets for $RELEASE_TAG."
+}
+
 cleanup_merged_branches() {
   release_branch_name="$1"
 
@@ -340,9 +410,11 @@ run_standard_release() {
   pr_number="$PR_NUMBER"
   watch_ci "$pr_number"
   check_pr_comments "$pr_number"
+  package_local_release_dmg
   merge_pr "$pr_number"
   fast_forward_base_branch
   create_github_release
+  upload_local_release_dmg
   cleanup_merged_branches "$branch_name"
   log "Standard release flow completed successfully for $RELEASE_TAG."
 }
