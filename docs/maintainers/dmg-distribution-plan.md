@@ -65,6 +65,12 @@ xcrun notarytool store-credentials gmax-notary \
   --password <app-specific-password>
 ```
 
+Verify the local profile before spending time on archive/export work:
+
+```sh
+xcrun notarytool history --keychain-profile gmax-notary
+```
+
 This keeps signing and notarization local. Forks of the public repository can
 run the open-source build and packaging scripts, but they cannot sign as Gale
 unless they separately possess Gale's private Developer ID signing key and
@@ -203,7 +209,7 @@ The release flow remains review-first:
 6. wait for CI
 7. stop on unresolved comments unless explicitly acknowledged
 8. verify that `HEAD` still matches the release tag
-9. preflight the local Developer ID signing identity
+9. preflight the local Developer ID signing identity and notary profile
 10. package, notarize, staple, and verify the local DMG assets from the tagged
    release candidate
 11. merge the PR

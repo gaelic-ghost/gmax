@@ -30,6 +30,25 @@ EOF
   }
 }
 
+require_notary_profile() {
+  [ "$skip_notarize" = "true" ] && return 0
+
+  xcrun notarytool history --keychain-profile "$notary_profile" >/dev/null 2>&1 || {
+    cat >&2 <<EOF
+No usable notarytool keychain profile named "$notary_profile" is available.
+
+Create the local profile with:
+
+  xcrun notarytool store-credentials $notary_profile --apple-id <apple-id> --team-id BC73766F69 --password <app-specific-password>
+
+The password should be an Apple Account app-specific password. Do not commit or
+share notarization credentials; notarytool stores this profile in your local
+keychain.
+EOF
+    exit 1
+  }
+}
+
 usage() {
   cat <<'USAGE'
 Usage:
@@ -134,6 +153,7 @@ fi
 }
 
 require_developer_id_identity
+require_notary_profile
 
 mkdir -p "$output_dir"
 
