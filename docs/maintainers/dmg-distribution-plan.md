@@ -55,6 +55,14 @@ security find-identity -v -p codesigning
 The output must include a `Developer ID Application` identity for team
 `BC73766F69`. An `Apple Development` identity can build and run the app locally,
 but it cannot export the direct-distribution app used for the public DMG.
+The local packaging script defaults to
+`Developer ID Application: Gale Williams (BC73766F69)`. Override that only when
+the repo's signing owner changes:
+
+```sh
+GMAX_DEVELOPER_ID_APPLICATION_IDENTITY="Developer ID Application: Example (TEAMID)" \
+  scripts/package-notarized-dmg.sh --version v0.1.6
+```
 
 Create the notary profile locally with:
 
@@ -151,12 +159,13 @@ The script performs the full local path:
    `scripts/export-options-developer-id.plist`
 4. verify the exported app's `CFBundleShortVersionString`
 5. `scripts/package-dmg.sh --app-path <exported app>`
-6. `xcrun notarytool submit --keychain-profile gmax-notary --wait`
-7. `xcrun stapler staple`
-8. `xcrun stapler validate`
-9. `spctl --assess --type open`
-10. `shasum -a 256`
-11. optional `gh release upload --clobber`
+6. sign the DMG with the Developer ID Application identity
+7. `xcrun notarytool submit --keychain-profile gmax-notary --wait`
+8. `xcrun stapler staple`
+9. `xcrun stapler validate`
+10. `spctl --assess --type open --context context:primary-signature`
+11. `shasum -a 256`
+12. optional `gh release upload --clobber`
 
 The generated files are:
 

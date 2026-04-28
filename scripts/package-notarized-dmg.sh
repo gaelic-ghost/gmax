@@ -11,20 +11,26 @@ archive_path="${GMAX_DMG_ARCHIVE_PATH:-}"
 export_path="${GMAX_DMG_EXPORT_PATH:-}"
 export_options_plist="${GMAX_DMG_EXPORT_OPTIONS_PLIST:-$SELF_DIR/export-options-developer-id.plist}"
 notary_profile="${GMAX_NOTARY_KEYCHAIN_PROFILE:-gmax-notary}"
+developer_id_identity="${GMAX_DEVELOPER_ID_APPLICATION_IDENTITY:-Developer ID Application: Gale Williams (BC73766F69)}"
 skip_notarize="false"
 upload_release="false"
 release_tag=""
 
 require_developer_id_identity() {
-  developer_id_identities="$(security find-identity -v -p codesigning 2>/dev/null | grep 'Developer ID Application' || true)"
+  developer_id_identities="$(security find-identity -v -p codesigning 2>/dev/null | grep -F "$developer_id_identity" || true)"
   [ -n "$developer_id_identities" ] || {
-    cat >&2 <<'EOF'
-No Developer ID Application signing identity is available in the current keychain.
+    cat >&2 <<EOF
+The Developer ID Application signing identity is not available in the current keychain.
+
+Expected identity:
+
+  $developer_id_identity
 
 Install the Developer ID Application certificate for team BC73766F69 through
-Xcode or Keychain Access, then rerun this packaging command. An Apple
-Development identity is enough for local debug builds, but direct-distribution
-DMGs need Developer ID signing before notarization.
+Xcode or Keychain Access, or set GMAX_DEVELOPER_ID_APPLICATION_IDENTITY to the
+exact Developer ID Application identity to use. An Apple Development identity is
+enough for local debug builds, but direct-distribution DMGs need Developer ID
+signing before notarization.
 EOF
     exit 1
   }
@@ -68,6 +74,8 @@ Environment:
   GMAX_DMG_EXPORT_PATH            Export path. Defaults under build/distribution.
   GMAX_DMG_EXPORT_OPTIONS_PLIST   Export options plist. Defaults to scripts/export-options-developer-id.plist.
   GMAX_NOTARY_KEYCHAIN_PROFILE    notarytool keychain profile. Defaults to gmax-notary.
+  GMAX_DEVELOPER_ID_APPLICATION_IDENTITY
+                                  Developer ID Application identity used to sign the DMG.
 USAGE
 }
 
@@ -202,6 +210,9 @@ exported_marketing_version="$(plutil -extract CFBundleShortVersionString raw "$e
   --output-dir "$output_dir" \
   --app-path "$exported_app_path"
 
+codesign --force --timestamp --sign "$developer_id_identity" "$dmg_path"
+codesign --verify --verbose=4 "$dmg_path"
+
 if [ "$skip_notarize" != "true" ]; then
   xcrun notarytool submit "$dmg_path" \
     --keychain-profile "$notary_profile" \
@@ -211,7 +222,7 @@ if [ "$skip_notarize" != "true" ]; then
   xcrun stapler validate "$dmg_path"
 fi
 
-spctl --assess --type open --verbose "$dmg_path"
+spctl --assess --type open --context context:primary-signature --verbose "$dmg_path"
 shasum -a 256 "$dmg_path" >"$sha_path"
 
 if [ "$upload_release" = "true" ]; then
