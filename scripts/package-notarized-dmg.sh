@@ -93,6 +93,8 @@ done
   exit 2
 }
 
+marketing_version="${version#v}"
+
 case "$version" in
   *[!A-Za-z0-9._-]*)
     printf 'DMG version contains unsupported filename characters: %s\n' "$version" >&2
@@ -136,7 +138,8 @@ xcodebuild archive \
   -scheme gmax \
   -configuration "$configuration" \
   -destination 'generic/platform=macOS' \
-  -archivePath "$archive_path"
+  -archivePath "$archive_path" \
+  MARKETING_VERSION="$marketing_version"
 
 xcodebuild -exportArchive \
   -archivePath "$archive_path" \
@@ -147,6 +150,13 @@ exported_app_path="$export_path/gmax.app"
 [ -d "$exported_app_path" ] || exported_app_path="$export_path/Gmax.app"
 [ -d "$exported_app_path" ] || {
   printf 'Expected exported app under %s, but no gmax.app or Gmax.app exists.\n' "$export_path" >&2
+  exit 1
+}
+
+exported_info_plist="$exported_app_path/Contents/Info.plist"
+exported_marketing_version="$(plutil -extract CFBundleShortVersionString raw "$exported_info_plist")"
+[ "$exported_marketing_version" = "$marketing_version" ] || {
+  printf 'Exported app version mismatch. Expected %s from %s, found %s in %s.\n' "$marketing_version" "$version" "$exported_marketing_version" "$exported_info_plist" >&2
   exit 1
 }
 

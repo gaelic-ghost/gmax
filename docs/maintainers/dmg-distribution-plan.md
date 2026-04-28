@@ -128,15 +128,19 @@ scripts/package-notarized-dmg.sh --version v0.1.6 --upload-release v0.1.6
 The script performs the full local path:
 
 1. `xcodebuild archive`
-2. `xcodebuild -exportArchive` with
+2. archive with `MARKETING_VERSION` set from the release tag, so the exported
+   app's `CFBundleShortVersionString` matches the DMG release version without
+   direct project-file edits
+3. `xcodebuild -exportArchive` with
    `scripts/export-options-developer-id.plist`
-3. `scripts/package-dmg.sh --app-path <exported app>`
-4. `xcrun notarytool submit --keychain-profile gmax-notary --wait`
-5. `xcrun stapler staple`
-6. `xcrun stapler validate`
-7. `spctl --assess --type open`
-8. `shasum -a 256`
-9. optional `gh release upload --clobber`
+4. verify the exported app's `CFBundleShortVersionString`
+5. `scripts/package-dmg.sh --app-path <exported app>`
+6. `xcrun notarytool submit --keychain-profile gmax-notary --wait`
+7. `xcrun stapler staple`
+8. `xcrun stapler validate`
+9. `spctl --assess --type open`
+10. `shasum -a 256`
+11. optional `gh release upload --clobber`
 
 The generated files are:
 
@@ -158,8 +162,14 @@ the local DMG by default because `scripts/repo-maintenance/config/release.env`
 sets:
 
 ```sh
+REPO_MAINTENANCE_SKIP_VERSION_BUMP=true
 REPO_MAINTENANCE_PACKAGE_LOCAL_DMG=true
 ```
+
+`REPO_MAINTENANCE_SKIP_VERSION_BUMP=true` is intentional for this Xcode project:
+the release artifact version is injected at archive time from the release tag
+and verified from the exported app's `Info.plist`, rather than editing
+`gmax.xcodeproj/project.pbxproj` directly during release.
 
 Use the normal release command when a public release should include the signed
 and notarized DMG assets:
