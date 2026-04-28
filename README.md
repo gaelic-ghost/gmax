@@ -16,7 +16,7 @@
 
 ### Status
 
-`gmax` is in early development and already stable enough for maintainers to build, run, and iterate on locally.
+`gmax` is in development, but already stable enough for maintainers to build, run, and iterate on locally.
 
 ### What This Project Is
 
