@@ -18,6 +18,7 @@ final class WorkspaceStore: ObservableObject {
     let paneControllers: TerminalPaneControllerStore
     let browserPaneControllers: BrowserPaneControllerStore
     var persistedSelectedWorkspaceID: WorkspaceID?
+    var persistedSelectedPaneID: PaneID?
     var pendingPersistenceTask: Task<Void, Never>?
 
     private var terminalSessionObservationCancellables: [TerminalSessionID: AnyCancellable]
@@ -112,6 +113,7 @@ final class WorkspaceStore: ObservableObject {
         currentBellCountByWorkspaceID = [:]
         currentWindowBellCount = 0
         persistedSelectedWorkspaceID = resolvedWindowState?.selectedWorkspaceID
+        persistedSelectedPaneID = resolvedWindowState?.selectedPaneID
         terminalSessionObservationCancellables = [:]
         reconcileTerminalSessionObservations()
     }

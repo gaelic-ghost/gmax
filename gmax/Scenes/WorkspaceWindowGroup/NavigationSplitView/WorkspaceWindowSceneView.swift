@@ -11,6 +11,7 @@ private enum WorkspaceWindowSceneStorageKey {
 private enum FocusAssignment: Equatable {
     case none
     case inspector
+    case emptyWorkspace(WorkspaceID)
     case pane(PaneID)
 }
 
@@ -37,6 +38,7 @@ struct WorkspaceWindowSceneView: View {
     @State private var hasAppliedSceneState = false
     @State private var paneFrames: [PaneID: CGRect] = [:]
     @State private var paneFocusHistory: [PaneID] = []
+    @State private var lastFocusedPaneIDByWorkspaceID: [WorkspaceID: PaneID] = [:]
     @State private var browserOmniboxRevealIDByPaneID: [PaneID: Int] = [:]
     @State private var pendingFocusedPaneID: PaneID?
     @State private var pendingWorkspaceSelectionFocusPaneID: PaneID?
@@ -199,6 +201,9 @@ struct WorkspaceWindowSceneView: View {
             paneFrames = paneFrames.filter { activePaneIDs.contains($0.key) }
             paneFocusHistory = paneFocusHistory.filter { activePaneIDs.contains($0) }
             pendingHistoryPaneID = pendingHistoryPaneID.flatMap { activePaneIDs.contains($0) ? $0 : nil }
+            lastFocusedPaneIDByWorkspaceID = lastFocusedPaneIDByWorkspaceID.filter { workspaceID, paneID in
+                paneIDsInWorkspace(workspaceID).contains(paneID)
+            }
         }
         let applyFocusAssignment: (FocusAssignment) -> Void = { assignment in
             let activePaneIDs = currentActivePaneIDs()
@@ -206,6 +211,10 @@ struct WorkspaceWindowSceneView: View {
                 case let .pane(paneID) where activePaneIDs.contains(paneID):
                     .pane(paneID)
                 case .pane:
+                    .none
+                case let .emptyWorkspace(workspaceID) where selectedWorkspaceID == workspaceID && currentActivePaneIDs().isEmpty:
+                    .emptyWorkspace(workspaceID)
+                case .emptyWorkspace:
                     .none
                 case .inspector:
                     .inspector
@@ -216,6 +225,8 @@ struct WorkspaceWindowSceneView: View {
             focusedTarget = switch normalizedAssignment {
                 case let .pane(paneID):
                     .pane(paneID)
+                case let .emptyWorkspace(workspaceID):
+                    .emptyWorkspace(workspaceID)
                 case .inspector:
                     .inspector
                 case .none:
@@ -235,8 +246,22 @@ struct WorkspaceWindowSceneView: View {
 
                 paneFocusHistory.removeAll { $0 == paneID }
                 paneFocusHistory.append(paneID)
+                if let selectedWorkspaceID, activePaneIDs.contains(paneID) {
+                    lastFocusedPaneIDByWorkspaceID[selectedWorkspaceID] = paneID
+                    workspaceStore.persistedSelectedPaneID = paneID
+                }
                 pendingHistoryPaneID = nil
             }
+        }
+        let recordCurrentPaneFocusForSelectedWorkspace = {
+            guard let selectedWorkspaceID,
+                  case let .pane(paneID) = focusedTarget,
+                  currentActivePaneIDs().contains(paneID) else {
+                return
+            }
+
+            lastFocusedPaneIDByWorkspaceID[selectedWorkspaceID] = paneID
+            workspaceStore.persistedSelectedPaneID = paneID
         }
         let requestPaneFocus: (PaneID?) -> Void = { paneID in
             guard let paneID else {
@@ -256,9 +281,20 @@ struct WorkspaceWindowSceneView: View {
                 pendingFocusedPaneID = nil
             }
         }
-        let firstPaneIDInWorkspace: (WorkspaceID?) -> PaneID? = { workspaceID in
+        let preferredPaneIDInWorkspace: (WorkspaceID?) -> PaneID? = { workspaceID in
             guard let workspaceID else {
                 return nil
+            }
+
+            let paneIDs = paneIDsInWorkspace(workspaceID)
+            if let lastFocusedPaneID = lastFocusedPaneIDByWorkspaceID[workspaceID],
+               paneIDs.contains(lastFocusedPaneID) {
+                return lastFocusedPaneID
+            }
+            if workspaceID == selectedWorkspaceID,
+               let persistedPaneID = workspaceStore.persistedSelectedPaneID,
+               paneIDs.contains(persistedPaneID) {
+                return persistedPaneID
             }
 
             return workspaceStore.workspaces
@@ -268,10 +304,14 @@ struct WorkspaceWindowSceneView: View {
                 .id
         }
         let selectWorkspaceAndRepairFocus: (WorkspaceID?) -> Void = { workspaceID in
+            recordCurrentPaneFocusForSelectedWorkspace()
             selectedWorkspaceID = workspaceID
-            pendingWorkspaceSelectionFocusPaneID = firstPaneIDInWorkspace(workspaceID)
+            pendingWorkspaceSelectionFocusPaneID = preferredPaneIDInWorkspace(workspaceID)
             prunePaneNavigationState()
             pruneBrowserOmniboxState()
+            if let workspaceID, paneIDsInWorkspace(workspaceID).isEmpty {
+                applyFocusAssignment(.emptyWorkspace(workspaceID))
+            }
         }
         let createWorkspaceAndFocus: () -> Void = {
             let workspaceID = workspaceStore.createWorkspace()
@@ -317,14 +357,16 @@ struct WorkspaceWindowSceneView: View {
             prunePaneNavigationState()
             pruneBrowserOmniboxState()
             switch paneFocusTargetAfterClosingPane(
+                workspaceID: workspaceID,
                 closedPaneID: paneID,
                 focusedTarget: focusedTarget,
                 survivingPaneIDs: paneIDsInWorkspace(workspaceID),
                 paneFocusHistory: paneFocusHistory,
-                isInspectorVisible: isInspectorVisible,
             ) {
                 case let .pane(paneID):
                     requestPaneFocus(paneID)
+                case let .emptyWorkspace(workspaceID):
+                    applyFocusAssignment(.emptyWorkspace(workspaceID))
                 case .inspector:
                     applyFocusAssignment(.inspector)
                 case .sidebar, nil:
@@ -473,11 +515,15 @@ struct WorkspaceWindowSceneView: View {
                 closePaneInWorkspace(selectedWorkspaceID, focusedPaneID)
             }
         }()
+        let selectedWorkspaceBinding = Binding<WorkspaceID?>(
+            get: { selectedWorkspaceID },
+            set: { selectWorkspaceAndRepairFocus($0) },
+        )
 
         NavigationSplitView(columnVisibility: $columnVisibility) {
             SidebarPane(
                 model: workspaceStore,
-                selection: $selectedWorkspaceID,
+                selection: selectedWorkspaceBinding,
                 focusedTarget: $focusedTarget,
                 openLibrary: openLibrary,
                 createWorkspace: createWorkspaceAndFocus,
@@ -491,7 +537,7 @@ struct WorkspaceWindowSceneView: View {
         } detail: {
             ContentPane(
                 model: workspaceStore,
-                selectedWorkspaceID: $selectedWorkspaceID,
+                selectedWorkspaceID: selectedWorkspaceBinding,
                 focusedTarget: $focusedTarget,
                 onCreatePane: createPaneInWorkspace,
                 onSplitPane: splitPaneInWorkspace,
@@ -508,7 +554,7 @@ struct WorkspaceWindowSceneView: View {
         .inspector(isPresented: $isInspectorVisible) {
             DetailPane(
                 model: workspaceStore,
-                selectedWorkspaceID: $selectedWorkspaceID,
+                selectedWorkspaceID: selectedWorkspaceBinding,
                 inspectedPaneID: inspectedPaneID,
                 focusedTarget: $focusedTarget,
             )
@@ -516,7 +562,7 @@ struct WorkspaceWindowSceneView: View {
         }
         .modifier(WorkspaceWindowPresentationModifier(
             workspaceStore: workspaceStore,
-            selectedWorkspaceID: $selectedWorkspaceID,
+            selectedWorkspaceID: selectedWorkspaceBinding,
             isLibraryPresented: $isLibraryPresented,
             deleteAlertIsPresented: Binding(
                 get: { workspacePendingDeletionID != nil },
@@ -546,7 +592,7 @@ struct WorkspaceWindowSceneView: View {
         .focusedSceneObject(workspaceStore)
         .focusedSceneValue(\.activeWorkspaceFocusTarget, focusedTarget)
         .focusedSceneValue(\.activeWorkspaceSceneIdentity, sceneIdentity)
-        .focusedSceneValue(\.selectedWorkspaceSelection, $selectedWorkspaceID)
+        .focusedSceneValue(\.selectedWorkspaceSelection, selectedWorkspaceBinding)
         .focusedSceneValue(\.createWorkspaceAndFocus, createWorkspaceAndFocus)
         .focusedSceneValue(\.closeSelectedWorkspaceAndFocus, closeSelectedWorkspaceAndFocus)
         .focusedSceneValue(\.dismissPresentedWorkspaceModal, dismissPresentedWorkspaceModal)
@@ -735,10 +781,12 @@ struct WorkspaceWindowSceneView: View {
         normalizeSelection()
         columnVisibility = restoredSidebarVisible ? .all : .detailOnly
         isInspectorVisible = restoredInspectorVisible
+        restoreInitialFocusForSelectedWorkspace()
 
         Logger.diagnostics.notice(
             """
             Applied per-window shell scene restoration. Durable selected workspace: \(workspaceStore.persistedSelectedWorkspaceID?.rawValue.uuidString ?? "(none)", privacy: .public). \
+            Durable selected pane: \(workspaceStore.persistedSelectedPaneID?.rawValue.uuidString ?? "(none)", privacy: .public). \
             SceneStorage selected workspace: \(sceneStorageSelection?.rawValue.uuidString ?? "(none)", privacy: .public). \
             Restored workspace selection: \(restoredSelection?.rawValue.uuidString ?? "(none)", privacy: .public). \
             Normalized workspace selection: \(selectedWorkspaceID?.rawValue.uuidString ?? "(none)", privacy: .public). \
@@ -748,11 +796,37 @@ struct WorkspaceWindowSceneView: View {
         )
     }
 
+    private func restoreInitialFocusForSelectedWorkspace() {
+        guard let selectedWorkspaceID,
+              let selectedWorkspace = workspaceStore.workspaces.first(where: { $0.id == selectedWorkspaceID }) else {
+            focusedTarget = nil
+            return
+        }
+
+        let activePaneIDs = Set(selectedWorkspace.paneLeaves.map(\.id))
+        if let persistedPaneID = workspaceStore.persistedSelectedPaneID,
+           activePaneIDs.contains(persistedPaneID) {
+            lastFocusedPaneIDByWorkspaceID[selectedWorkspaceID] = persistedPaneID
+            focusedTarget = .pane(persistedPaneID)
+            return
+        }
+
+        if let firstPaneID = selectedWorkspace.root?.firstLeaf()?.id {
+            focusedTarget = .pane(firstPaneID)
+            return
+        }
+
+        focusedTarget = .emptyWorkspace(selectedWorkspaceID)
+    }
+
     private func handleFocusedTargetChange(
         _ newValue: WorkspaceFocusTarget?,
         activePaneIDs: Set<PaneID>,
         recordFocusedPaneInHistory: (PaneID) -> Void,
     ) {
+        Logger.diagnostics.notice(
+            "Workspace scene focus changed. Focus target: \(workspaceFocusTargetDescription(newValue), privacy: .public). Active pane count: \(activePaneIDs.count, privacy: .public).",
+        )
         guard let newValue else {
             pendingHistoryPaneID = nil
             return
@@ -791,6 +865,9 @@ struct WorkspaceWindowSceneView: View {
         guard let restoredPaneFocusTarget else {
             return
         }
+        guard restoredPaneFocusTarget != focusedTarget else {
+            return
+        }
 
         if case let .pane(paneID) = restoredPaneFocusTarget {
             restorePaneFocusAfterWindowActivationDirect(
@@ -812,6 +889,7 @@ struct WorkspaceWindowSceneView: View {
         workspaceStore.persistedSelectedWorkspaceID = selectedWorkspaceID
         if selectedWorkspaceID == nil {
             pendingWorkspaceSelectionFocusPaneID = nil
+            workspaceStore.persistedSelectedPaneID = nil
         }
     }
 
@@ -824,6 +902,10 @@ struct WorkspaceWindowSceneView: View {
                 .pane(paneID)
             case .pane:
                 .none
+            case let .emptyWorkspace(workspaceID) where activePaneIDs.isEmpty:
+                .emptyWorkspace(workspaceID)
+            case .emptyWorkspace:
+                .none
             case .inspector:
                 .inspector
             case .none:
@@ -833,6 +915,8 @@ struct WorkspaceWindowSceneView: View {
         focusedTarget = switch normalizedAssignment {
             case let .pane(paneID):
                 .pane(paneID)
+            case let .emptyWorkspace(workspaceID):
+                .emptyWorkspace(workspaceID)
             case .inspector:
                 .inspector
             case .none:
@@ -880,7 +964,11 @@ struct WorkspaceWindowSceneView: View {
         pendingHistoryPaneID = normalizedState.pendingHistoryPaneID
 
         if case let .pane(paneID) = focusedTarget, !activePaneIDs.contains(paneID) {
-            applyFocusAssignment(isInspectorVisible ? .inspector : .none)
+            if activePaneIDs.isEmpty, let selectedWorkspaceID {
+                applyFocusAssignment(.emptyWorkspace(selectedWorkspaceID))
+            } else if pendingWorkspaceSelectionFocusPaneID == nil {
+                applyFocusAssignment(.none)
+            }
         }
     }
 
@@ -1159,11 +1247,11 @@ private func overlapLength(
 }
 
 func paneFocusTargetAfterClosingPane(
+    workspaceID: WorkspaceID,
     closedPaneID: PaneID,
     focusedTarget: WorkspaceFocusTarget?,
     survivingPaneIDs: Set<PaneID>,
     paneFocusHistory: [PaneID],
-    isInspectorVisible: Bool,
 ) -> WorkspaceFocusTarget? {
     let shouldRepairFocus = focusedTarget == .pane(closedPaneID) || {
         guard case let .pane(currentPaneID) = focusedTarget else {
@@ -1181,11 +1269,7 @@ func paneFocusTargetAfterClosingPane(
         return .pane(historyFallbackPaneID)
     }
 
-    if isInspectorVisible {
-        return .inspector
-    }
-
-    return nil
+    return .emptyWorkspace(workspaceID)
 }
 
 private struct WorkspaceWindowPresentationModifier: ViewModifier {
@@ -1336,4 +1420,19 @@ func paneFocusTargetAfterActivatingWindow(
     }
 
     return nil
+}
+
+private func workspaceFocusTargetDescription(_ target: WorkspaceFocusTarget?) -> String {
+    switch target {
+        case let .pane(paneID):
+            "pane(\(paneID.rawValue.uuidString))"
+        case let .emptyWorkspace(workspaceID):
+            "emptyWorkspace(\(workspaceID.rawValue.uuidString))"
+        case .sidebar:
+            "sidebar"
+        case .inspector:
+            "inspector"
+        case nil:
+            "none"
+    }
 }

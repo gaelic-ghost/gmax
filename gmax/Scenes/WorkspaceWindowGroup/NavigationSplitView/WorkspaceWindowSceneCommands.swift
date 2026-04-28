@@ -91,6 +91,13 @@ struct WorkspaceWindowSceneCommands: Commands {
                 case .pane:
                     ("Close Pane", closeFocusedPane)
 
+                case .emptyWorkspace:
+                    if isOnlyWorkspaceInWindow {
+                        ("Close Window", closeWindowAction)
+                    } else {
+                        ("Close Workspace", closeWorkspaceAction)
+                    }
+
                 case .sidebar:
                     if isOnlyWorkspaceInWindow {
                         if isSelectedWorkspaceEmpty {

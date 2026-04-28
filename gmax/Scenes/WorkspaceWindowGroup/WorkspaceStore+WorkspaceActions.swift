@@ -247,6 +247,7 @@ extension WorkspaceStore {
     private struct PersistenceSnapshot {
         let liveWorkspaces: [Workspace]
         let selectedWorkspaceID: WorkspaceID?
+        let selectedPaneID: PaneID?
         let liveHistoryByWorkspaceID: [WorkspaceID: [TerminalSessionID: WorkspaceSessionHistorySnapshot]]
         let liveBrowserSnapshotsByWorkspaceID: [WorkspaceID: [BrowserSessionID: BrowserSessionSnapshot]]
     }
@@ -397,6 +398,7 @@ extension WorkspaceStore {
         return PersistenceSnapshot(
             liveWorkspaces: workspacesSnapshot,
             selectedWorkspaceID: persistedSelectedWorkspaceID,
+            selectedPaneID: persistedSelectedPaneID,
             liveHistoryByWorkspaceID: historyByWorkspaceID,
             liveBrowserSnapshotsByWorkspaceID: browserSnapshotsByWorkspaceID,
         )
@@ -416,6 +418,7 @@ extension WorkspaceStore {
             for: sceneIdentity,
             liveWorkspaces: snapshot.liveWorkspaces,
             selectedWorkspaceID: snapshot.selectedWorkspaceID,
+            selectedPaneID: snapshot.selectedPaneID,
             sessions: sessions,
             browserSessions: browserSessions,
             liveHistoryByWorkspaceID: snapshot.liveHistoryByWorkspaceID,

@@ -292,7 +292,11 @@ final class WorkspacePersistenceController {
                 }
 
                 let selectedWorkspaceID = window.selectedWorkspaceID.map(WorkspaceID.init(rawValue:))
-                return WorkspaceWindowStateSnapshot(selectedWorkspaceID: selectedWorkspaceID)
+                let selectedPaneID = window.selectedPaneID.map(PaneID.init(rawValue:))
+                return WorkspaceWindowStateSnapshot(
+                    selectedWorkspaceID: selectedWorkspaceID,
+                    selectedPaneID: selectedPaneID,
+                )
             } catch {
                 Logger.persistence.error(
                     "Core Data could not load the durable window metadata for the active workspace scene. The app will continue, but this window may fall back to lighter-weight restoration behavior. Window ID: \(sceneIdentity.windowID.uuidString, privacy: .public). Error: \(String(describing: error), privacy: .public)",
@@ -382,6 +386,7 @@ final class WorkspacePersistenceController {
         for sceneIdentity: WorkspaceSceneIdentity,
         liveWorkspaces: [Workspace],
         selectedWorkspaceID: WorkspaceID?,
+        selectedPaneID: PaneID?,
         sessions: TerminalSessionRegistry,
         browserSessions: BrowserSessionRegistry,
         liveHistoryByWorkspaceID: [WorkspaceID: [TerminalSessionID: WorkspaceSessionHistorySnapshot]] = [:],
@@ -470,6 +475,7 @@ final class WorkspacePersistenceController {
                 window.updatedAt = now
                 window.lastActiveAt = now
                 window.selectedWorkspaceID = selectedWorkspaceID?.rawValue
+                window.selectedPaneID = selectedPaneID?.rawValue
                 window.title = selectedWorkspaceID
                     .flatMap { workspaceID in liveWorkspaces.first { $0.id == workspaceID }?.title }
                     ?? liveWorkspaces.first?.title
@@ -710,6 +716,7 @@ extension WorkspacePersistenceController {
         for sceneIdentity: WorkspaceSceneIdentity,
         title: String?,
         selectedWorkspaceID: WorkspaceID?,
+        selectedPaneID: PaneID? = nil,
         isOpen: Bool,
         saveToLibrary: Bool = false,
     ) {
@@ -727,6 +734,9 @@ extension WorkspacePersistenceController {
                 window.lastActiveAt = now
                 if let selectedWorkspaceID {
                     window.selectedWorkspaceID = selectedWorkspaceID.rawValue
+                }
+                if let selectedPaneID {
+                    window.selectedPaneID = selectedPaneID.rawValue
                 }
                 if let title {
                     window.title = title

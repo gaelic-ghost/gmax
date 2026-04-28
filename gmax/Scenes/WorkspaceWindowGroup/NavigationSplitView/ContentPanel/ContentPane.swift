@@ -49,7 +49,9 @@ struct ContentPane: View {
                     }
                 } else {
                     ContentPaneEmptyWorkspaceView(
+                        workspaceID: workspace.id,
                         workspaceTitle: workspace.title,
+                        focusedTarget: focusedTarget,
                         onStartShell: {
                             onCreatePane(workspace.id)
                         },
@@ -224,10 +226,13 @@ struct ContentPaneFramePreferenceKey: PreferenceKey {
 }
 
 private struct ContentPaneEmptyWorkspaceView: View {
+    let workspaceID: WorkspaceID
     let workspaceTitle: String
+    let focusedTarget: FocusState<WorkspaceFocusTarget?>.Binding
     let onStartShell: () -> Void
 
     var body: some View {
+        let isFocused = focusedTarget.wrappedValue == .emptyWorkspace(workspaceID)
         ContentUnavailableView {
             Label("This Workspace Has No Panes", systemImage: "rectangle.dashed")
         } description: {
@@ -236,6 +241,10 @@ private struct ContentPaneEmptyWorkspaceView: View {
             Button("Start Shell", action: onStartShell)
                 .buttonStyle(.borderedProminent)
         }
+        .focusable(interactions: .activate)
+        .focused(focusedTarget, equals: .emptyWorkspace(workspaceID))
+        .accessibilityValue(isFocused ? "Focused" : "Not focused")
+        .accessibilityIdentifier("contentPane.emptyWorkspace.\(workspaceID.rawValue.uuidString)")
     }
 }
 
