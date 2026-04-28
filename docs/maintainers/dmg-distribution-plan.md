@@ -46,6 +46,16 @@ The local release path uses credentials already installed on Gale's Mac:
   Xcode's archive export workflow
 - a local `notarytool` keychain profile named `gmax-notary`
 
+Check the local signing identity with:
+
+```sh
+security find-identity -v -p codesigning
+```
+
+The output must include a `Developer ID Application` identity for team
+`BC73766F69`. An `Apple Development` identity can build and run the app locally,
+but it cannot export the direct-distribution app used for the public DMG.
+
 Create the notary profile locally with:
 
 ```sh
@@ -193,12 +203,13 @@ The release flow remains review-first:
 6. wait for CI
 7. stop on unresolved comments unless explicitly acknowledged
 8. verify that `HEAD` still matches the release tag
-9. package, notarize, staple, and verify the local DMG assets from the tagged
+9. preflight the local Developer ID signing identity
+10. package, notarize, staple, and verify the local DMG assets from the tagged
    release candidate
-10. merge the PR
-11. fast-forward local `main`
-12. create the GitHub release object
-13. upload the local DMG assets
+11. merge the PR
+12. fast-forward local `main`
+13. create the GitHub release object
+14. upload the local DMG assets
 
 The DMG packaging step runs only after CI and the review-comment gate pass, but
 before the branch is merged, so the signed artifact is built from the exact
@@ -206,6 +217,10 @@ commit named by the release tag. The upload step runs only after the reviewed
 PR is merged and the GitHub release object exists. Both steps run on the local
 machine, using the local keychain and local notary profile. CI does not receive
 signing credentials.
+
+The release script also retries briefly when GitHub has created the pull
+request but has not yet reported any check runs. That keeps a healthy release
+from stopping just because the CI provider is a few seconds behind the PR.
 
 If `--skip-gh-release` is used while local DMG packaging is enabled, the release
 script stops because there is no GitHub release object to receive the DMG

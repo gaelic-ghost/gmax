@@ -15,6 +15,21 @@ skip_notarize="false"
 upload_release="false"
 release_tag=""
 
+require_developer_id_identity() {
+  developer_id_identities="$(security find-identity -v -p codesigning 2>/dev/null | grep 'Developer ID Application' || true)"
+  [ -n "$developer_id_identities" ] || {
+    cat >&2 <<'EOF'
+No Developer ID Application signing identity is available in the current keychain.
+
+Install the Developer ID Application certificate for team BC73766F69 through
+Xcode or Keychain Access, then rerun this packaging command. An Apple
+Development identity is enough for local debug builds, but direct-distribution
+DMGs need Developer ID signing before notarization.
+EOF
+    exit 1
+  }
+}
+
 usage() {
   cat <<'USAGE'
 Usage:
@@ -117,6 +132,8 @@ fi
   printf 'Expected Developer ID export options plist at %s.\n' "$export_options_plist" >&2
   exit 1
 }
+
+require_developer_id_identity
 
 mkdir -p "$output_dir"
 

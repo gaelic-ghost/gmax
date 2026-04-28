@@ -220,6 +220,8 @@ EOF
 
 watch_ci() {
   pr_number="$1"
+  attempts=0
+  max_attempts=12
 
   if [ "$REPO_MAINTENANCE_DRY_RUN" = "true" ]; then
     log "Would watch CI for PR #$pr_number."
@@ -227,10 +229,28 @@ watch_ci() {
   fi
 
   log "Watching CI for PR #$pr_number."
-  if ! gh pr checks "$pr_number" --watch; then
-    die "CI is not green for PR #$pr_number. Fix the failing checks, push the branch, and rerun release.sh so it can watch CI again."
-  fi
-  log "CI is green for PR #$pr_number."
+  while :; do
+    checks_output="$(gh pr checks "$pr_number" --watch 2>&1)" && {
+      log "CI is green for PR #$pr_number."
+      return 0
+    }
+
+    case "$checks_output" in
+      *"no checks reported"*)
+        attempts=$((attempts + 1))
+        [ "$attempts" -lt "$max_attempts" ] || {
+          printf '%s\n' "$checks_output" >&2
+          die "CI did not report checks for PR #$pr_number after waiting. Rerun release.sh once GitHub has created the check run."
+        }
+        log "GitHub has not reported checks for PR #$pr_number yet; waiting before retrying."
+        sleep 5
+        ;;
+      *)
+        printf '%s\n' "$checks_output" >&2
+        die "CI is not green for PR #$pr_number. Fix the failing checks, push the branch, and rerun release.sh so it can watch CI again."
+        ;;
+    esac
+  done
 }
 
 check_pr_comments() {
