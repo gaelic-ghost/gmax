@@ -314,12 +314,35 @@ package_local_release_dmg() {
   fi
 
   if [ "$REPO_MAINTENANCE_DRY_RUN" = "true" ]; then
-    log "Would package, notarize, staple, verify, and upload a local DMG for $RELEASE_TAG."
+    log "Would package, notarize, staple, and verify a local DMG for $RELEASE_TAG from the tagged release candidate."
     return 0
   fi
 
-  "$REPO_ROOT/scripts/package-notarized-dmg.sh" --version "$RELEASE_TAG" --upload-release "$RELEASE_TAG"
-  log "Packaged and uploaded notarized local DMG assets for $RELEASE_TAG."
+  head_sha="$(git -C "$REPO_ROOT" rev-parse HEAD)"
+  tag_sha="$(git -C "$REPO_ROOT" rev-parse "$RELEASE_TAG")"
+  [ "$head_sha" = "$tag_sha" ] || die "Refusing to package the notarized DMG because HEAD does not match $RELEASE_TAG. HEAD: $head_sha. Tag: $tag_sha."
+
+  "$REPO_ROOT/scripts/package-notarized-dmg.sh" --version "$RELEASE_TAG"
+  log "Packaged notarized local DMG assets for $RELEASE_TAG."
+}
+
+upload_local_release_dmg() {
+  if [ "$package_local_dmg" != "true" ]; then
+    return 0
+  fi
+
+  if [ "$REPO_MAINTENANCE_DRY_RUN" = "true" ]; then
+    log "Would upload local DMG assets for $RELEASE_TAG to the GitHub release."
+    return 0
+  fi
+
+  dmg_path="$REPO_ROOT/build/distribution/Gmax-$RELEASE_TAG.dmg"
+  sha_path="$dmg_path.sha256"
+  [ -f "$dmg_path" ] || die "Expected notarized DMG at $dmg_path before uploading release assets."
+  [ -f "$sha_path" ] || die "Expected notarized DMG checksum at $sha_path before uploading release assets."
+
+  gh release upload "$RELEASE_TAG" "$dmg_path" "$sha_path" --clobber
+  log "Uploaded notarized local DMG assets for $RELEASE_TAG."
 }
 
 cleanup_merged_branches() {
@@ -367,10 +390,11 @@ run_standard_release() {
   pr_number="$PR_NUMBER"
   watch_ci "$pr_number"
   check_pr_comments "$pr_number"
+  package_local_release_dmg
   merge_pr "$pr_number"
   fast_forward_base_branch
   create_github_release
-  package_local_release_dmg
+  upload_local_release_dmg
   cleanup_merged_branches "$branch_name"
   log "Standard release flow completed successfully for $RELEASE_TAG."
 }

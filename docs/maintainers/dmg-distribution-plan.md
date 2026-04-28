@@ -182,14 +182,20 @@ The release flow remains review-first:
 5. open or update the release PR
 6. wait for CI
 7. stop on unresolved comments unless explicitly acknowledged
-8. merge the PR
-9. fast-forward local `main`
-10. create the GitHub release object
-11. package, notarize, staple, verify, and upload the local DMG assets
+8. verify that `HEAD` still matches the release tag
+9. package, notarize, staple, and verify the local DMG assets from the tagged
+   release candidate
+10. merge the PR
+11. fast-forward local `main`
+12. create the GitHub release object
+13. upload the local DMG assets
 
-The DMG step runs only after the reviewed code is merged and the GitHub release
-object exists. It runs on the local machine, using the local keychain and local
-notary profile. CI does not receive signing credentials.
+The DMG packaging step runs only after CI and the review-comment gate pass, but
+before the branch is merged, so the signed artifact is built from the exact
+commit named by the release tag. The upload step runs only after the reviewed
+PR is merged and the GitHub release object exists. Both steps run on the local
+machine, using the local keychain and local notary profile. CI does not receive
+signing credentials.
 
 If `--skip-gh-release` is used while local DMG packaging is enabled, the release
 script stops because there is no GitHub release object to receive the DMG
