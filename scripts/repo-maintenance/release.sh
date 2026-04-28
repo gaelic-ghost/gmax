@@ -13,7 +13,7 @@ release_tag=""
 skip_validate="false"
 skip_gh_release="false"
 skip_version_bump="false"
-package_local_dmg="false"
+package_local_dmg="${REPO_MAINTENANCE_PACKAGE_LOCAL_DMG:-false}"
 base_branch="${REPO_MAINTENANCE_RELEASE_BRANCH:-main}"
 review_comments_addressed="false"
 skip_branch_cleanup="false"
@@ -45,6 +45,10 @@ while [ "$#" -gt 0 ]; do
       package_local_dmg="true"
       shift
       ;;
+    --skip-local-dmg)
+      package_local_dmg="false"
+      shift
+      ;;
     --base-branch)
       base_branch="${2:-}"
       shift 2
@@ -64,7 +68,7 @@ while [ "$#" -gt 0 ]; do
     -h|--help)
       cat <<'USAGE'
 Usage:
-  release.sh --mode standard --version <vX.Y.Z> [--base-branch main] [--skip-validate] [--skip-version-bump] [--skip-gh-release] [--package-local-dmg] [--review-comments-addressed] [--skip-branch-cleanup] [--dry-run]
+  release.sh --mode standard --version <vX.Y.Z> [--base-branch main] [--skip-validate] [--skip-version-bump] [--skip-gh-release] [--package-local-dmg|--skip-local-dmg] [--review-comments-addressed] [--skip-branch-cleanup] [--dry-run]
   release.sh --mode submodule --version <vX.Y.Z> [--skip-validate] [--skip-gh-release] [--dry-run]
 USAGE
       exit 0

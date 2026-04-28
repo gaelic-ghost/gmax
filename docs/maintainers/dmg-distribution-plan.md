@@ -153,11 +153,25 @@ as the public release DMG.
 
 ## Existing Release Flow Integration
 
-The standard release script now has an opt-in local packaging flag:
+The standard release script packages, notarizes, staples, verifies, and uploads
+the local DMG by default because `scripts/repo-maintenance/config/release.env`
+sets:
 
 ```sh
-scripts/repo-maintenance/release.sh --mode standard --version v0.1.6 --package-local-dmg
+REPO_MAINTENANCE_PACKAGE_LOCAL_DMG=true
 ```
+
+Use the normal release command when a public release should include the signed
+and notarized DMG assets:
+
+```sh
+scripts/repo-maintenance/release.sh --mode standard --version v0.1.6
+```
+
+The explicit `--package-local-dmg` flag is still supported when a caller wants
+to override a temporary environment default. Use `--skip-local-dmg` only for an
+intentional release that should create the tag and GitHub release object without
+uploading DMG assets.
 
 The release flow remains review-first:
 
@@ -177,10 +191,10 @@ The DMG step runs only after the reviewed code is merged and the GitHub release
 object exists. It runs on the local machine, using the local keychain and local
 notary profile. CI does not receive signing credentials.
 
-If `--skip-gh-release` is used with `--package-local-dmg`, the release script
-stops because there is no GitHub release object to receive the DMG assets.
-Package manually with `scripts/package-notarized-dmg.sh` if an offline artifact
-is needed.
+If `--skip-gh-release` is used while local DMG packaging is enabled, the release
+script stops because there is no GitHub release object to receive the DMG
+assets. Pair `--skip-gh-release` with `--skip-local-dmg`, or package manually
+with `scripts/package-notarized-dmg.sh` if an offline artifact is needed.
 
 ## Validation Notes
 
