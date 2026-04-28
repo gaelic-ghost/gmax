@@ -74,15 +74,32 @@ struct TerminalLaunchContextBuilderTests {
         let builder = TestSupport.makeLaunchContextBuilder(defaultCurrentDirectory: "/tmp/gmax-tests")
 
         let launchConfiguration = builder.makeLaunchConfiguration(
-            currentDirectory: "file://Mac.lan%23/Users/galew/Project%20Space",
+            currentDirectory: "file://localhost/Users/galew/Project%20Space",
         )
 
         #expect(launchConfiguration.currentDirectory == "/Users/galew/Project Space")
         #expect(launchConfiguration.environment?.contains("PWD=/Users/galew/Project Space") == true)
     }
 
+    @Test func `launch configuration ignores remote current directory file urls`() {
+        let builder = TestSupport.makeLaunchContextBuilder(defaultCurrentDirectory: "/tmp/gmax-tests")
+
+        let launchConfiguration = builder.makeLaunchConfiguration(
+            currentDirectory: "file://remote.example.com/home/gale/project",
+        )
+
+        #expect(launchConfiguration.currentDirectory == "/tmp/gmax-tests")
+        #expect(launchConfiguration.environment?.contains("PWD=/tmp/gmax-tests") == true)
+    }
+
     @Test func `terminal current directory leaves plain paths untouched`() {
         #expect(TerminalCurrentDirectory.normalizedPath(fromHostDirectory: "/Users/galew") == "/Users/galew")
         #expect(TerminalCurrentDirectory.normalizedPath(fromHostDirectory: nil) == nil)
+    }
+
+    @Test func `terminal current directory rejects remote file urls`() {
+        #expect(TerminalCurrentDirectory.normalizedPath(
+            fromHostDirectory: "file://remote.example.com/home/gale/project",
+        ) == nil)
     }
 }

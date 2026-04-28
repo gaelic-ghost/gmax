@@ -6,6 +6,7 @@
 //
 
 import Combine
+import Darwin
 import Foundation
 
 enum TerminalSessionState: Equatable {
@@ -169,8 +170,46 @@ enum TerminalCurrentDirectory {
         guard let url = URL(string: directory), url.isFileURL else {
             return directory
         }
+        guard isLocalFileURL(url) else {
+            return nil
+        }
 
         return url.path
+    }
+
+    private nonisolated static func isLocalFileURL(_ url: URL) -> Bool {
+        guard let host = url.host(percentEncoded: false), !host.isEmpty else {
+            return true
+        }
+
+        let normalizedHost = normalizedHostName(host)
+        return localHostNames().contains(normalizedHost)
+    }
+
+    private nonisolated static func localHostNames() -> Set<String> {
+        var names: Set = ["localhost", "127.0.0.1", "::1"]
+        let processInfo = ProcessInfo.processInfo
+        names.insert(processInfo.hostName)
+        names.formUnion([
+            processInfo.environment["HOST"],
+            processInfo.environment["HOSTNAME"],
+        ].compactMap(\.self))
+
+        var buffer = [CChar](repeating: 0, count: Int(NI_MAXHOST))
+        if gethostname(&buffer, buffer.count) == 0 {
+            let hostnameBytes = buffer
+                .prefix { $0 != 0 }
+                .map { UInt8(bitPattern: $0) }
+            names.insert(String(decoding: hostnameBytes, as: UTF8.self))
+        }
+
+        return Set(names.map(normalizedHostName).filter { !$0.isEmpty })
+    }
+
+    private nonisolated static func normalizedHostName(_ host: String) -> String {
+        host
+            .trimmingCharacters(in: CharacterSet(charactersIn: "#."))
+            .lowercased()
     }
 }
 
