@@ -161,6 +161,19 @@ struct TerminalHostEventParser {
     }
 }
 
+enum TerminalCurrentDirectory {
+    nonisolated static func normalizedPath(fromHostDirectory directory: String?) -> String? {
+        guard let directory, !directory.isEmpty else {
+            return directory
+        }
+        guard let url = URL(string: directory), url.isFileURL else {
+            return directory
+        }
+
+        return url.path
+    }
+}
+
 @MainActor
 final class TerminalSession: ObservableObject, Identifiable {
     let id: TerminalSessionID

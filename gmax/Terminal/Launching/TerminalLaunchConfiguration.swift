@@ -21,4 +21,12 @@ struct TerminalLaunchConfiguration: Hashable, Codable {
             currentDirectory: nil,
         )
     }
+
+    nonisolated func normalizingCurrentDirectory() -> TerminalLaunchConfiguration {
+        var configuration = self
+        configuration.currentDirectory = TerminalCurrentDirectory.normalizedPath(
+            fromHostDirectory: currentDirectory,
+        )
+        return configuration
+    }
 }

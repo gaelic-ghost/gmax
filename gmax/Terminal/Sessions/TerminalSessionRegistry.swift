@@ -26,7 +26,8 @@ final class TerminalSessionRegistry {
                 }
 
                 let paneSnapshot = restoredPaneSnapshotsBySessionID[sessionID]
-                let launchConfiguration = paneSnapshot?.launchConfiguration ?? defaultLaunchConfiguration
+                let launchConfiguration = (paneSnapshot?.launchConfiguration ?? defaultLaunchConfiguration)
+                    .normalizingCurrentDirectory()
                 sessionsByID[sessionID] = TerminalSession(
                     id: sessionID,
                     launchConfiguration: launchConfiguration,
@@ -46,7 +47,8 @@ final class TerminalSessionRegistry {
             return session
         }
 
-        let resolvedLaunchConfiguration = launchConfiguration ?? defaultLaunchConfiguration
+        let resolvedLaunchConfiguration = (launchConfiguration ?? defaultLaunchConfiguration)
+            .normalizingCurrentDirectory()
         let session = TerminalSession(
             id: id,
             launchConfiguration: resolvedLaunchConfiguration,

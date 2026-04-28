@@ -52,7 +52,7 @@ extension TerminalPaneView {
         func hostCurrentDirectoryUpdate(source: TerminalView, directory: String?) {
             Task { @MainActor in
                 await Task.yield()
-                controller.session.currentDirectory = directory
+                controller.session.currentDirectory = TerminalCurrentDirectory.normalizedPath(fromHostDirectory: directory)
             }
         }
 

@@ -177,7 +177,9 @@ struct TerminalLaunchContextBuilder {
         currentDirectory: String? = nil,
         environmentOverrides: [String: String] = [:],
     ) -> TerminalLaunchConfiguration {
-        let resolvedCurrentDirectory = currentDirectory ?? defaultCurrentDirectory
+        let resolvedCurrentDirectory = TerminalCurrentDirectory.normalizedPath(
+            fromHostDirectory: currentDirectory ?? defaultCurrentDirectory,
+        )
         var environment = baseEnvironment.merging(environmentOverrides, uniquingKeysWith: { _, new in new })
         environment["PWD"] = resolvedCurrentDirectory
 
