@@ -882,7 +882,7 @@ struct WorkspacePersistenceTests {
     @Test func `pane node coding round trips terminal browser and legacy leaf content`() throws {
         let persistence = WorkspacePersistenceController.inMemoryForTesting()
         let context = persistence.container.viewContext
-        let terminalPane = PaneLeaf(content: .terminal(TerminalSessionID()))
+        let terminalPane = PaneLeaf(content: .terminal(TerminalSessionID()), terminalBackendKind: .ghostty)
         let browserPane = PaneLeaf(content: .browser(BrowserSessionID()))
         let split = PaneSplit(
             axis: .vertical,
@@ -902,7 +902,9 @@ struct WorkspacePersistenceTests {
         #expect(decodedSplit.axis == .vertical)
         #expect(decodedSplit.fraction == 0.35)
         #expect(decodedTerminalPane.terminalSessionID == terminalPane.terminalSessionID)
+        #expect(decodedTerminalPane.resolvedTerminalBackendKind == .ghostty)
         #expect(decodedBrowserPane.browserSessionID == browserPane.browserSessionID)
+        #expect(decodedBrowserPane.terminalBackendKind == nil)
 
         let legacyTerminalNode = PaneNodeEntity(context: context)
         legacyTerminalNode.id = UUID()
@@ -912,7 +914,9 @@ struct WorkspacePersistenceTests {
         legacyTerminalNode.browserSessionID = nil
 
         let decodedLegacyNode = try #require(WorkspacePersistenceController.decodeNode(legacyTerminalNode))
-        #expect(extractRootLeaf(from: decodedLegacyNode)?.terminalSessionID?.rawValue == legacyTerminalNode.sessionID)
+        let decodedLegacyLeaf = try #require(extractRootLeaf(from: decodedLegacyNode))
+        #expect(decodedLegacyLeaf.terminalSessionID?.rawValue == legacyTerminalNode.sessionID)
+        #expect(decodedLegacyLeaf.resolvedTerminalBackendKind == .swiftTerm)
     }
 
     @Test func `pane node decoding skips malformed leaf split and unknown kind payloads`() {

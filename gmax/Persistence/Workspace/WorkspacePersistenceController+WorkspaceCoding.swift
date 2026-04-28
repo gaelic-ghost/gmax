@@ -25,10 +25,12 @@ extension WorkspacePersistenceController {
                     case let .terminal(sessionID):
                         nodeEntity.contentKind = PersistedPaneContentKind.terminal.rawValue
                         nodeEntity.sessionID = sessionID.rawValue
+                        nodeEntity.terminalBackendKind = leaf.resolvedTerminalBackendKind.rawValue
                         nodeEntity.browserSessionID = nil
                     case let .browser(sessionID):
                         nodeEntity.contentKind = PersistedPaneContentKind.browser.rawValue
                         nodeEntity.sessionID = nil
+                        nodeEntity.terminalBackendKind = nil
                         nodeEntity.browserSessionID = sessionID.rawValue
                 }
                 nodeEntity.axis = nil
@@ -43,6 +45,7 @@ extension WorkspacePersistenceController {
                 nodeEntity.kind = PaneNodeKind.split.rawValue
                 nodeEntity.contentKind = nil
                 nodeEntity.sessionID = nil
+                nodeEntity.terminalBackendKind = nil
                 nodeEntity.browserSessionID = nil
                 nodeEntity.axis = split.axis.rawValue
                 nodeEntity.fraction = split.fraction
@@ -72,10 +75,12 @@ extension WorkspacePersistenceController {
                     case let .terminal(sessionID):
                         nodeEntity.contentKind = PersistedPaneContentKind.terminal.rawValue
                         nodeEntity.sessionID = sessionID.rawValue
+                        nodeEntity.terminalBackendKind = leaf.resolvedTerminalBackendKind.rawValue
                         nodeEntity.browserSessionID = nil
                     case let .browser(sessionID):
                         nodeEntity.contentKind = PersistedPaneContentKind.browser.rawValue
                         nodeEntity.sessionID = nil
+                        nodeEntity.terminalBackendKind = nil
                         nodeEntity.browserSessionID = sessionID.rawValue
                 }
                 nodeEntity.axis = nil
@@ -92,6 +97,7 @@ extension WorkspacePersistenceController {
                 nodeEntity.kind = PaneNodeKind.split.rawValue
                 nodeEntity.contentKind = nil
                 nodeEntity.sessionID = nil
+                nodeEntity.terminalBackendKind = nil
                 nodeEntity.browserSessionID = nil
                 nodeEntity.axis = split.axis.rawValue
                 nodeEntity.fraction = split.fraction
@@ -127,7 +133,14 @@ extension WorkspacePersistenceController {
                             return nil
                         }
 
-                        content = .terminal(TerminalSessionID(rawValue: sessionID))
+                        let backendKind = nodeEntity.terminalBackendKind.flatMap(TerminalBackendKind.init(rawValue:)) ?? .swiftTerm
+                        return .leaf(
+                            PaneLeaf(
+                                id: PaneID(rawValue: nodeEntity.id),
+                                content: .terminal(TerminalSessionID(rawValue: sessionID)),
+                                terminalBackendKind: backendKind,
+                            ),
+                        )
                     case .browser:
                         guard let sessionID = nodeEntity.browserSessionID else {
                             Logger.persistence.error("A persisted browser leaf node is missing its browser session identifier. That node will be skipped during restore. Node ID: \(nodeEntity.id.uuidString, privacy: .public)")
@@ -142,7 +155,13 @@ extension WorkspacePersistenceController {
                             return nil
                         }
 
-                        content = .terminal(TerminalSessionID(rawValue: sessionID))
+                        return .leaf(
+                            PaneLeaf(
+                                id: PaneID(rawValue: nodeEntity.id),
+                                content: .terminal(TerminalSessionID(rawValue: sessionID)),
+                                terminalBackendKind: .swiftTerm,
+                            ),
+                        )
                 }
 
                 return .leaf(

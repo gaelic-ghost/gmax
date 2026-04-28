@@ -64,8 +64,15 @@ enum PaneContent: Hashable, Codable {
 }
 
 struct PaneLeaf: Identifiable, Hashable, Codable {
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case content
+        case terminalBackendKind
+    }
+
     var id = PaneID()
     var content: PaneContent = .terminal(TerminalSessionID())
+    var terminalBackendKind: TerminalBackendKind?
 
     nonisolated var terminalSessionID: TerminalSessionID? {
         guard case let .terminal(sessionID) = content else {
@@ -81,6 +88,47 @@ struct PaneLeaf: Identifiable, Hashable, Codable {
         }
 
         return sessionID
+    }
+
+    nonisolated var resolvedTerminalBackendKind: TerminalBackendKind {
+        terminalBackendKind ?? .swiftTerm
+    }
+
+    nonisolated init(
+        id: PaneID = PaneID(),
+        content: PaneContent = .terminal(TerminalSessionID()),
+        terminalBackendKind: TerminalBackendKind? = nil,
+    ) {
+        self.id = id
+        self.content = content
+        switch content {
+            case .terminal:
+                self.terminalBackendKind = terminalBackendKind ?? .selectedForNewSession
+            case .browser:
+                self.terminalBackendKind = nil
+        }
+    }
+
+    nonisolated init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(PaneID.self, forKey: .id)
+        content = try container.decode(PaneContent.self, forKey: .content)
+        switch content {
+            case .terminal:
+                terminalBackendKind = try container.decodeIfPresent(TerminalBackendKind.self, forKey: .terminalBackendKind)
+                    ?? .swiftTerm
+            case .browser:
+                terminalBackendKind = nil
+        }
+    }
+
+    nonisolated func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(content, forKey: .content)
+        if terminalSessionID != nil {
+            try container.encode(resolvedTerminalBackendKind, forKey: .terminalBackendKind)
+        }
     }
 }
 

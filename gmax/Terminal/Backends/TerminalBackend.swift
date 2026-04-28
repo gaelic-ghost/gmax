@@ -11,7 +11,7 @@ enum TerminalBackendKind: String, Codable, Hashable {
     case swiftTerm
     case ghostty
 
-    static var selectedForNewSession: TerminalBackendKind {
+    nonisolated static var selectedForNewSession: TerminalBackendKind {
         ExperimentalSettingsDefaults.useGhosttyForNewTerminalPanes() ? .ghostty : .swiftTerm
     }
 }

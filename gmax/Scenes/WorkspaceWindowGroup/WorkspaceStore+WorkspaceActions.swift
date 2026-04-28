@@ -331,7 +331,7 @@ extension WorkspaceStore {
                     let sourceSession = sessions.ensureSession(id: sourceSessionID)
                     let inheritedCurrentDirectory = sourceSession.currentDirectory
                         ?? sourceSession.launchConfiguration.currentDirectory
-                    let clonedLeaf = PaneLeaf()
+                    let clonedLeaf = PaneLeaf(terminalBackendKind: leaf.resolvedTerminalBackendKind)
                     if let sessionID = clonedLeaf.terminalSessionID {
                         _ = sessions.ensureSession(
                             id: sessionID,
@@ -359,7 +359,7 @@ extension WorkspaceStore {
                     return .leaf(clonedLeaf)
                 }
 
-                return .leaf(PaneLeaf(content: leaf.content))
+                return .leaf(PaneLeaf(content: leaf.content, terminalBackendKind: leaf.terminalBackendKind))
 
             case let .split(split):
                 return .split(
@@ -610,7 +610,7 @@ extension WorkspaceStore {
             case let .leaf(leaf):
                 let restoredLeaf = switch leaf.content {
                     case .terminal:
-                        PaneLeaf()
+                        PaneLeaf(terminalBackendKind: leaf.resolvedTerminalBackendKind)
                     case .browser:
                         PaneLeaf(content: .browser(BrowserSessionID()))
                 }

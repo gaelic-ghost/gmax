@@ -43,6 +43,7 @@ final class PaneNodeEntity: NSManagedObject {
     @NSManaged var kind: String
     @NSManaged var contentKind: String?
     @NSManaged var sessionID: UUID?
+    @NSManaged var terminalBackendKind: String?
     @NSManaged var browserSessionID: UUID?
     @NSManaged var axis: String?
     @NSManaged var fraction: Double

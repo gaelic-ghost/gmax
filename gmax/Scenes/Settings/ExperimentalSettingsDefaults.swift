@@ -8,10 +8,10 @@
 import Foundation
 
 enum ExperimentalSettingsDefaults {
-    static let useGhosttyForNewTerminalPanesKey = "experimental.useGhosttyForNewTerminalPanes"
-    static let ghosttyEnvironmentOverrideKey = "GMAX_GHOSTTY_PANE_SPIKE"
+    nonisolated static let useGhosttyForNewTerminalPanesKey = "experimental.useGhosttyForNewTerminalPanes"
+    nonisolated static let ghosttyEnvironmentOverrideKey = "GMAX_GHOSTTY_PANE_SPIKE"
 
-    static func useGhosttyForNewTerminalPanes(userDefaults: UserDefaults = .standard) -> Bool {
+    nonisolated static func useGhosttyForNewTerminalPanes(userDefaults: UserDefaults = .standard) -> Bool {
         switch ProcessInfo.processInfo.environment[ghosttyEnvironmentOverrideKey] {
             case "1":
                 true
@@ -22,7 +22,7 @@ enum ExperimentalSettingsDefaults {
         }
     }
 
-    static var hasGhosttyEnvironmentOverride: Bool {
+    nonisolated static var hasGhosttyEnvironmentOverride: Bool {
         ProcessInfo.processInfo.environment[ghosttyEnvironmentOverrideKey] == "1"
             || ProcessInfo.processInfo.environment[ghosttyEnvironmentOverrideKey] == "0"
     }

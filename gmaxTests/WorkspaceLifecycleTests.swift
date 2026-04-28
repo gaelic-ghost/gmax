@@ -213,8 +213,8 @@ struct WorkspaceLifecycleTests {
     }
 
     @Test func `terminal backend registry creates Ghostty hosts when selected`() throws {
-        let pane = PaneLeaf()
-        let registry = TerminalBackendRegistry(selectedBackend: { .ghostty })
+        let pane = PaneLeaf(terminalBackendKind: .ghostty)
+        let registry = TerminalBackendRegistry()
         let session = try TerminalSession(id: #require(pane.terminalSessionID))
 
         let host = registry.host(for: pane, session: session)
@@ -224,14 +224,14 @@ struct WorkspaceLifecycleTests {
     }
 
     @Test func `terminal backend registry keeps existing host after selection changes`() throws {
-        let pane = PaneLeaf()
-        var selectedBackend = TerminalBackendKind.swiftTerm
-        let registry = TerminalBackendRegistry(selectedBackend: { selectedBackend })
+        let pane = PaneLeaf(terminalBackendKind: .swiftTerm)
+        var updatedPane = pane
+        updatedPane.terminalBackendKind = .ghostty
+        let registry = TerminalBackendRegistry()
         let session = try TerminalSession(id: #require(pane.terminalSessionID))
 
         let firstHost = registry.host(for: pane, session: session)
-        selectedBackend = .ghostty
-        let secondHost = registry.host(for: pane, session: session)
+        let secondHost = registry.host(for: updatedPane, session: session)
 
         #expect(firstHost === secondHost)
         #expect(secondHost.kind == .swiftTerm)
@@ -247,6 +247,36 @@ struct WorkspaceLifecycleTests {
         userDefaults.set(true, forKey: ExperimentalSettingsDefaults.useGhosttyForNewTerminalPanesKey)
 
         #expect(ExperimentalSettingsDefaults.useGhosttyForNewTerminalPanes(userDefaults: userDefaults))
+    }
+
+    @Test func `experimental setting only stamps newly created terminal panes`() {
+        if ExperimentalSettingsDefaults.hasGhosttyEnvironmentOverride {
+            return
+        }
+
+        let userDefaults = UserDefaults.standard
+        let key = ExperimentalSettingsDefaults.useGhosttyForNewTerminalPanesKey
+        let hadOriginalValue = userDefaults.object(forKey: key) != nil
+        let originalValue = userDefaults.bool(forKey: key)
+        defer {
+            if hadOriginalValue {
+                userDefaults.set(originalValue, forKey: key)
+            } else {
+                userDefaults.removeObject(forKey: key)
+            }
+        }
+
+        userDefaults.set(false, forKey: key)
+        let existingPane = PaneLeaf()
+
+        userDefaults.set(true, forKey: key)
+        let newPane = PaneLeaf()
+
+        userDefaults.set(false, forKey: key)
+
+        #expect(existingPane.resolvedTerminalBackendKind == .swiftTerm)
+        #expect(newPane.resolvedTerminalBackendKind == .ghostty)
+        #expect(existingPane.resolvedTerminalBackendKind == .swiftTerm)
     }
 
     @Test func `closing a terminal pane prunes its backend host`() throws {
