@@ -13,6 +13,7 @@ release_tag=""
 skip_validate="false"
 skip_gh_release="false"
 skip_version_bump="false"
+package_local_dmg="false"
 base_branch="${REPO_MAINTENANCE_RELEASE_BRANCH:-main}"
 review_comments_addressed="false"
 skip_branch_cleanup="false"
@@ -40,6 +41,10 @@ while [ "$#" -gt 0 ]; do
       skip_version_bump="true"
       shift
       ;;
+    --package-local-dmg)
+      package_local_dmg="true"
+      shift
+      ;;
     --base-branch)
       base_branch="${2:-}"
       shift 2
@@ -59,7 +64,7 @@ while [ "$#" -gt 0 ]; do
     -h|--help)
       cat <<'USAGE'
 Usage:
-  release.sh --mode standard --version <vX.Y.Z> [--base-branch main] [--skip-validate] [--skip-version-bump] [--skip-gh-release] [--review-comments-addressed] [--skip-branch-cleanup] [--dry-run]
+  release.sh --mode standard --version <vX.Y.Z> [--base-branch main] [--skip-validate] [--skip-version-bump] [--skip-gh-release] [--package-local-dmg] [--review-comments-addressed] [--skip-branch-cleanup] [--dry-run]
   release.sh --mode submodule --version <vX.Y.Z> [--skip-validate] [--skip-gh-release] [--dry-run]
 USAGE
       exit 0
@@ -295,6 +300,24 @@ create_github_release() {
   log "Created GitHub release $RELEASE_TAG."
 }
 
+package_local_release_dmg() {
+  if [ "$package_local_dmg" != "true" ]; then
+    return 0
+  fi
+
+  if [ "$REPO_MAINTENANCE_SKIP_GH_RELEASE" = "true" ]; then
+    die "--package-local-dmg needs a GitHub release object so it can upload the notarized DMG. Remove --skip-gh-release or package manually with scripts/package-notarized-dmg.sh."
+  fi
+
+  if [ "$REPO_MAINTENANCE_DRY_RUN" = "true" ]; then
+    log "Would package, notarize, staple, verify, and upload a local DMG for $RELEASE_TAG."
+    return 0
+  fi
+
+  "$REPO_ROOT/scripts/package-notarized-dmg.sh" --version "$RELEASE_TAG" --upload-release "$RELEASE_TAG"
+  log "Packaged and uploaded notarized local DMG assets for $RELEASE_TAG."
+}
+
 cleanup_merged_branches() {
   release_branch_name="$1"
 
@@ -343,6 +366,7 @@ run_standard_release() {
   merge_pr "$pr_number"
   fast_forward_base_branch
   create_github_release
+  package_local_release_dmg
   cleanup_merged_branches "$branch_name"
   log "Standard release flow completed successfully for $RELEASE_TAG."
 }

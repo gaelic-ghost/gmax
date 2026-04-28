@@ -8,12 +8,13 @@ configuration="Release"
 version="${GMAX_DMG_VERSION:-}"
 output_dir="${GMAX_DMG_OUTPUT_DIR:-$REPO_ROOT/build/distribution}"
 derived_data_path="${GMAX_DMG_DERIVED_DATA_PATH:-}"
+app_path="${GMAX_DMG_APP_PATH:-}"
 skip_build="false"
 
 usage() {
   cat <<'USAGE'
 Usage:
-  scripts/package-dmg.sh [--version <version>] [--configuration Release] [--output-dir <path>] [--derived-data-path <path>] [--skip-build]
+  scripts/package-dmg.sh [--version <version>] [--configuration Release] [--output-dir <path>] [--derived-data-path <path>] [--app-path <path>] [--skip-build]
 
 Builds gmax.app and packages it into a compressed DMG with an Applications symlink.
 
@@ -21,6 +22,7 @@ Environment:
   GMAX_DMG_VERSION            Version label used in the DMG filename.
   GMAX_DMG_OUTPUT_DIR         Output directory. Defaults to build/distribution.
   GMAX_DMG_DERIVED_DATA_PATH  DerivedData path. Defaults to a temporary directory.
+  GMAX_DMG_APP_PATH           Existing app bundle to package instead of building.
 USAGE
 }
 
@@ -40,6 +42,10 @@ while [ "$#" -gt 0 ]; do
       ;;
     --derived-data-path)
       derived_data_path="${2:-}"
+      shift 2
+      ;;
+    --app-path)
+      app_path="${2:-}"
       shift 2
       ;;
     --skip-build)
@@ -81,7 +87,11 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-app_path="$derived_data_path/Build/Products/$configuration/gmax.app"
+if [ -n "$app_path" ]; then
+  skip_build="true"
+else
+  app_path="$derived_data_path/Build/Products/$configuration/gmax.app"
+fi
 
 if [ "$skip_build" != "true" ]; then
   xcodebuild \

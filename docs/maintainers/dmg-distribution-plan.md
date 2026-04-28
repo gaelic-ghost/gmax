@@ -19,36 +19,90 @@ So GitHub storage and asset-size limits are not the blocker.
 
 ## Apple Distribution Requirement
 
-A DMG that users can download is easy. A DMG that opens without scary
-Gatekeeper friction requires Apple distribution signing and notarization.
+A DMG that users can download is easy. A DMG that opens without Gatekeeper
+friction requires Apple distribution signing and notarization.
 
 Apple's documented direct-distribution path is:
 
 1. Archive the macOS app.
 2. Export a distribution-signed app with Developer ID signing.
-3. Notarize the distributed software with Apple's notary service.
-4. Staple the notarization ticket.
-5. Package and publish the final artifact.
+3. Package the exported app into the final distributable format.
+4. Notarize the distributed software with Apple's notary service.
+5. Staple the notarization ticket.
+6. Publish the final artifact.
 
-The current project is close on project settings but not distribution-ready
-by itself:
+For `gmax`, the final distributable format is a compressed UDIF DMG containing
+`Gmax.app` and an `/Applications` symlink.
+
+## Credential And Fork Safety Model
+
+`gmax` must not store Developer ID certificates, private keys, notary
+credentials, app-specific passwords, App Store Connect API keys, exported
+keychains, or base64-encoded credential blobs in the repository.
+
+The local release path uses credentials already installed on Gale's Mac:
+
+- a Developer ID Application certificate in the login keychain, available to
+  Xcode's archive export workflow
+- a local `notarytool` keychain profile named `gmax-notary`
+
+Create the notary profile locally with:
+
+```sh
+xcrun notarytool store-credentials gmax-notary \
+  --apple-id <apple-id> \
+  --team-id BC73766F69 \
+  --password <app-specific-password>
+```
+
+This keeps signing and notarization local. Forks of the public repository can
+run the open-source build and packaging scripts, but they cannot sign as Gale
+unless they separately possess Gale's private Developer ID signing key and
+notary credentials.
+
+If CI signing is added later, it must be protected as release infrastructure,
+not ordinary CI:
+
+- use a protected GitHub Environment such as `release-signing`
+- expose signing secrets only to trusted tag or release workflows
+- do not expose signing secrets to `pull_request` workflows
+- do not use `pull_request_target` for workflows that run repository scripts
+  while holding signing secrets
+- require a human environment approval before any job imports a Developer ID
+  certificate or accesses notary credentials
+- never run unreviewed contributor-controlled code in a job that has signing
+  secrets
+
+GitHub-hosted signing is feasible, but it is intentionally not the first
+implementation for this project.
+
+## Current Project Audit
+
+The current project is close on build settings but is not distribution-ready
+through a normal Release build alone:
 
 - Hardened Runtime is enabled for `gmax`.
-- The Release build currently signs with `Apple Development: Gale Williams`,
-  not a `Developer ID Application` certificate.
-- The generated Release entitlements include `com.apple.security.get-task-allow`
-  in the local probe, which Apple documents as unsuitable for notarized
-  distribution.
+- The target has `SKIP_INSTALL=NO`, so `xcodebuild archive` can produce an
+  installable app archive.
+- The bundle identifier is `com.galewilliams.gmax`.
+- The development team is `BC73766F69`.
+- The normal Release build signs with `Apple Development: Gale Williams`, not
+  a `Developer ID Application` certificate.
+- The local build probe included `com.apple.security.get-task-allow`, which is
+  unsuitable for notarized distribution when set to `true`.
+- No GitHub workflow currently imports signing credentials or performs
+  notarization.
+- The repo-maintenance release script creates and publishes GitHub release
+  objects, but previously did not package or attach DMG assets.
 
-That means a GitHub-hosted DMG can exist before notarization, but it should be
-treated as a developer/test artifact rather than the public installer.
+That means the compliant path is: archive/export specifically for Developer ID,
+then package and notarize that exported app. Do not treat a normal local
+Release build as the public distribution app.
 
-## Recommended Shape
+## Local DMG Packaging
 
-### Phase 1: Local DMG Packaging
-
-Use `scripts/package-dmg.sh` to create a repeatable local DMG from a Release
-build:
+Use `scripts/package-dmg.sh` when only the DMG container shape needs to be
+tested:
 
 ```sh
 scripts/package-dmg.sh --version v0.1.6
@@ -60,38 +114,73 @@ creates:
 - `build/distribution/Gmax-v0.1.6.dmg`
 - `build/distribution/Gmax-v0.1.6.dmg.sha256`
 
-This is useful immediately for manual testing and for proving the artifact
-shape before CI gets secrets.
+For distribution, prefer the notarized script below because it archives and
+exports a Developer ID signed app before packaging.
 
-### Phase 2: Release Asset Upload
+## Local Notarized Release DMG
 
-Once the artifact is trusted, attach it to a GitHub release with:
+Use `scripts/package-notarized-dmg.sh` for the public downloadable artifact:
 
 ```sh
-gh release upload v0.1.6 build/distribution/Gmax-v0.1.6.dmg build/distribution/Gmax-v0.1.6.dmg.sha256
+scripts/package-notarized-dmg.sh --version v0.1.6 --upload-release v0.1.6
 ```
 
-This can be folded into the repo release script after the signing story is
-settled.
+The script performs the full local path:
 
-### Phase 3: CI Signing And Notarization
+1. `xcodebuild archive`
+2. `xcodebuild -exportArchive` with
+   `scripts/export-options-developer-id.plist`
+3. `scripts/package-dmg.sh --app-path <exported app>`
+4. `xcrun notarytool submit --keychain-profile gmax-notary --wait`
+5. `xcrun stapler staple`
+6. `xcrun stapler validate`
+7. `spctl --assess --type open`
+8. `shasum -a 256`
+9. optional `gh release upload --clobber`
 
-For a fully automated GitHub-hosted release, CI needs:
+The generated files are:
 
-- Developer ID Application certificate exported as a protected secret.
-- Certificate password stored as a protected secret.
-- Temporary keychain setup in the workflow.
-- Apple notary credentials stored as protected secrets.
-- `xcodebuild archive` / `xcodebuild -exportArchive` or an equivalent
-  Developer ID signing path.
-- `xcrun notarytool submit --wait`.
-- `xcrun stapler staple` for the notarized artifact.
-- DMG packaging and `gh release upload`.
+- `build/distribution/Gmax-v0.1.6.dmg`
+- `build/distribution/Gmax-v0.1.6.dmg.sha256`
+- `build/distribution/Gmax-v0.1.6.xcarchive`
+- `build/distribution/export-v0.1.6/`
 
-This is feasible on GitHub Free for this public repo, but certificate and
-notary credentials are the high-risk part. Keep them scoped to release-only
-workflows and protected repository environments before enabling automatic
-publishing.
+`build/` is ignored by git, so release artifacts stay out of source control.
+
+If notarization credentials are not available yet, use `--skip-notarize` only
+for local packaging validation. Do not upload a skipped-notarization artifact
+as the public release DMG.
+
+## Existing Release Flow Integration
+
+The standard release script now has an opt-in local packaging flag:
+
+```sh
+scripts/repo-maintenance/release.sh --mode standard --version v0.1.6 --package-local-dmg
+```
+
+The release flow remains review-first:
+
+1. validate
+2. bump versions
+3. tag the release candidate
+4. push the branch and tag
+5. open or update the release PR
+6. wait for CI
+7. stop on unresolved comments unless explicitly acknowledged
+8. merge the PR
+9. fast-forward local `main`
+10. create the GitHub release object
+11. package, notarize, staple, verify, and upload the local DMG assets
+
+The DMG step runs only after the reviewed code is merged and the GitHub release
+object exists. It runs on the local machine, using the local keychain and local
+notary profile. CI does not receive signing credentials.
+
+If `--skip-gh-release` is used with `--package-local-dmg`, the release script
+stops because there is no GitHub release object to receive the DMG assets.
+Package manually with `scripts/package-notarized-dmg.sh` if an offline artifact
+is needed.
 
 ## Validation Notes
 
