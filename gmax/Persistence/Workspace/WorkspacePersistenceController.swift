@@ -1699,6 +1699,9 @@ extension WorkspacePersistenceController {
         if let selectedWorkspaceID = legacyWindowState?.selectedWorkspaceID {
             window.selectedWorkspaceID = selectedWorkspaceID
         }
+        if let selectedPaneID = legacyWindowState?.selectedPaneID {
+            window.selectedPaneID = selectedPaneID
+        }
         if window.title == nil {
             window.title = livePlacements.first?.title
         }

@@ -865,9 +865,6 @@ struct WorkspaceWindowSceneView: View {
         guard let restoredPaneFocusTarget else {
             return
         }
-        guard restoredPaneFocusTarget != focusedTarget else {
-            return
-        }
 
         if case let .pane(paneID) = restoredPaneFocusTarget {
             restorePaneFocusAfterWindowActivationDirect(
@@ -877,7 +874,8 @@ struct WorkspaceWindowSceneView: View {
             return
         }
 
-        if restoredPaneFocusTarget == .inspector {
+        if restoredPaneFocusTarget == .inspector,
+           restoredPaneFocusTarget != focusedTarget {
             applyFocusAssignmentDirect(
                 .inspector,
                 activePaneIDs: activePaneIDs,
