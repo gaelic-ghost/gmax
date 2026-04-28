@@ -69,4 +69,20 @@ struct TerminalLaunchContextBuilderTests {
         #expect(plan.arguments == ["-l"])
         #expect(plan.environment.isEmpty)
     }
+
+    @Test func `launch configuration normalizes current directory file urls to file system paths`() {
+        let builder = TestSupport.makeLaunchContextBuilder(defaultCurrentDirectory: "/tmp/gmax-tests")
+
+        let launchConfiguration = builder.makeLaunchConfiguration(
+            currentDirectory: "file://Mac.lan%23/Users/galew/Project%20Space",
+        )
+
+        #expect(launchConfiguration.currentDirectory == "/Users/galew/Project Space")
+        #expect(launchConfiguration.environment?.contains("PWD=/Users/galew/Project Space") == true)
+    }
+
+    @Test func `terminal current directory leaves plain paths untouched`() {
+        #expect(TerminalCurrentDirectory.normalizedPath(fromHostDirectory: "/Users/galew") == "/Users/galew")
+        #expect(TerminalCurrentDirectory.normalizedPath(fromHostDirectory: nil) == nil)
+    }
 }

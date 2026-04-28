@@ -83,6 +83,7 @@ struct ZshShellIntegrationTests {
         #expect(integrationScript.contains("gmax_emit_osc '133;C'"))
         #expect(integrationScript.contains("gmax_emit_osc \"133;D;${exit_status}\""))
         #expect(integrationScript.contains("gmax_emit_osc \"7;file://"))
+        #expect(integrationScript.contains("absolute_path=${absolute_path//\\#/%23}"))
     }
 
     @Test func `wrapper zshrc sources integration from stable wrapper path`() throws {
