@@ -145,7 +145,7 @@ run_version_bump() {
 
 create_release_tag() {
   head_sha="$(git -C "$REPO_ROOT" rev-parse HEAD)"
-  tag_sha="$(git -C "$REPO_ROOT" rev-parse -q --verify "refs/tags/$RELEASE_TAG" 2>/dev/null || true)"
+  tag_sha="$(git -C "$REPO_ROOT" rev-parse -q --verify "refs/tags/$RELEASE_TAG^{}" 2>/dev/null || true)"
 
   if [ -n "$tag_sha" ]; then
     [ "$tag_sha" = "$head_sha" ] || die "Tag $RELEASE_TAG already exists and does not point at HEAD."
@@ -319,7 +319,7 @@ package_local_release_dmg() {
   fi
 
   head_sha="$(git -C "$REPO_ROOT" rev-parse HEAD)"
-  tag_sha="$(git -C "$REPO_ROOT" rev-parse "$RELEASE_TAG")"
+  tag_sha="$(git -C "$REPO_ROOT" rev-parse "$RELEASE_TAG^{}")"
   [ "$head_sha" = "$tag_sha" ] || die "Refusing to package the notarized DMG because HEAD does not match $RELEASE_TAG. HEAD: $head_sha. Tag: $tag_sha."
 
   "$REPO_ROOT/scripts/package-notarized-dmg.sh" --version "$RELEASE_TAG"
