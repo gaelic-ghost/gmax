@@ -276,6 +276,23 @@ struct PaneManagementTests {
         #expect(target == .pane(leftPaneID))
     }
 
+    @Test func `closing a restored focused pane falls back to newest surviving pane when history is empty`() {
+        let leftPaneID = PaneID()
+        let middlePaneID = PaneID()
+        let rightPaneID = PaneID()
+        let workspaceID = WorkspaceID()
+
+        let target = paneFocusTargetAfterClosingPane(
+            workspaceID: workspaceID,
+            closedPaneID: rightPaneID,
+            focusedTarget: .pane(rightPaneID),
+            survivingPaneIDs: [leftPaneID, middlePaneID],
+            paneFocusHistory: [],
+        )
+
+        #expect(target == .pane(middlePaneID))
+    }
+
     @Test func `closing the last focused pane focuses the empty workspace when inspector is visible`() {
         let paneID = PaneID()
         let workspaceID = WorkspaceID()

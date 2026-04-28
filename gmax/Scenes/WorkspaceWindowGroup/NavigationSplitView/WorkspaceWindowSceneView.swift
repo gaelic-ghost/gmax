@@ -360,7 +360,10 @@ struct WorkspaceWindowSceneView: View {
                 workspaceID: workspaceID,
                 closedPaneID: paneID,
                 focusedTarget: focusedTarget,
-                survivingPaneIDs: paneIDsInWorkspace(workspaceID),
+                survivingPaneIDs: workspaceStore.workspaces
+                    .first(where: { $0.id == workspaceID })?
+                    .paneLeaves
+                    .map(\.id) ?? [],
                 paneFocusHistory: paneFocusHistory,
             ) {
                 case let .pane(paneID):
@@ -807,11 +810,19 @@ struct WorkspaceWindowSceneView: View {
         if let persistedPaneID = workspaceStore.persistedSelectedPaneID,
            activePaneIDs.contains(persistedPaneID) {
             lastFocusedPaneIDByWorkspaceID[selectedWorkspaceID] = persistedPaneID
+            seedPaneFocusHistory(
+                paneIDs: selectedWorkspace.paneLeaves.map(\.id),
+                focusedPaneID: persistedPaneID,
+            )
             focusedTarget = .pane(persistedPaneID)
             return
         }
 
         if let firstPaneID = selectedWorkspace.root?.firstLeaf()?.id {
+            seedPaneFocusHistory(
+                paneIDs: selectedWorkspace.paneLeaves.map(\.id),
+                focusedPaneID: firstPaneID,
+            )
             focusedTarget = .pane(firstPaneID)
             return
         }
@@ -843,6 +854,14 @@ struct WorkspaceWindowSceneView: View {
         }
 
         recordFocusedPaneInHistory(paneID)
+    }
+
+    private func seedPaneFocusHistory(
+        paneIDs: [PaneID],
+        focusedPaneID: PaneID,
+    ) {
+        paneFocusHistory = paneIDs.filter { $0 != focusedPaneID }
+        paneFocusHistory.append(focusedPaneID)
     }
 
     private func handleWindowAppearanceChange(
@@ -1248,23 +1267,28 @@ func paneFocusTargetAfterClosingPane(
     workspaceID: WorkspaceID,
     closedPaneID: PaneID,
     focusedTarget: WorkspaceFocusTarget?,
-    survivingPaneIDs: Set<PaneID>,
+    survivingPaneIDs: [PaneID],
     paneFocusHistory: [PaneID],
 ) -> WorkspaceFocusTarget? {
+    let survivingPaneIDSet = Set(survivingPaneIDs)
     let shouldRepairFocus = focusedTarget == .pane(closedPaneID) || {
         guard case let .pane(currentPaneID) = focusedTarget else {
             return false
         }
 
-        return !survivingPaneIDs.contains(currentPaneID)
+        return !survivingPaneIDSet.contains(currentPaneID)
     }()
 
     guard shouldRepairFocus else {
         return focusedTarget
     }
 
-    if let historyFallbackPaneID = paneFocusHistory.last(where: survivingPaneIDs.contains) {
+    if let historyFallbackPaneID = paneFocusHistory.last(where: survivingPaneIDSet.contains) {
         return .pane(historyFallbackPaneID)
+    }
+
+    if let fallbackPaneID = survivingPaneIDs.last {
+        return .pane(fallbackPaneID)
     }
 
     return .emptyWorkspace(workspaceID)
