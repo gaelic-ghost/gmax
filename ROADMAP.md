@@ -339,3 +339,4 @@ Planned
 - 2026-04-24: Shipped the `v0.0.9` browser-pane follow-through checkpoint with persisted browser session metadata, lightweight back-forward history restore, browser creation and navigation commands, and the first omnibox overlay pass.
 - 2026-04-24: Prepared the `v0.1.0` shell-integration checkpoint with prompt and command markers, `zsh` emission, pane and sidebar attention affordances, explicit terminal-notification capture, and the first bell-aware workspace attention model.
 - 2026-04-25: Expanded unit and UI coverage for pane actions, browser defaults, persistence coding, saved-workspace library flows, launch recovery, and Settings smoke coverage; remaining coverage work is now tracked under Milestone 6.
+- 2026-04-29: Prepared the `v0.1.7` split-pane resize stability release with preview-then-commit divider dragging so terminal panes avoid live SwiftTerm reflow jitter during pointer resizing.
