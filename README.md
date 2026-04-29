@@ -30,7 +30,9 @@ The project exists to build a terminal app that feels native on macOS while stil
 
 ## Quick Start
 
-There is not a polished end-user quick start yet. The fastest way to try `gmax` today is to open the project in Xcode, build the `gmax` scheme, and run the app locally.
+Download the latest packaged app from [GitHub Releases](https://github.com/gaelic-ghost/gmax/releases). The current release includes [`Gmax-v0.1.7.dmg`](https://github.com/gaelic-ghost/gmax/releases/download/v0.1.7/Gmax-v0.1.7.dmg) plus a matching SHA-256 checksum file.
+
+For local development, open the project in Xcode, build the `gmax` scheme, and run the app from the debugger.
 
 If you want the maintainer workflow and validation commands, jump to [Development](#development).
 
@@ -148,7 +150,7 @@ Key repo surfaces:
 
 ## Release Notes
 
-The repository now includes the `v0.1.0` release tag. The current shell-integration checkpoint is documented in [docs/releases/v0.1.0-release-notes.md](docs/releases/v0.1.0-release-notes.md), and the broader internal-release quality bar remains tracked in [docs/releases/v0.1.0-release-checklist.md](docs/releases/v0.1.0-release-checklist.md). Both release docs assume `README.md`, `ROADMAP.md`, and the maintainer notes stay aligned with the shipped persistence, library, command, window-restoration, browser-pane, and shell-integration model.
+The current split-pane resize stability checkpoint is documented in [docs/releases/v0.1.7-release-notes.md](docs/releases/v0.1.7-release-notes.md), and the broader internal-release quality bar remains tracked in [docs/releases/v0.1.0-release-checklist.md](docs/releases/v0.1.0-release-checklist.md). Release docs assume `README.md`, `ROADMAP.md`, and the maintainer notes stay aligned with the shipped persistence, library, command, window-restoration, browser-pane, shell-integration, and split-resize model.
 
 ## License
 

@@ -9,6 +9,9 @@ import AppKit
 import SwiftUI
 
 struct ContentPaneSplitView<First: View, Second: View>: View {
+    @State private var activeDragFraction: CGFloat?
+    @State private var dragStartFraction: CGFloat?
+
     private let axis: PaneSplit.Axis
     private let fraction: CGFloat
     private let onFractionChange: (CGFloat) -> Void
@@ -63,12 +66,20 @@ struct ContentPaneSplitView<First: View, Second: View>: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .overlay(alignment: .topLeading) {
+                if let activeDragFraction {
+                    dragPreviewDivider(
+                        fraction: activeDragFraction,
+                        availableLength: availableLength,
+                    )
+                }
+            }
         }
     }
 
     private func divider(for size: CGSize) -> some View {
         let totalLength = axis == .horizontal ? size.width : size.height
-        let currentFraction = clamped(fraction, for: totalLength)
+        let currentFraction = clamped(activeDragFraction ?? fraction, for: totalLength)
 
         return Rectangle()
             .fill(.separator.opacity(0.9))
@@ -82,6 +93,7 @@ struct ContentPaneSplitView<First: View, Second: View>: View {
                 height: axis == .vertical ? dividerThickness : nil,
             )
             .contentShape(Rectangle())
+            .opacity(activeDragFraction == nil ? 1 : 0.22)
             .gesture(
                 DragGesture(minimumDistance: 0)
                     .onChanged { value in
@@ -90,9 +102,23 @@ struct ContentPaneSplitView<First: View, Second: View>: View {
                             return
                         }
 
-                        let dragLocation = axis == .horizontal ? value.location.x : value.location.y
-                        let proposedFraction = (dragLocation - (dividerThickness / 2)) / max(totalLength - dividerThickness, 1)
-                        onFractionChange(clamped(proposedFraction, for: totalLength))
+                        let usableLength = max(totalLength - dividerThickness, 1)
+                        let startFraction = dragStartFraction ?? currentFraction
+                        dragStartFraction = startFraction
+                        let translation = axis == .horizontal ? value.translation.width : value.translation.height
+                        let proposedFraction = startFraction + (translation / usableLength)
+                        var transaction = Transaction()
+                        transaction.disablesAnimations = true
+                        withTransaction(transaction) {
+                            activeDragFraction = clamped(proposedFraction, for: totalLength)
+                        }
+                    }
+                    .onEnded { _ in
+                        if let activeDragFraction {
+                            onFractionChange(activeDragFraction)
+                        }
+                        activeDragFraction = nil
+                        dragStartFraction = nil
                     },
             )
             .onHover { isHovering in
@@ -121,6 +147,24 @@ struct ContentPaneSplitView<First: View, Second: View>: View {
                         break
                 }
             }
+    }
+
+    private func dragPreviewDivider(fraction: CGFloat, availableLength: CGFloat) -> some View {
+        Rectangle()
+            .fill(.tint.opacity(0.9))
+            .frame(
+                width: axis == .horizontal ? dividerThickness : nil,
+                height: axis == .vertical ? dividerThickness : nil,
+            )
+            .frame(
+                maxWidth: axis == .horizontal ? nil : .infinity,
+                maxHeight: axis == .horizontal ? .infinity : nil,
+            )
+            .offset(
+                x: axis == .horizontal ? availableLength * fraction : 0,
+                y: axis == .vertical ? availableLength * fraction : 0,
+            )
+            .allowsHitTesting(false)
     }
 
     private func clamped(_ proposedFraction: CGFloat, for totalLength: CGFloat) -> CGFloat {

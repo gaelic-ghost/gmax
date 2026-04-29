@@ -915,8 +915,16 @@ That was a good local implementation detail for proving out the pane tree, but i
 The current renderer therefore uses a custom split container that:
 
 - reads `PaneSplit.fraction` from the workspace tree
-- writes divider drags back into that same model value
+- shows a pane-local preview divider during pointer drags
+- writes the final divider position back into that same model value when the
+  drag ends
 - keeps split sizes stable when sibling panes are added or removed
+
+The preview-then-commit drag behavior is intentional. Live terminal panes are
+AppKit-hosted SwiftTerm views, and continuously resizing them while the mouse
+moves causes visible text reflow jitter. The split model still persists the
+final fraction, but ordinary pointer drags avoid forcing terminal host reflow on
+every drag event.
 
 This is now a durable building-block change, not a cosmetic refactor. It unlocks:
 
