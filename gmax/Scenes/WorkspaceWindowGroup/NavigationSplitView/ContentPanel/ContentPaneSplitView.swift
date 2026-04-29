@@ -9,6 +9,7 @@ import AppKit
 import SwiftUI
 
 struct ContentPaneSplitView<First: View, Second: View>: View {
+    @State private var activeDragFraction: CGFloat?
     @State private var dragStartFraction: CGFloat?
 
     private let axis: PaneSplit.Axis
@@ -36,7 +37,8 @@ struct ContentPaneSplitView<First: View, Second: View>: View {
     var body: some View {
         GeometryReader { geometry in
             let primaryLength = axis == .horizontal ? geometry.size.width : geometry.size.height
-            let clampedFraction = clamped(fraction, for: primaryLength)
+            let displayedFraction = activeDragFraction ?? fraction
+            let clampedFraction = clamped(displayedFraction, for: primaryLength)
             let availableLength = max(primaryLength - dividerThickness, 0)
             let firstLength = availableLength * clampedFraction
             let secondLength = max(availableLength - firstLength, 0)
@@ -70,7 +72,8 @@ struct ContentPaneSplitView<First: View, Second: View>: View {
 
     private func divider(for size: CGSize) -> some View {
         let totalLength = axis == .horizontal ? size.width : size.height
-        let currentFraction = clamped(fraction, for: totalLength)
+        let displayedFraction = activeDragFraction ?? fraction
+        let currentFraction = clamped(displayedFraction, for: totalLength)
 
         return Rectangle()
             .fill(.separator.opacity(0.9))
@@ -97,9 +100,13 @@ struct ContentPaneSplitView<First: View, Second: View>: View {
                         dragStartFraction = startFraction
                         let translation = axis == .horizontal ? value.translation.width : value.translation.height
                         let proposedFraction = startFraction + (translation / usableLength)
-                        onFractionChange(clamped(proposedFraction, for: totalLength))
+                        activeDragFraction = clamped(proposedFraction, for: totalLength)
                     }
                     .onEnded { _ in
+                        if let activeDragFraction {
+                            onFractionChange(activeDragFraction)
+                        }
+                        activeDragFraction = nil
                         dragStartFraction = nil
                     },
             )
