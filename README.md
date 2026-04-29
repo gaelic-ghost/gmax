@@ -30,7 +30,9 @@ The project exists to build a terminal app that feels native on macOS while stil
 
 ## Quick Start
 
-There is not a polished end-user quick start yet. The fastest way to try `gmax` today is to open the project in Xcode, build the `gmax` scheme, and run the app locally.
+Download the latest packaged app from [GitHub Releases](https://github.com/gaelic-ghost/gmax/releases). The current release includes [`Gmax-v0.1.6.dmg`](https://github.com/gaelic-ghost/gmax/releases/download/v0.1.6/Gmax-v0.1.6.dmg) plus a matching SHA-256 checksum file.
+
+For local development, open the project in Xcode, build the `gmax` scheme, and run the app from the debugger.
 
 If you want the maintainer workflow and validation commands, jump to [Development](#development).
 
