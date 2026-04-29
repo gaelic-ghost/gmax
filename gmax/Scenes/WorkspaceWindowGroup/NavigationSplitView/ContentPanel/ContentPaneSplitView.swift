@@ -11,8 +11,6 @@ import SwiftUI
 struct ContentPaneSplitView<First: View, Second: View>: View {
     @State private var activeDragFraction: CGFloat?
     @State private var dragStartFraction: CGFloat?
-    @State private var pendingDragFraction: CGFloat?
-    @State private var pendingDragUpdateTask: Task<Void, Never>?
 
     private let axis: PaneSplit.Axis
     private let fraction: CGFloat
@@ -39,8 +37,7 @@ struct ContentPaneSplitView<First: View, Second: View>: View {
     var body: some View {
         GeometryReader { geometry in
             let primaryLength = axis == .horizontal ? geometry.size.width : geometry.size.height
-            let displayedFraction = activeDragFraction ?? fraction
-            let clampedFraction = clamped(displayedFraction, for: primaryLength)
+            let clampedFraction = clamped(fraction, for: primaryLength)
             let availableLength = max(primaryLength - dividerThickness, 0)
             let firstLength = availableLength * clampedFraction
             let secondLength = max(availableLength - firstLength, 0)
@@ -69,17 +66,20 @@ struct ContentPaneSplitView<First: View, Second: View>: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-        }
-        .onDisappear {
-            pendingDragUpdateTask?.cancel()
-            pendingDragUpdateTask = nil
+            .overlay(alignment: .topLeading) {
+                if let activeDragFraction {
+                    dragPreviewDivider(
+                        fraction: activeDragFraction,
+                        availableLength: availableLength,
+                    )
+                }
+            }
         }
     }
 
     private func divider(for size: CGSize) -> some View {
         let totalLength = axis == .horizontal ? size.width : size.height
-        let displayedFraction = activeDragFraction ?? fraction
-        let currentFraction = clamped(displayedFraction, for: totalLength)
+        let currentFraction = clamped(activeDragFraction ?? fraction, for: totalLength)
 
         return Rectangle()
             .fill(.separator.opacity(0.9))
@@ -93,6 +93,7 @@ struct ContentPaneSplitView<First: View, Second: View>: View {
                 height: axis == .vertical ? dividerThickness : nil,
             )
             .contentShape(Rectangle())
+            .opacity(activeDragFraction == nil ? 1 : 0.22)
             .gesture(
                 DragGesture(minimumDistance: 0)
                     .onChanged { value in
@@ -106,15 +107,15 @@ struct ContentPaneSplitView<First: View, Second: View>: View {
                         dragStartFraction = startFraction
                         let translation = axis == .horizontal ? value.translation.width : value.translation.height
                         let proposedFraction = startFraction + (translation / usableLength)
-                        scheduleDragUpdate(clamped(proposedFraction, for: totalLength))
+                        var transaction = Transaction()
+                        transaction.disablesAnimations = true
+                        withTransaction(transaction) {
+                            activeDragFraction = clamped(proposedFraction, for: totalLength)
+                        }
                     }
                     .onEnded { _ in
-                        let finalFraction = pendingDragFraction ?? activeDragFraction
-                        pendingDragUpdateTask?.cancel()
-                        pendingDragUpdateTask = nil
-                        pendingDragFraction = nil
-                        if let finalFraction {
-                            onFractionChange(finalFraction)
+                        if let activeDragFraction {
+                            onFractionChange(activeDragFraction)
                         }
                         activeDragFraction = nil
                         dragStartFraction = nil
@@ -148,26 +149,22 @@ struct ContentPaneSplitView<First: View, Second: View>: View {
             }
     }
 
-    private func scheduleDragUpdate(_ fraction: CGFloat) {
-        pendingDragFraction = fraction
-        guard pendingDragUpdateTask == nil else {
-            return
-        }
-
-        pendingDragUpdateTask = Task { @MainActor in
-            await Task.yield()
-            guard !Task.isCancelled else {
-                return
-            }
-
-            var transaction = Transaction()
-            transaction.disablesAnimations = true
-            withTransaction(transaction) {
-                activeDragFraction = pendingDragFraction
-            }
-            pendingDragFraction = nil
-            pendingDragUpdateTask = nil
-        }
+    private func dragPreviewDivider(fraction: CGFloat, availableLength: CGFloat) -> some View {
+        Rectangle()
+            .fill(.tint.opacity(0.9))
+            .frame(
+                width: axis == .horizontal ? dividerThickness : nil,
+                height: axis == .vertical ? dividerThickness : nil,
+            )
+            .frame(
+                maxWidth: axis == .horizontal ? nil : .infinity,
+                maxHeight: axis == .horizontal ? .infinity : nil,
+            )
+            .offset(
+                x: axis == .horizontal ? availableLength * fraction : 0,
+                y: axis == .vertical ? availableLength * fraction : 0,
+            )
+            .allowsHitTesting(false)
     }
 
     private func clamped(_ proposedFraction: CGFloat, for totalLength: CGFloat) -> CGFloat {
