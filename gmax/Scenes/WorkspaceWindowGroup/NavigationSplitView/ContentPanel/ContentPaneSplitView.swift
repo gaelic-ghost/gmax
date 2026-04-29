@@ -11,6 +11,8 @@ import SwiftUI
 struct ContentPaneSplitView<First: View, Second: View>: View {
     @State private var activeDragFraction: CGFloat?
     @State private var dragStartFraction: CGFloat?
+    @State private var pendingDragFraction: CGFloat?
+    @State private var pendingDragUpdateTask: Task<Void, Never>?
 
     private let axis: PaneSplit.Axis
     private let fraction: CGFloat
@@ -68,6 +70,10 @@ struct ContentPaneSplitView<First: View, Second: View>: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+        .onDisappear {
+            pendingDragUpdateTask?.cancel()
+            pendingDragUpdateTask = nil
+        }
     }
 
     private func divider(for size: CGSize) -> some View {
@@ -100,11 +106,15 @@ struct ContentPaneSplitView<First: View, Second: View>: View {
                         dragStartFraction = startFraction
                         let translation = axis == .horizontal ? value.translation.width : value.translation.height
                         let proposedFraction = startFraction + (translation / usableLength)
-                        activeDragFraction = clamped(proposedFraction, for: totalLength)
+                        scheduleDragUpdate(clamped(proposedFraction, for: totalLength))
                     }
                     .onEnded { _ in
-                        if let activeDragFraction {
-                            onFractionChange(activeDragFraction)
+                        let finalFraction = pendingDragFraction ?? activeDragFraction
+                        pendingDragUpdateTask?.cancel()
+                        pendingDragUpdateTask = nil
+                        pendingDragFraction = nil
+                        if let finalFraction {
+                            onFractionChange(finalFraction)
                         }
                         activeDragFraction = nil
                         dragStartFraction = nil
@@ -136,6 +146,28 @@ struct ContentPaneSplitView<First: View, Second: View>: View {
                         break
                 }
             }
+    }
+
+    private func scheduleDragUpdate(_ fraction: CGFloat) {
+        pendingDragFraction = fraction
+        guard pendingDragUpdateTask == nil else {
+            return
+        }
+
+        pendingDragUpdateTask = Task { @MainActor in
+            await Task.yield()
+            guard !Task.isCancelled else {
+                return
+            }
+
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) {
+                activeDragFraction = pendingDragFraction
+            }
+            pendingDragFraction = nil
+            pendingDragUpdateTask = nil
+        }
     }
 
     private func clamped(_ proposedFraction: CGFloat, for totalLength: CGFloat) -> CGFloat {
