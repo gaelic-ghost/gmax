@@ -9,6 +9,8 @@ import AppKit
 import SwiftUI
 
 struct ContentPaneSplitView<First: View, Second: View>: View {
+    @State private var dragStartFraction: CGFloat?
+
     private let axis: PaneSplit.Axis
     private let fraction: CGFloat
     private let onFractionChange: (CGFloat) -> Void
@@ -90,9 +92,15 @@ struct ContentPaneSplitView<First: View, Second: View>: View {
                             return
                         }
 
-                        let dragLocation = axis == .horizontal ? value.location.x : value.location.y
-                        let proposedFraction = (dragLocation - (dividerThickness / 2)) / max(totalLength - dividerThickness, 1)
+                        let usableLength = max(totalLength - dividerThickness, 1)
+                        let startFraction = dragStartFraction ?? currentFraction
+                        dragStartFraction = startFraction
+                        let translation = axis == .horizontal ? value.translation.width : value.translation.height
+                        let proposedFraction = startFraction + (translation / usableLength)
                         onFractionChange(clamped(proposedFraction, for: totalLength))
+                    }
+                    .onEnded { _ in
+                        dragStartFraction = nil
                     },
             )
             .onHover { isHovering in
