@@ -2,6 +2,8 @@
 
 `gmax` is a macOS terminal workspace app built with SwiftUI and [SwiftTerm](https://github.com/migueldeicaza/SwiftTerm).
 
+![gmax workspace with terminal and browser panes](docs/media/gmax-workspace-browser-terminal.png)
+
 ## Table of Contents
 
 - [Overview](#overview)
