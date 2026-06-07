@@ -12,12 +12,12 @@ mode="${REPO_MAINTENANCE_DEFAULT_RELEASE_MODE:-standard}"
 release_tag=""
 skip_validate="false"
 skip_gh_release="false"
-skip_version_bump="${REPO_MAINTENANCE_SKIP_VERSION_BUMP:-false}"
-package_local_dmg="${REPO_MAINTENANCE_PACKAGE_LOCAL_DMG:-false}"
+skip_version_bump="false"
 base_branch="${REPO_MAINTENANCE_RELEASE_BRANCH:-main}"
 review_comments_addressed="false"
 skip_branch_cleanup="false"
 dry_run="false"
+remote_ci_mode="${REPO_MAINTENANCE_REMOTE_CI_MODE:-full}"
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -41,14 +41,6 @@ while [ "$#" -gt 0 ]; do
       skip_version_bump="true"
       shift
       ;;
-    --package-local-dmg)
-      package_local_dmg="true"
-      shift
-      ;;
-    --skip-local-dmg)
-      package_local_dmg="false"
-      shift
-      ;;
     --base-branch)
       base_branch="${2:-}"
       shift 2
@@ -56,6 +48,10 @@ while [ "$#" -gt 0 ]; do
     --review-comments-addressed)
       review_comments_addressed="true"
       shift
+      ;;
+    --remote-ci-mode)
+      remote_ci_mode="${2:-}"
+      shift 2
       ;;
     --skip-branch-cleanup)
       skip_branch_cleanup="true"
@@ -68,7 +64,7 @@ while [ "$#" -gt 0 ]; do
     -h|--help)
       cat <<'USAGE'
 Usage:
-  release.sh --mode standard --version <vX.Y.Z> [--base-branch main] [--skip-validate] [--skip-version-bump] [--skip-gh-release] [--package-local-dmg|--skip-local-dmg] [--review-comments-addressed] [--skip-branch-cleanup] [--dry-run]
+  release.sh --mode standard --version <vX.Y.Z> [--base-branch main] [--skip-validate] [--skip-version-bump] [--skip-gh-release] [--review-comments-addressed] [--remote-ci-mode full|defer] [--skip-branch-cleanup] [--dry-run]
   release.sh --mode submodule --version <vX.Y.Z> [--skip-validate] [--skip-gh-release] [--dry-run]
 USAGE
       exit 0
@@ -85,6 +81,7 @@ export REPO_MAINTENANCE_RELEASE_MODE="$mode"
 export RELEASE_TAG="$release_tag"
 export REPO_MAINTENANCE_SKIP_GH_RELEASE="$skip_gh_release"
 export REPO_MAINTENANCE_DRY_RUN="$dry_run"
+export REPO_MAINTENANCE_REMOTE_CI_MODE="$remote_ci_mode"
 
 ensure_clean_worktree() {
   status_output="$(git -C "$REPO_ROOT" status --porcelain)"
@@ -105,6 +102,16 @@ ensure_semver_tag() {
   esac
 }
 
+ensure_remote_ci_mode() {
+  case "$REPO_MAINTENANCE_REMOTE_CI_MODE" in
+    full|defer)
+      ;;
+    *)
+      die "Remote CI mode must be either full or defer. Use full to watch GitHub checks in this script, or defer to pause after initial check discovery and continue from a Codex wakeup."
+      ;;
+  esac
+}
+
 current_branch() {
   git -C "$REPO_ROOT" symbolic-ref --quiet --short HEAD || true
 }
@@ -119,9 +126,15 @@ ensure_branch_release_context() {
 run_version_bump() {
   release_version="${RELEASE_TAG#v}"
   version_bump_script="$SELF_DIR/version-bump.sh"
+  head_subject="$(git -C "$REPO_ROOT" log -1 --format=%s 2>/dev/null || true)"
 
   if [ "$skip_version_bump" = "true" ]; then
     log "Skipping repo version bump because --skip-version-bump was requested."
+    return 0
+  fi
+
+  if [ "$head_subject" = "release: bump versions for $RELEASE_TAG" ]; then
+    log "Version bump commit for $RELEASE_TAG is already at HEAD; continuing the release resume path."
     return 0
   fi
 
@@ -145,10 +158,11 @@ run_version_bump() {
 
 create_release_tag() {
   head_sha="$(git -C "$REPO_ROOT" rev-parse HEAD)"
-  tag_sha="$(git -C "$REPO_ROOT" rev-parse -q --verify "refs/tags/$RELEASE_TAG^{}" 2>/dev/null || true)"
+  tag_sha="$(git -C "$REPO_ROOT" rev-parse -q --verify "refs/tags/$RELEASE_TAG" 2>/dev/null || true)"
 
   if [ -n "$tag_sha" ]; then
-    [ "$tag_sha" = "$head_sha" ] || die "Tag $RELEASE_TAG already exists and does not point at HEAD."
+    tag_commit_sha="$(git -C "$REPO_ROOT" rev-list -n 1 "$RELEASE_TAG")"
+    [ "$tag_commit_sha" = "$head_sha" ] || die "Tag $RELEASE_TAG already exists and does not point at HEAD."
     log "Tag $RELEASE_TAG already points at HEAD."
     return 0
   fi
@@ -162,17 +176,28 @@ create_release_tag() {
   log "Created annotated tag $RELEASE_TAG."
 }
 
-push_branch_and_tag() {
+push_release_branch() {
   branch_name="$1"
 
   if [ "$REPO_MAINTENANCE_DRY_RUN" = "true" ]; then
-    log "Would push branch $branch_name and tag $RELEASE_TAG to origin."
+    log "Would push branch $branch_name to origin."
     return 0
   fi
 
   git -C "$REPO_ROOT" push -u origin "$branch_name"
+  log "Pushed branch $branch_name."
+  wait_for_remote_branch "$branch_name"
+}
+
+push_release_tag() {
+  if [ "$REPO_MAINTENANCE_DRY_RUN" = "true" ]; then
+    log "Would push tag $RELEASE_TAG to origin."
+    return 0
+  fi
+
   git -C "$REPO_ROOT" push origin "$RELEASE_TAG"
-  log "Pushed branch $branch_name and tag $RELEASE_TAG."
+  log "Pushed tag $RELEASE_TAG."
+  wait_for_remote_tag "$RELEASE_TAG"
 }
 
 create_or_update_pr() {
@@ -193,11 +218,11 @@ create_or_update_pr() {
 
 - prepares $RELEASE_TAG from branch \`$branch_name\`
 - keeps protected \`$base_branch\` updates behind pull request review and CI
-- release tag \`$RELEASE_TAG\` was created locally before this PR so the reviewed release candidate is preserved exactly
+- release tag \`$RELEASE_TAG\` will be created after CI and the review-comment gate pass, so failed or still-discussed release candidates do not get tagged
 
 ## Review Loop
 
-Before merge, \`scripts/repo-maintenance/release.sh\` watches CI and stops on review comments unless the maintainer has already addressed or resolved them and reruns with \`--review-comments-addressed\`.
+Before merge and tagging, \`scripts/repo-maintenance/release.sh\` watches CI and stops on review comments unless the maintainer has already addressed or resolved them and reruns with \`--review-comments-addressed\`.
 EOF
 
   pr_number="$(gh pr list --head "$branch_name" --base "$base_branch" --json number --jq '.[0].number // empty' --limit 1)"
@@ -220,8 +245,6 @@ EOF
 
 watch_ci() {
   pr_number="$1"
-  attempts=0
-  max_attempts=12
 
   if [ "$REPO_MAINTENANCE_DRY_RUN" = "true" ]; then
     log "Would watch CI for PR #$pr_number."
@@ -229,27 +252,89 @@ watch_ci() {
   fi
 
   log "Watching CI for PR #$pr_number."
-  while :; do
-    checks_output="$(gh pr checks "$pr_number" --watch 2>&1)" && {
-      log "CI is green for PR #$pr_number."
-      return 0
-    }
+  if ! gh pr checks "$pr_number" --watch; then
+    die "CI is not green for PR #$pr_number. Fix the failing checks, push the branch, and rerun release.sh so it can watch CI again."
+  fi
+  log "CI is green for PR #$pr_number."
+}
 
-    case "$checks_output" in
-      *"no checks reported"*)
-        attempts=$((attempts + 1))
-        [ "$attempts" -lt "$max_attempts" ] || {
-          printf '%s\n' "$checks_output" >&2
-          die "CI did not report checks for PR #$pr_number after waiting. Rerun release.sh once GitHub has created the check run."
-        }
-        log "GitHub has not reported checks for PR #$pr_number yet; waiting before retrying."
-        sleep 5
-        ;;
-      *)
-        printf '%s\n' "$checks_output" >&2
-        die "CI is not green for PR #$pr_number. Fix the failing checks, push the branch, and rerun release.sh so it can watch CI again."
+defer_remote_ci_if_requested() {
+  pr_number="$1"
+  branch_name="$2"
+
+  [ "$REPO_MAINTENANCE_REMOTE_CI_MODE" = "defer" ] || return 1
+
+  if [ "$REPO_MAINTENANCE_DRY_RUN" = "true" ]; then
+    log "Would defer remote CI after PR #$pr_number reports initial checks."
+    return 0
+  fi
+
+  pr_url="$(gh pr view "$pr_number" --json url --jq '.url')"
+  log "Remote CI mode is defer, so release.sh is pausing after local validation, branch push, PR creation, and initial check discovery."
+  log "Release is not complete yet. Let GitHub finish CI for PR #$pr_number, then continue from branch $branch_name with:"
+  log "  bash scripts/repo-maintenance/release.sh --mode standard --version $RELEASE_TAG"
+  log "Codex should use a native thread Timer/Wakeup or heartbeat automation for this wait when available, then resume by checking $pr_url and rerunning the command above instead of leaving a shell script open to poll GitHub."
+  return 0
+}
+
+wait_for_initial_pr_checks() {
+  pr_number="$1"
+  timeout_seconds="$(github_wait_timeout "${REPO_MAINTENANCE_INITIAL_CHECK_TIMEOUT_SECONDS:-}")"
+  poll_seconds="$(github_wait_poll_seconds "${REPO_MAINTENANCE_INITIAL_CHECK_POLL_SECONDS:-}")"
+  elapsed_seconds="0"
+  last_state="no check data returned yet"
+
+  log "Waiting up to ${timeout_seconds}s for GitHub to report initial checks on PR #$pr_number."
+
+  while :; do
+    last_state="$(gh pr checks "$pr_number" --json name,state,workflow --jq 'map(.name + ":" + .state) | join(", ")' 2>/dev/null || printf 'no checks reported')"
+    check_count="$(gh pr checks "$pr_number" --json name,state,workflow --jq 'length' 2>/dev/null || printf '0')"
+    case "$check_count" in
+      ''|*[!0-9]*)
+        check_count="0"
         ;;
     esac
+
+    if [ "$check_count" -gt 0 ]; then
+      log "Found $check_count initial check(s) for PR #$pr_number."
+      return 0
+    fi
+
+    if [ "$elapsed_seconds" -ge "$timeout_seconds" ]; then
+      die "No checks were reported for PR #$pr_number after ${timeout_seconds}s. Last observed state: $last_state. Confirm the GitHub Actions workflow triggers for the release branch, Actions is enabled, and the branch push succeeded before rerunning release.sh."
+    fi
+
+    sleep "$poll_seconds"
+    elapsed_seconds=$((elapsed_seconds + poll_seconds))
+  done
+}
+
+wait_for_pr_review_state() {
+  pr_number="$1"
+  timeout_seconds="$(github_wait_timeout "${REPO_MAINTENANCE_PR_REVIEW_TIMEOUT_SECONDS:-}")"
+  poll_seconds="$(github_wait_poll_seconds "${REPO_MAINTENANCE_PR_REVIEW_POLL_SECONDS:-}")"
+  elapsed_seconds="0"
+  last_state="PR review/comment state has not been read yet"
+
+  log "Waiting up to ${timeout_seconds}s for GitHub review/comment state on PR #$pr_number."
+
+  while :; do
+    last_state="$(gh pr view "$pr_number" --json reviewDecision,comments,reviews --jq '"reviewDecision=" + (.reviewDecision // "") + ", comments=" + ((.comments | length) | tostring) + ", reviews=" + ((.reviews | length) | tostring)' 2>/dev/null || printf 'GitHub did not return PR review/comment state')"
+    case "$last_state" in
+      "GitHub did not return PR review/comment state")
+        ;;
+      *)
+        log "GitHub review/comment state is readable for PR #$pr_number: $last_state."
+        return 0
+        ;;
+    esac
+
+    if [ "$elapsed_seconds" -ge "$timeout_seconds" ]; then
+      die "GitHub review/comment state for PR #$pr_number was not readable after ${timeout_seconds}s. Last observed state: $last_state. Confirm the PR exists and GitHub is returning review data before rerunning release.sh."
+    fi
+
+    sleep "$poll_seconds"
+    elapsed_seconds=$((elapsed_seconds + poll_seconds))
   done
 }
 
@@ -261,8 +346,10 @@ check_pr_comments() {
     return 0
   fi
 
+  wait_for_pr_review_state "$pr_number"
+
   review_decision="$(gh pr view "$pr_number" --json reviewDecision --jq '.reviewDecision // ""')"
-  comment_count="$(gh pr view "$pr_number" --json comments,reviews --jq '([.comments[]?, .reviews[]?] | length)')"
+  comment_count="$(gh pr view "$pr_number" --json comments,reviews --jq '([.comments[]?, (.reviews[]? | select(.state == "COMMENTED"))] | length)')"
 
   if [ "$review_decision" = "CHANGES_REQUESTED" ]; then
     gh pr view "$pr_number" --comments
@@ -300,7 +387,7 @@ fast_forward_base_branch() {
     git -C "$REPO_ROOT" pull --ff-only origin "$base_branch"
     log "Fast-forwarded local $base_branch."
   else
-    warn "Could not check out local $base_branch, likely because another worktree owns it. Fast-forward $base_branch from origin/$base_branch in that checkout before cleanup."
+    die "Could not check out local $base_branch, likely because another worktree owns it. Fast-forward $base_branch from origin/$base_branch in that checkout, then rerun release.sh so the release tag is created from the reviewed base branch."
   fi
 }
 
@@ -311,58 +398,23 @@ create_github_release() {
   fi
 
   if [ "$REPO_MAINTENANCE_DRY_RUN" = "true" ]; then
-    log "Would create a GitHub release for $RELEASE_TAG with gh release create --verify-tag."
+    prerelease_flag="$(github_release_create_prerelease_flag "$RELEASE_TAG")"
+    log "Would create a GitHub release for $RELEASE_TAG with gh release create --verify-tag${prerelease_flag:+ $prerelease_flag}."
     return 0
   fi
 
   if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+    verify_github_release_prerelease_metadata "$RELEASE_TAG"
     log "GitHub release $RELEASE_TAG already exists."
     return 0
   fi
 
-  gh release create "$RELEASE_TAG" --verify-tag --generate-notes
+  prerelease_flag="$(github_release_create_prerelease_flag "$RELEASE_TAG")"
+  # shellcheck disable=SC2086
+  gh release create "$RELEASE_TAG" --verify-tag --generate-notes $prerelease_flag
   log "Created GitHub release $RELEASE_TAG."
-}
-
-package_local_release_dmg() {
-  if [ "$package_local_dmg" != "true" ]; then
-    return 0
-  fi
-
-  if [ "$REPO_MAINTENANCE_SKIP_GH_RELEASE" = "true" ]; then
-    die "--package-local-dmg needs a GitHub release object so it can upload the notarized DMG. Remove --skip-gh-release or package manually with scripts/package-notarized-dmg.sh."
-  fi
-
-  if [ "$REPO_MAINTENANCE_DRY_RUN" = "true" ]; then
-    log "Would package, notarize, staple, and verify a local DMG for $RELEASE_TAG from the tagged release candidate."
-    return 0
-  fi
-
-  head_sha="$(git -C "$REPO_ROOT" rev-parse HEAD)"
-  tag_sha="$(git -C "$REPO_ROOT" rev-parse "$RELEASE_TAG^{}")"
-  [ "$head_sha" = "$tag_sha" ] || die "Refusing to package the notarized DMG because HEAD does not match $RELEASE_TAG. HEAD: $head_sha. Tag: $tag_sha."
-
-  "$REPO_ROOT/scripts/package-notarized-dmg.sh" --version "$RELEASE_TAG"
-  log "Packaged notarized local DMG assets for $RELEASE_TAG."
-}
-
-upload_local_release_dmg() {
-  if [ "$package_local_dmg" != "true" ]; then
-    return 0
-  fi
-
-  if [ "$REPO_MAINTENANCE_DRY_RUN" = "true" ]; then
-    log "Would upload local DMG assets for $RELEASE_TAG to the GitHub release."
-    return 0
-  fi
-
-  dmg_path="$REPO_ROOT/build/distribution/Gmax-$RELEASE_TAG.dmg"
-  sha_path="$dmg_path.sha256"
-  [ -f "$dmg_path" ] || die "Expected notarized DMG at $dmg_path before uploading release assets."
-  [ -f "$sha_path" ] || die "Expected notarized DMG checksum at $sha_path before uploading release assets."
-
-  gh release upload "$RELEASE_TAG" "$dmg_path" "$sha_path" --clobber
-  log "Uploaded notarized local DMG assets for $RELEASE_TAG."
+  wait_for_github_release "$RELEASE_TAG"
+  verify_github_release_prerelease_metadata "$RELEASE_TAG"
 }
 
 cleanup_merged_branches() {
@@ -395,6 +447,7 @@ run_standard_release() {
   ensure_git_repo
   ensure_gh_cli
   ensure_semver_tag
+  ensure_remote_ci_mode
   branch_name="$(ensure_branch_release_context)"
   ensure_clean_worktree
 
@@ -404,17 +457,21 @@ run_standard_release() {
 
   run_version_bump
   ensure_clean_worktree
-  create_release_tag
-  push_branch_and_tag "$branch_name"
+  push_release_branch "$branch_name"
   create_or_update_pr "$branch_name"
   pr_number="$PR_NUMBER"
+  wait_for_initial_pr_checks "$pr_number"
+  if defer_remote_ci_if_requested "$pr_number" "$branch_name"; then
+    log "Standard release flow paused before remote CI watch for $RELEASE_TAG."
+    return 0
+  fi
   watch_ci "$pr_number"
   check_pr_comments "$pr_number"
-  package_local_release_dmg
   merge_pr "$pr_number"
   fast_forward_base_branch
+  create_release_tag
+  push_release_tag
   create_github_release
-  upload_local_release_dmg
   cleanup_merged_branches "$branch_name"
   log "Standard release flow completed successfully for $RELEASE_TAG."
 }

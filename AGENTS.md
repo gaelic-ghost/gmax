@@ -2,7 +2,7 @@
 
 ## Apple / Xcode Project Workflow
 
-- Use `xcode-app-project-workflow` for normal Xcode workspace inspection, diagnostics, builds, runs, previews, file-membership checks, and guarded mutation work inside this existing project.
+- Use `xcode-build-run-workflow` for normal Xcode build, run, diagnostics, preview, file-membership, and guarded mutation work inside this existing project.
 - Use `xcode-testing-workflow` when the task is primarily about Swift Testing, XCTest, XCUITest, `.xctestplan`, flaky tests, retries, or test diagnosis.
 - Use `apple-ui-accessibility-workflow` when the task is primarily about SwiftUI accessibility semantics, Apple UI accessibility review, accessibility tree shaping, or UIKit/AppKit accessibility bridge behavior.
 - Use `sync-xcode-project-guidance` when the repo guidance for this project drifts and needs to be refreshed or merged forward.
@@ -27,5 +27,5 @@
 - Keep data flow straight and dependency direction unidirectional.
 - Treat the `.xcworkspace` or `.xcodeproj` as the source of truth for app integration, schemes, and build settings.
 - Prefer Xcode-aware tooling or `xcodebuild` over ad hoc filesystem assumptions when project structure or target membership is involved.
-- Never edit `.pbxproj` files directly. If a project-file change is needed and no safe project-aware tool is available, stop and make that change through Xcode instead.
+- Never edit `.pbxproj` files directly. If a project-file change is needed and no safe project-aware tool is available, stop and make that change through Xcode instead. When `.pbxproj` is tracked and Xcode, XcodeGen, or another project-aware workflow legitimately changes it, treat that diff as critical project state: review it, stage it, and commit it with the branch before any push, merge, release, or cleanup.
 - Validate Xcode-project changes with explicit `xcodebuild` commands when build or test integrity matters.

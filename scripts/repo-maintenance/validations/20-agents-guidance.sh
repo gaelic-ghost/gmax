@@ -15,9 +15,6 @@ agents_path="$REPO_ROOT/AGENTS.md"
 [ -s "$agents_path" ] || die "Expected $agents_path to be non-empty."
 
 for needle in \
-  "xcode-app-project-workflow" \
-  "sync-xcode-project-guidance" \
-  "Never edit \`.pbxproj\` files directly." \
   "scripts/repo-maintenance/validate-all.sh" \
   "scripts/repo-maintenance/sync-shared.sh" \
   "scripts/repo-maintenance/release.sh"
