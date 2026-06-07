@@ -27,5 +27,5 @@
 - Keep data flow straight and dependency direction unidirectional.
 - Treat the `.xcworkspace` or `.xcodeproj` as the source of truth for app integration, schemes, and build settings.
 - Prefer Xcode-aware tooling or `xcodebuild` over ad hoc filesystem assumptions when project structure or target membership is involved.
-- Never edit `.pbxproj` files directly. If a project-file change is needed and no safe project-aware tool is available, stop and make that change through Xcode instead.
+- Never edit `.pbxproj` files directly. If a project-file change is needed and no safe project-aware tool is available, stop and make that change through Xcode instead. When `.pbxproj` is tracked and Xcode, XcodeGen, or another project-aware workflow legitimately changes it, treat that diff as critical project state: review it, stage it, and commit it with the branch before any push, merge, release, or cleanup.
 - Validate Xcode-project changes with explicit `xcodebuild` commands when build or test integrity matters.
